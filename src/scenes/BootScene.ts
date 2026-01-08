@@ -93,9 +93,7 @@ export class BootScene extends Phaser.Scene {
     this.load.image('chess_clock', 'clock/chess_clock.png');
     this.load.image('stopwatch', 'stopwatch/stopwatch.png');
     
-    // Buttons
-    this.load.image('button', 'button/button.png');
-    this.load.image('switch', 'button/switch.png');
+    // Focus/Disturb switches
     this.load.image('switch_focus', 'button/switch_focus.png');
     this.load.image('switch_disturb', 'button/switch_disturb.png');
     

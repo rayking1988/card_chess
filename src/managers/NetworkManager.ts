@@ -97,9 +97,7 @@ const PING_INTERVAL_MS = 5000;
 const WSS_TRACKERS = [
   'wss://tracker.openwebtorrent.com',
   'wss://tracker.btorrent.xyz',
-  'wss://tracker.webtorrent.dev',
-  'wss://tracker.files.fm:7073/announce',
-  'wss://spacetradersapi-chatbox.herokuapp.com:443/announce'
+  'wss://tracker.webtorrent.dev'
 ];
 
 
@@ -125,6 +123,13 @@ export class NetworkManager {
   private pingInterval: ReturnType<typeof setInterval> | null = null;
   private lastPeerActivity: number = 0;
   private peerTimeoutCheck: ReturnType<typeof setInterval> | null = null;
+  
+  // Auto-rejoin for faster peer discovery
+  private rejoinInterval: ReturnType<typeof setInterval> | null = null;
+  private currentRoomId: string = '';
+  private rejoinAttempts: number = 0;
+  private static readonly REJOIN_INTERVAL_MS = 8000; // Rejoin every 8 seconds if no peer found
+  private static readonly MAX_REJOIN_ATTEMPTS = 10; // Stop after 10 attempts
   
   // Local player info
   private localPlayerId: string = '';
@@ -196,6 +201,7 @@ export class NetworkManager {
 
       this.setConnectionState('waiting');
       this.startPeerTimeoutCheck();
+      this.startRejoinInterval(roomId);
 
     } catch (error) {
       this.setConnectionState('disconnected');
@@ -210,6 +216,7 @@ export class NetworkManager {
   leaveRoom(): void {
     this.stopPingInterval();
     this.stopPeerTimeoutCheck();
+    this.stopRejoinInterval();
     
     if (this.room) {
       this.room.leave();
@@ -220,6 +227,8 @@ export class NetworkManager {
     this.peerId = null;
     this.localColor = null;
     this.isHost = false;
+    this.currentRoomId = '';
+    this.rejoinAttempts = 0;
     this.setConnectionState('disconnected');
   }
 
@@ -578,6 +587,100 @@ export class NetworkManager {
     if (this.peerTimeoutCheck) {
       clearInterval(this.peerTimeoutCheck);
       this.peerTimeoutCheck = null;
+    }
+  }
+
+  /**
+   * Start auto-rejoin interval for faster peer discovery
+   * This helps when both players join simultaneously and don't see each other
+   */
+  private startRejoinInterval(roomId: string): void {
+    this.stopRejoinInterval();
+    this.currentRoomId = roomId;
+    this.rejoinAttempts = 0;
+    
+    this.rejoinInterval = setInterval(() => {
+      // Only rejoin if still waiting for peer and haven't exceeded max attempts
+      if (this.connectionState === 'waiting' && !this.peerId) {
+        this.rejoinAttempts++;
+        
+        if (this.rejoinAttempts >= NetworkManager.MAX_REJOIN_ATTEMPTS) {
+          console.log('Max rejoin attempts reached, stopping auto-rejoin');
+          this.stopRejoinInterval();
+          return;
+        }
+        
+        console.log(`Auto-rejoin attempt ${this.rejoinAttempts}/${NetworkManager.MAX_REJOIN_ATTEMPTS}`);
+        this.performRejoin();
+      } else if (this.peerId) {
+        // Peer found, stop rejoining
+        this.stopRejoinInterval();
+      }
+    }, NetworkManager.REJOIN_INTERVAL_MS);
+  }
+
+  /**
+   * Perform a rejoin to refresh tracker presence
+   */
+  private async performRejoin(): Promise<void> {
+    if (!this.currentRoomId || !this.room) return;
+    
+    const roomId = this.currentRoomId;
+    
+    // Leave current room
+    if (this.room) {
+      this.room.leave();
+      this.room = null;
+    }
+    this.sendMessage = null;
+    
+    // Small delay before rejoining
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Rejoin the room
+    try {
+      this.room = joinRoom(
+        { 
+          appId: this.config.appId,
+          relayUrls: WSS_TRACKERS,
+          relayRedundancy: WSS_TRACKERS.length,
+          rtcConfig: this.config.rtcConfig
+        }, 
+        roomId
+      );
+      
+      // Re-setup action channel
+      const [sendMessage, onMessage] = this.room.makeAction<NetworkMessage>('action');
+      this.sendMessage = sendMessage;
+      
+      onMessage((message, peerId) => {
+        this.lastPeerActivity = Date.now();
+        const action = this.deserializeAction(message);
+        if (action) {
+          this.handleIncomingAction(action, peerId);
+        }
+      });
+
+      this.room.onPeerJoin((peerId) => {
+        this.handlePeerJoin(peerId);
+      });
+
+      this.room.onPeerLeave((peerId) => {
+        this.handlePeerLeave(peerId);
+      });
+      
+    } catch (error) {
+      console.error('Rejoin failed:', error);
+    }
+  }
+
+  /**
+   * Stop auto-rejoin interval
+   */
+  private stopRejoinInterval(): void {
+    if (this.rejoinInterval) {
+      clearInterval(this.rejoinInterval);
+      this.rejoinInterval = null;
     }
   }
 
