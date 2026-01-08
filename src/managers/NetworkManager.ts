@@ -92,6 +92,13 @@ const RECONNECT_TIMEOUT_MS = 30000;
 const PEER_TIMEOUT_MS = 60000;
 const PING_INTERVAL_MS = 5000;
 
+// WebSocket Secure (wss://) BitTorrent trackers for HTTPS compatibility
+const WSS_TRACKERS = [
+  'wss://tracker.openwebtorrent.com',
+  'wss://tracker.btorrent.xyz',
+  'wss://tracker.webtorrent.dev'
+];
+
 
 // ============================================
 // NetworkManager Class
@@ -147,8 +154,16 @@ export class NetworkManager {
     this.setConnectionState('connecting');
 
     try {
-      // Join room using Trystero's BitTorrent tracker strategy (default)
-      this.room = joinRoom({ appId: this.config.appId }, roomId);
+      // Join room using Trystero's BitTorrent tracker strategy
+      // Use WSS trackers for HTTPS compatibility (GitHub Pages, etc.)
+      this.room = joinRoom(
+        { 
+          appId: this.config.appId,
+          relayUrls: WSS_TRACKERS,
+          rtcConfig: this.config.rtcConfig
+        }, 
+        roomId
+      );
       
       // Set up action channel with NetworkMessage wrapper
       const [sendMessage, onMessage] = this.room.makeAction<NetworkMessage>('action');
