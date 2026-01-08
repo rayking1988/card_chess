@@ -93,10 +93,13 @@ const PEER_TIMEOUT_MS = 60000;
 const PING_INTERVAL_MS = 5000;
 
 // WebSocket Secure (wss://) BitTorrent trackers for HTTPS compatibility
+// Using multiple trackers increases connection speed and reliability
 const WSS_TRACKERS = [
   'wss://tracker.openwebtorrent.com',
   'wss://tracker.btorrent.xyz',
-  'wss://tracker.webtorrent.dev'
+  'wss://tracker.webtorrent.dev',
+  'wss://tracker.files.fm:7073/announce',
+  'wss://spacetradersapi-chatbox.herokuapp.com:443/announce'
 ];
 
 
@@ -156,10 +159,12 @@ export class NetworkManager {
     try {
       // Join room using Trystero's BitTorrent tracker strategy
       // Use WSS trackers for HTTPS compatibility (GitHub Pages, etc.)
+      // Connect to all trackers simultaneously for faster peer discovery
       this.room = joinRoom(
         { 
           appId: this.config.appId,
           relayUrls: WSS_TRACKERS,
+          relayRedundancy: WSS_TRACKERS.length, // Use all trackers
           rtcConfig: this.config.rtcConfig
         }, 
         roomId
