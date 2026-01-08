@@ -139,15 +139,17 @@ export class MenuScene extends Phaser.Scene {
       fontSize: '72px',
       color: '#ffffff',
       stroke: '#000000',
-      strokeThickness: 4
+      strokeThickness: 15
     }).setOrigin(0.5);
     this.uiContainer.add(title);
     
     // Subtitle
     const subtitle = this.add.text(0, -BASE_HEIGHT * 0.28, 'Chess meets Cards', {
       fontFamily: 'BoldPixels, Arial',
-      fontSize: '28px',
-      color: '#cccccc'
+      fontSize: '36px',
+      color: '#cccccc',
+      stroke: '#000000',
+      strokeThickness: 5
     }).setOrigin(0.5);
     this.uiContainer.add(subtitle);
   }
@@ -157,14 +159,16 @@ export class MenuScene extends Phaser.Scene {
    */
   private createNameInput(): void {
     // Label
-    const label = this.add.text(0, -BASE_HEIGHT * 0.12, 'Enter Your Name:', {
+    const label = this.add.text(0, -BASE_HEIGHT * 0.15, 'Enter Your Name:', {
       fontFamily: 'BoldPixels, Arial',
-      fontSize: '24px',
-      color: '#ffffff'
+      fontSize: '28px',
+      color: '#ffffff',
+      stroke: '#000000',
+      strokeThickness: 3
     }).setOrigin(0.5);
     this.uiContainer.add(label);
     
-    // Create HTML input element
+    // Create HTML input element with pixel art styling
     this.nameInput = document.createElement('input');
     this.nameInput.type = 'text';
     this.nameInput.placeholder = 'Player Name';
@@ -173,28 +177,23 @@ export class MenuScene extends Phaser.Scene {
     this.nameInput.style.cssText = `
       position: absolute;
       font-family: 'BoldPixels', Arial, sans-serif;
-      font-size: 24px;
-      padding: 12px 20px;
-      border: 3px solid #4a4a6a;
+      font-size: 30px;
+      padding: 15px 20px;
+      border: 4px solid #000000ff;
       border-radius: 8px;
-      background-color: #2a2a4a;
-      color: #ffffff;
+      background-color: #23211fff;
+      color: rgba(227, 205, 105, 1);
       text-align: center;
-      width: 300px;
+      width: 320px;
       outline: none;
+      box-shadow: 
+        inset 0 0 0 2px #2a1a0a,
+        inset 0 0 0 4px #1d1b1aff,
+        4px 4px 0 0 #1a0a00;
+      image-rendering: pixelated;
+      text-shadow: 2px 2px 0 #1a0a00;
+      letter-spacing: 2px;
     `;
-    
-    this.nameInput.addEventListener('focus', () => {
-      if (this.nameInput) {
-        this.nameInput.style.borderColor = '#6a6aaa';
-      }
-    });
-    
-    this.nameInput.addEventListener('blur', () => {
-      if (this.nameInput) {
-        this.nameInput.style.borderColor = '#4a4a6a';
-      }
-    });
     
     this.nameInput.addEventListener('input', () => {
       if (this.nameInput) {
@@ -218,10 +217,10 @@ export class MenuScene extends Phaser.Scene {
     
     // Input is at center + offset
     const inputX = width / 2;
-    const inputY = height / 2 - BASE_HEIGHT * 0.04;
+    const inputY = height / 2 - BASE_HEIGHT * 0.08;
     
-    this.nameInput.style.left = `${canvasRect.left + (inputX / width) * canvasRect.width - 150}px`;
-    this.nameInput.style.top = `${canvasRect.top + (inputY / height) * canvasRect.height - 25}px`;
+    this.nameInput.style.left = `${canvasRect.left + (inputX / width) * canvasRect.width - 160}px`;
+    this.nameInput.style.top = `${canvasRect.top + (inputY / height) * canvasRect.height - 30}px`;
   }
 
   /**
@@ -230,7 +229,7 @@ export class MenuScene extends Phaser.Scene {
   private createJoinButton(): void {
     this.joinButton = this.createImageButton(
       0,
-      BASE_HEIGHT * 0.08,
+      BASE_HEIGHT * 0.07,
       'JOIN THE QUEUE',
       'blue_button',
       'blue_button_pressed',
@@ -275,7 +274,7 @@ export class MenuScene extends Phaser.Scene {
   private createStatusText(): void {
     this.statusText = this.add.text(0, BASE_HEIGHT * 0.42, '', {
       fontFamily: 'BoldPixels, Arial',
-      fontSize: '20px',
+      fontSize: '30px',
       color: '#ffcc00'
     }).setOrigin(0.5);
     this.uiContainer.add(this.statusText);
@@ -287,7 +286,7 @@ export class MenuScene extends Phaser.Scene {
   private createCancelButton(): void {
     this.cancelButton = this.createImageButton(
       0,
-      BASE_HEIGHT * 0.08,
+      BASE_HEIGHT * 0.07,
       'CANCEL',
       'red_button',
       'red_button_pressed',
@@ -314,12 +313,12 @@ export class MenuScene extends Phaser.Scene {
     const bgPressed = this.add.image(0, 0, pressedTexture);
     bgPressed.setVisible(false);
     
-    const buttonText = this.add.text(0, -2, text, {
+    const buttonText = this.add.text(0, -5, text, {
       fontFamily: 'BoldPixels, Arial',
-      fontSize: '24px',
+      fontSize: '30px',
       color: '#ffffff',
-      stroke: '#000000',
-      strokeThickness: 3
+      stroke: '#000000ff',
+      strokeThickness: 8
     }).setOrigin(0.5);
     
     container.add([bgNormal, bgPressed, buttonText]);
