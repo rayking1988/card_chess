@@ -14,12 +14,13 @@ const LOG_WIDTH = 300;
 const LOG_HEIGHT = 600;
 const ENTRY_HEIGHT = 30;
 const PADDING = 10;
-const MAX_VISIBLE_ENTRIES = Math.floor((LOG_HEIGHT - PADDING * 2) / ENTRY_HEIGHT);
+const MASK_VERTICAL_MARGIN = 35;
 
 export interface LogEntry {
   id: string;
   player: 'white' | 'black' | 'system';
   message: string;
+  displayName?: string;
   timestamp: number;
 }
 
@@ -38,8 +39,13 @@ export class EventLogComponent {
   
   private entries: LogEntry[] = [];
   private entryTexts: Phaser.GameObjects.Text[] = [];
+  private entryBackgrounds: Phaser.GameObjects.Graphics[] = [];
   private scrollOffset: number = 0;
   private entryIdCounter: number = 0;
+  private currentScale: number = 1;
+  private currentX: number;
+  private currentY: number;
+  private maxVisibleEntries: number = 0;
 
   constructor(
     scene: Phaser.Scene,
@@ -49,6 +55,8 @@ export class EventLogComponent {
     this.scene = scene;
     
     this.container = scene.add.container(x, y);
+    this.currentX = x;
+    this.currentY = y;
     
     // Background
     this.backgroundGraphics = scene.add.graphics();
@@ -70,13 +78,7 @@ export class EventLogComponent {
     
     // Create mask for scrolling
     this.maskGraphics = scene.add.graphics();
-    this.maskGraphics.fillStyle(0xffffff);
-    this.maskGraphics.fillRect(
-      x - LOG_WIDTH / 2 + PADDING,
-      y - LOG_HEIGHT / 2 + 35,
-      LOG_WIDTH - PADDING * 2,
-      LOG_HEIGHT - 70
-    );
+    this.updateMask();
     const mask = this.maskGraphics.createGeometryMask();
     this.entriesContainer.setMask(mask);
     
@@ -113,6 +115,8 @@ export class EventLogComponent {
     
     // Enable mouse wheel scrolling
     this.setupMouseWheelScroll();
+
+    this.maxVisibleEntries = this.calculateMaxVisibleEntries();
   }
 
   /**
@@ -181,11 +185,12 @@ export class EventLogComponent {
    * @param player Player who performed the action
    * @param message Action description
    */
-  addEntry(player: 'white' | 'black' | 'system', message: string): LogEntry {
+  addEntry(player: 'white' | 'black' | 'system', message: string, displayName?: string): LogEntry {
     const entry: LogEntry = {
       id: `entry_${this.entryIdCounter++}`,
       player,
       message,
+      displayName,
       timestamp: Date.now()
     };
     
@@ -205,26 +210,44 @@ export class EventLogComponent {
     // Player color indicator
     let color: string;
     let prefix: string;
+    let backgroundColor: number;
     
     switch (entry.player) {
       case 'white':
         color = '#ffffff';
-        prefix = '⚪ ';
+        prefix = '[W] ';
+        backgroundColor = 0x2a2f45;
         break;
       case 'black':
-        color = '#888888';
-        prefix = '⚫ ';
+        color = '#dddddd';
+        prefix = '[B] ';
+        backgroundColor = 0x3a2a2a;
         break;
       case 'system':
         color = '#ffff44';
-        prefix = '⚡ ';
+        prefix = '[SYS] ';
+        backgroundColor = 0x3a3a1a;
         break;
     }
-    
+    const label = entry.displayName ? `${entry.displayName}: ` : '';
+    const y = -LOG_HEIGHT / 2 + 40 + (index * ENTRY_HEIGHT);
+
+    const bg = this.scene.add.graphics();
+    bg.fillStyle(backgroundColor, 0.22);
+    bg.fillRoundedRect(
+      -LOG_WIDTH / 2 + PADDING,
+      y - 2,
+      LOG_WIDTH - PADDING * 2 - 8,
+      ENTRY_HEIGHT - 6,
+      4
+    );
+    this.entryBackgrounds.push(bg);
+    this.entriesContainer.add(bg);
+
     const text = this.scene.add.text(
       -LOG_WIDTH / 2 + PADDING + 5,
-      -LOG_HEIGHT / 2 + 40 + (index * ENTRY_HEIGHT),
-      prefix + entry.message,
+      y,
+      prefix + label + entry.message,
       {
         fontSize: '18px',
         fontFamily: 'BoldPixels, Arial',
@@ -251,7 +274,7 @@ export class EventLogComponent {
    * Scroll down
    */
   scrollDown(): void {
-    const maxScroll = Math.max(0, this.entries.length - MAX_VISIBLE_ENTRIES);
+    const maxScroll = Math.max(0, this.entries.length - this.maxVisibleEntries);
     if (this.scrollOffset < maxScroll) {
       this.scrollOffset++;
       this.updateScroll();
@@ -262,7 +285,7 @@ export class EventLogComponent {
    * Scroll to bottom (most recent entries)
    */
   scrollToBottom(): void {
-    this.scrollOffset = Math.max(0, this.entries.length - MAX_VISIBLE_ENTRIES);
+    this.scrollOffset = Math.max(0, this.entries.length - this.maxVisibleEntries);
     this.updateScroll();
   }
 
@@ -282,7 +305,7 @@ export class EventLogComponent {
     
     // Update scroll button visibility
     this.scrollUpButton.setAlpha(this.scrollOffset > 0 ? 1 : 0.3);
-    const maxScroll = Math.max(0, this.entries.length - MAX_VISIBLE_ENTRIES);
+    const maxScroll = Math.max(0, this.entries.length - this.maxVisibleEntries);
     this.scrollDownButton.setAlpha(this.scrollOffset < maxScroll ? 1 : 0.3);
   }
 
@@ -291,6 +314,8 @@ export class EventLogComponent {
    */
   clear(): void {
     this.entries = [];
+    this.entryBackgrounds.forEach(bg => bg.destroy());
+    this.entryBackgrounds = [];
     this.entryTexts.forEach(text => text.destroy());
     this.entryTexts = [];
     this.scrollOffset = 0;
@@ -328,16 +353,9 @@ export class EventLogComponent {
    */
   setPosition(x: number, y: number): void {
     this.container.setPosition(x, y);
-    
-    // Update mask position
-    this.maskGraphics.clear();
-    this.maskGraphics.fillStyle(0xffffff);
-    this.maskGraphics.fillRect(
-      x - LOG_WIDTH / 2 + PADDING,
-      y - LOG_HEIGHT / 2 + 35,
-      LOG_WIDTH - PADDING * 2,
-      LOG_HEIGHT - 70
-    );
+    this.currentX = x;
+    this.currentY = y;
+    this.updateMask();
   }
 
   /**
@@ -352,6 +370,31 @@ export class EventLogComponent {
    */
   setScale(scale: number): void {
     this.container.setScale(scale);
+    this.currentScale = scale;
+    this.updateMask();
+    this.maxVisibleEntries = this.calculateMaxVisibleEntries();
+    this.scrollToBottom();
+  }
+
+  private updateMask(): void {
+    const scale = this.currentScale;
+    const width = LOG_WIDTH * scale;
+    const height = LOG_HEIGHT * scale;
+    const padding = PADDING * scale;
+    
+    this.maskGraphics.clear();
+    this.maskGraphics.fillStyle(0xffffff);
+    this.maskGraphics.fillRect(
+      this.currentX - width / 2 + padding,
+      this.currentY - height / 2 + MASK_VERTICAL_MARGIN * scale,
+      width - padding * 2,
+      height - MASK_VERTICAL_MARGIN * 2 * scale
+    );
+  }
+
+  private calculateMaxVisibleEntries(): number {
+    const visibleHeight = LOG_HEIGHT - MASK_VERTICAL_MARGIN * 2;
+    return Math.max(1, Math.floor(visibleHeight / ENTRY_HEIGHT));
   }
 
   /**

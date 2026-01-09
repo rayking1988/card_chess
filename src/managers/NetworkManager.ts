@@ -35,6 +35,8 @@ export type GameAction =
   | { type: 'MULLIGAN' }
   | { type: 'READY' }
   | { type: 'END_TURN' }
+  | { type: 'PLAYER_NAME'; name: string }
+  | { type: 'COLOR_REQUEST' }
   | { type: 'REMATCH_REQUEST' }
   | { type: 'REMATCH_ACCEPT' }
   | { type: 'REMATCH_DECLINE' }
@@ -130,11 +132,16 @@ export class NetworkManager {
   private rejoinAttempts: number = 0;
   private static readonly REJOIN_INTERVAL_MS = 8000; // Rejoin every 8 seconds if no peer found
   private static readonly MAX_REJOIN_ATTEMPTS = 10; // Stop after 10 attempts
+  private static readonly COLOR_REQUEST_INTERVAL_MS = 3000;
+  private static readonly MAX_COLOR_REQUESTS = 3;
   
   // Local player info
   private localPlayerId: string = '';
   private localColor: PlayerColor | null = null;
   private isHost: boolean = false;
+  private lastColorAssignment: GameAction | null = null;
+  private colorRequestTimeout: ReturnType<typeof setTimeout> | null = null;
+  private colorRequestAttempts: number = 0;
 
   constructor(config?: Partial<TrysteroConfig>) {
     this.config = {
@@ -217,6 +224,7 @@ export class NetworkManager {
     this.stopPingInterval();
     this.stopPeerTimeoutCheck();
     this.stopRejoinInterval();
+    this.stopColorRequestLoop();
     
     if (this.room) {
       this.room.leave();
@@ -229,6 +237,7 @@ export class NetworkManager {
     this.isHost = false;
     this.currentRoomId = '';
     this.rejoinAttempts = 0;
+    this.lastColorAssignment = null;
     this.setConnectionState('disconnected');
   }
 
@@ -406,6 +415,13 @@ export class NetworkManager {
   }
 
   /**
+   * Send player name
+   */
+  sendPlayerName(name: string): void {
+    this.sendGameAction({ type: 'PLAYER_NAME', name });
+  }
+
+  /**
    * Send player stats sync (clock, stopwatch, mode)
    */
   sendPlayerStats(clock: number, stopwatch: number, mode: 'focus' | 'disturb', deckCount: number, discardCount: number): void {
@@ -468,10 +484,13 @@ export class NetworkManager {
         whitePlayerId: localIsWhite ? this.localPlayerId : peerId,
         blackPlayerId: localIsWhite ? peerId : this.localPlayerId
       };
+      this.lastColorAssignment = colorAssignment;
       this.sendGameAction(colorAssignment);
       
       // Notify local callback
       this.callbacks.onColorAssigned?.(this.localColor);
+    } else {
+      this.startColorRequestLoop();
     }
     
     this.callbacks.onPeerJoined?.(peerId);
@@ -486,6 +505,7 @@ export class NetworkManager {
     
     this.peerId = null;
     this.stopPingInterval();
+    this.stopColorRequestLoop();
     this.setConnectionState('waiting');
     this.callbacks.onPeerLeft?.(peerId);
   }
@@ -505,13 +525,22 @@ export class NetworkManager {
         
       case 'COLOR_ASSIGNMENT':
         // Determine local color from assignment
-        if (action.whitePlayerId === this.localPlayerId) {
-          this.localColor = 'white';
-        } else if (action.blackPlayerId === this.localPlayerId) {
-          this.localColor = 'black';
+        if (this.localColor === null) {
+          if (action.whitePlayerId === this.localPlayerId) {
+            this.localColor = 'white';
+          } else if (action.blackPlayerId === this.localPlayerId) {
+            this.localColor = 'black';
+          }
+          if (this.localColor) {
+            this.stopColorRequestLoop();
+            this.callbacks.onColorAssigned?.(this.localColor);
+          }
         }
-        if (this.localColor) {
-          this.callbacks.onColorAssigned?.(this.localColor);
+        break;
+        
+      case 'COLOR_REQUEST':
+        if (this.isHost && this.lastColorAssignment) {
+          this.sendGameAction(this.lastColorAssignment);
         }
         break;
         
@@ -682,6 +711,37 @@ export class NetworkManager {
       clearInterval(this.rejoinInterval);
       this.rejoinInterval = null;
     }
+  }
+
+  private startColorRequestLoop(): void {
+    this.stopColorRequestLoop();
+    this.colorRequestAttempts = 0;
+    
+    const requestOnce = () => {
+      if (this.localColor || !this.peerId) {
+        this.stopColorRequestLoop();
+        return;
+      }
+      
+      this.colorRequestAttempts += 1;
+      this.sendGameAction({ type: 'COLOR_REQUEST' });
+      
+      if (this.colorRequestAttempts < NetworkManager.MAX_COLOR_REQUESTS) {
+        this.colorRequestTimeout = setTimeout(requestOnce, NetworkManager.COLOR_REQUEST_INTERVAL_MS);
+      } else {
+        this.colorRequestTimeout = null;
+      }
+    };
+    
+    this.colorRequestTimeout = setTimeout(requestOnce, NetworkManager.COLOR_REQUEST_INTERVAL_MS);
+  }
+
+  private stopColorRequestLoop(): void {
+    if (this.colorRequestTimeout) {
+      clearTimeout(this.colorRequestTimeout);
+      this.colorRequestTimeout = null;
+    }
+    this.colorRequestAttempts = 0;
   }
 
   // ============================================

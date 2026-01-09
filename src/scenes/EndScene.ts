@@ -12,6 +12,7 @@
 
 import Phaser from 'phaser';
 import type { PlayerColor } from '../managers/GameStateManager';
+import { formatTime } from '../components/Clock';
 import { NetworkManager, GameAction } from '../managers/NetworkManager';
 
 interface EndSceneData {
@@ -20,6 +21,11 @@ interface EndSceneData {
   localColor: PlayerColor;
   playerName: string;
   opponentName: string;
+  finalStats?: {
+    turnNumber: number;
+    localClock: number;
+    opponentClock: number;
+  };
   networkManager: NetworkManager | null;
 }
 
@@ -31,6 +37,7 @@ export class EndScene extends Phaser.Scene {
   private localColor: PlayerColor = 'white';
   private playerName: string = 'Player';
   private opponentName: string = 'Opponent';
+  private finalStats: EndSceneData['finalStats'] | null = null;
   private networkManager: NetworkManager | null = null;
   
   // Rematch state
@@ -53,6 +60,7 @@ export class EndScene extends Phaser.Scene {
     this.localColor = data?.localColor ?? 'white';
     this.playerName = data?.playerName ?? 'Player';
     this.opponentName = data?.opponentName ?? 'Opponent';
+    this.finalStats = data?.finalStats ?? null;
     this.networkManager = data?.networkManager ?? null;
     this.rematchState = 'idle';
   }
@@ -61,7 +69,11 @@ export class EndScene extends Phaser.Scene {
     const { width, height } = this.scale;
     
     // Add background
-    if (this.textures.exists('background')) {
+    if (this.textures.exists('room_background')) {
+      const bg = this.add.image(width / 2, height / 2, 'room_background');
+      const scale = Math.max(width / bg.width, height / bg.height);
+      bg.setScale(scale);
+    } else if (this.textures.exists('background')) {
       this.add.image(width / 2, height / 2, 'background')
         .setDisplaySize(width, height);
     } else {
@@ -87,7 +99,7 @@ export class EndScene extends Phaser.Scene {
     }
     
     // Result text (large)
-    this.add.text(width / 2, height * 0.25, resultText, {
+    this.add.text(width / 2, height * 0.23, resultText, {
       fontFamily: 'BoldPixels, Arial',
       fontSize: '72px',
       color: resultColor,
@@ -96,7 +108,7 @@ export class EndScene extends Phaser.Scene {
     }).setOrigin(0.5);
     
     // Reason text
-    this.add.text(width / 2, height * 0.38, this.reason, {
+    this.add.text(width / 2, height * 0.34, this.reason, {
       fontFamily: 'BoldPixels, Arial',
       fontSize: '28px',
       color: '#ffffff'
@@ -110,15 +122,66 @@ export class EndScene extends Phaser.Scene {
         : null;
     
     if (winnerName) {
-      this.add.text(width / 2, height * 0.48, `Winner: ${winnerName}`, {
+      this.add.text(width / 2, height * 0.43, `Winner: ${winnerName}`, {
         fontFamily: 'BoldPixels, Arial',
         fontSize: '24px',
         color: '#cccccc'
       }).setOrigin(0.5);
     }
     
+    // Summary panel
+    const panelWidth = Math.min(560, width * 0.8);
+    const panelHeight = 130;
+    const panelY = height * 0.54;
+    const panel = this.add.graphics();
+    panel.fillStyle(0x0f0f1f, 0.7);
+    panel.fillRoundedRect(width / 2 - panelWidth / 2, panelY - panelHeight / 2, panelWidth, panelHeight, 12);
+    panel.lineStyle(2, 0xffffff, 0.2);
+    panel.strokeRoundedRect(width / 2 - panelWidth / 2, panelY - panelHeight / 2, panelWidth, panelHeight, 12);
+    
+    const whiteName = this.localColor === 'white' ? this.playerName : this.opponentName;
+    const blackName = this.localColor === 'black' ? this.playerName : this.opponentName;
+    const whiteClock = this.finalStats
+      ? (this.localColor === 'white' ? this.finalStats.localClock : this.finalStats.opponentClock)
+      : 0;
+    const blackClock = this.finalStats
+      ? (this.localColor === 'black' ? this.finalStats.localClock : this.finalStats.opponentClock)
+      : 0;
+    
+    this.add.text(width / 2 - panelWidth * 0.22, panelY - 20, `White: ${whiteName}`, {
+      fontFamily: 'BoldPixels, Arial',
+      fontSize: '18px',
+      color: '#ffffff'
+    }).setOrigin(0, 0.5);
+    
+    this.add.text(width / 2 + panelWidth * 0.22, panelY - 20, this.finalStats ? formatTime(whiteClock) : '--:--', {
+      fontFamily: 'Digital7, "Courier New"',
+      fontSize: '22px',
+      color: '#ffffff'
+    }).setOrigin(1, 0.5);
+    
+    this.add.text(width / 2 - panelWidth * 0.22, panelY + 20, `Black: ${blackName}`, {
+      fontFamily: 'BoldPixels, Arial',
+      fontSize: '18px',
+      color: '#cccccc'
+    }).setOrigin(0, 0.5);
+    
+    this.add.text(width / 2 + panelWidth * 0.22, panelY + 20, this.finalStats ? formatTime(blackClock) : '--:--', {
+      fontFamily: 'Digital7, "Courier New"',
+      fontSize: '22px',
+      color: '#cccccc'
+    }).setOrigin(1, 0.5);
+    
+    if (this.finalStats) {
+      this.add.text(width / 2, panelY + panelHeight / 2 - 16, `Turns: ${this.finalStats.turnNumber}`, {
+        fontFamily: 'BoldPixels, Arial',
+        fontSize: '14px',
+        color: '#aaaaaa'
+      }).setOrigin(0.5);
+    }
+    
     // Status text for rematch state
-    this.statusText = this.add.text(width / 2, height * 0.55, '', {
+    this.statusText = this.add.text(width / 2, height * 0.68, '', {
       fontFamily: 'BoldPixels, Arial',
       fontSize: '20px',
       color: '#ffcc00'
@@ -127,7 +190,7 @@ export class EndScene extends Phaser.Scene {
     // Rematch button
     this.rematchButton = this.createButton(
       width / 2,
-      height * 0.65,
+      height * 0.76,
       'REMATCH',
       0x4a7c59,
       () => this.handleRematchRequest()
@@ -136,7 +199,7 @@ export class EndScene extends Phaser.Scene {
     // Return to menu button
     this.createButton(
       width / 2,
-      height * 0.78,
+      height * 0.88,
       'MAIN MENU',
       0x5a5a8a,
       () => this.handleReturnToMenu()
@@ -153,7 +216,7 @@ export class EndScene extends Phaser.Scene {
    * Create the rematch request UI (accept/decline buttons)
    */
   private createRematchRequestUI(width: number, height: number): void {
-    this.rematchRequestContainer = this.add.container(width / 2, height * 0.65);
+    this.rematchRequestContainer = this.add.container(width / 2, height * 0.76);
     this.rematchRequestContainer.setVisible(false);
     
     // Request text

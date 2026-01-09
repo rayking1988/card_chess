@@ -170,6 +170,13 @@ export class ClockComponent {
   }
 
   /**
+   * Get the time text (for animations)
+   */
+  getTimeText(): Phaser.GameObjects.Text {
+    return this.timeText;
+  }
+
+  /**
    * Get dimensions
    */
   getDimensions(): { width: number; height: number } {

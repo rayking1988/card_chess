@@ -48,6 +48,7 @@ export class CardHandComponent {
   private hoveredCard: CardComponent | null = null;
   private isInteractive: boolean = false;
   private draggingCard: CardComponent | null = null;
+  private handScale: number = 1;
   
   // Targeting component
   private targeting: CardTargetingComponent | null = null;
@@ -235,7 +236,7 @@ export class CardHandComponent {
         pos.y,
         this.cardData[i],
         false,
-        CARD_SCALE
+        CARD_SCALE * this.handScale
       );
       
       cardComponent.setRotation(pos.rotation);
@@ -246,6 +247,7 @@ export class CardHandComponent {
       (cardComponent as CardComponentWithOriginal).originalY = pos.y;
       (cardComponent as CardComponentWithOriginal).originalRotation = pos.rotation;
       (cardComponent as CardComponentWithOriginal).originalDepth = i;
+      (cardComponent as CardComponentWithOriginal).originalScale = CARD_SCALE * this.handScale;
       
       this.cards.push(cardComponent);
       this.container.add(cardComponent.getContainer());
@@ -375,7 +377,7 @@ export class CardHandComponent {
     
     // Lift and scale the hovered card
     const original = card as CardComponentWithOriginal;
-    card.setScale(HOVER_SCALE);
+    card.setScale(original.originalScale * HOVER_SCALE);
     card.setPosition(original.originalX, original.originalY - HOVER_LIFT);
     card.setRotation(0); // Straighten on hover
     card.setDepth(100); // Bring to front
@@ -412,7 +414,7 @@ export class CardHandComponent {
    */
   private resetCardPosition(card: CardComponent): void {
     const original = card as CardComponentWithOriginal;
-    card.setScale(CARD_SCALE);
+    card.setScale(original.originalScale);
     card.setPosition(original.originalX, original.originalY);
     card.setRotation(original.originalRotation);
     card.setDepth(original.originalDepth);
@@ -425,7 +427,8 @@ export class CardHandComponent {
   private handleCardDragStart(card: CardComponent, cardData: CardData): void {
     this.draggingCard = card;
     card.setDepth(200); // Bring to very front while dragging
-    card.setScale(HOVER_SCALE);
+    const original = card as CardComponentWithOriginal;
+    card.setScale(original.originalScale * HOVER_SCALE);
     card.setRotation(0);
     
     // Hide preview while dragging
@@ -525,6 +528,17 @@ export class CardHandComponent {
   setPreviewPosition(x: number, y: number): void {
     this.previewX = x;
     this.previewY = y;
+    if (this.previewCard) {
+      this.previewCard.setPosition(x, y);
+    }
+  }
+
+  /**
+   * Set the scale for cards in hand (container stays at scale 1)
+   */
+  setHandScale(scale: number): void {
+    this.handScale = scale;
+    this.rebuildHand();
   }
 
   /**
@@ -594,6 +608,7 @@ interface CardComponentWithOriginal extends CardComponent {
   originalY: number;
   originalRotation: number;
   originalDepth: number;
+  originalScale: number;
 }
 
 // Re-export targeting types for convenience

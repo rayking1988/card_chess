@@ -9,11 +9,19 @@
 import Phaser from 'phaser';
 
 // Stopwatch dimensions
-const STOPWATCH_WIDTH = 80;
-const STOPWATCH_HEIGHT = 80;
+const STOPWATCH_WIDTH = 100;
+const STOPWATCH_HEIGHT = 100;
 
 // Threshold for opponent card draw (Requirement 5.3)
 const THRESHOLD_SECONDS = 60;
+
+/**
+ * Format stopwatch time into two-digit seconds
+ */
+function formatStopwatchTime(seconds: number): string {
+  const safeSeconds = Math.max(0, Math.floor(seconds));
+  return safeSeconds.toString().padStart(2, '0');
+}
 
 /**
  * StopwatchComponent - Phaser visual component for turn time tracking
@@ -23,6 +31,7 @@ export class StopwatchComponent {
   private stopwatchSprite: Phaser.GameObjects.Image;
   private timeText: Phaser.GameObjects.Text;
   private thresholdText: Phaser.GameObjects.Text;
+  private labelText: Phaser.GameObjects.Text;
   private warningGraphics: Phaser.GameObjects.Graphics;
   private currentTime: number = 0;
 
@@ -42,17 +51,26 @@ export class StopwatchComponent {
     this.stopwatchSprite.setDisplaySize(STOPWATCH_WIDTH, STOPWATCH_HEIGHT);
     this.container.add(this.stopwatchSprite);
     
-    // Time display text
-    this.timeText = scene.add.text(0, 0, '0s', {
-      fontSize: '18px',
+    // Label text
+    this.labelText = scene.add.text(0, -55, 'Turn Timer', {
+      fontSize: '14px',
       fontFamily: 'BoldPixels, Arial',
-      color: '#ffffff',
+      color: '#cccccc',
       fontStyle: 'bold'
+    }).setOrigin(0.5);
+    this.container.add(this.labelText);
+    
+    // Time display text
+    this.timeText = scene.add.text(0, -4, '00', {
+      fontSize: '24px',
+      fontFamily: 'Digital7, "Courier New"',
+      color: '#ffffff',
+      fontStyle: 'normal'
     }).setOrigin(0.5);
     this.container.add(this.timeText);
     
     // Threshold indicator text
-    this.thresholdText = scene.add.text(0, 45, `/ ${THRESHOLD_SECONDS}s`, {
+    this.thresholdText = scene.add.text(0, 46, `Draw @ ${THRESHOLD_SECONDS}s`, {
       fontSize: '12px',
       fontFamily: 'BoldPixels, Arial',
       color: '#888888'
@@ -114,7 +132,7 @@ export class StopwatchComponent {
    */
   private updateDisplay(): void {
     // Update time text
-    this.timeText.setText(`${this.currentTime}s`);
+    this.timeText.setText(formatStopwatchTime(this.currentTime));
     
     // Calculate progress toward threshold
     const progress = (this.currentTime % THRESHOLD_SECONDS) / THRESHOLD_SECONDS;
@@ -125,13 +143,13 @@ export class StopwatchComponent {
     if (this.currentTime >= THRESHOLD_SECONDS * 0.75) {
       // High warning - red tint
       this.timeText.setColor('#ff4444');
-      this.warningGraphics.fillStyle(0xff0000, 0.2);
-      this.warningGraphics.fillCircle(0, 0, STOPWATCH_WIDTH / 2 + 5);
+      this.warningGraphics.fillStyle(0xff0000, 0.25);
+      this.warningGraphics.fillCircle(0, 0, STOPWATCH_WIDTH / 2 + 8);
     } else if (this.currentTime >= THRESHOLD_SECONDS * 0.5) {
       // Medium warning - orange tint
       this.timeText.setColor('#ffaa44');
-      this.warningGraphics.fillStyle(0xffaa00, 0.15);
-      this.warningGraphics.fillCircle(0, 0, STOPWATCH_WIDTH / 2 + 3);
+      this.warningGraphics.fillStyle(0xffaa00, 0.2);
+      this.warningGraphics.fillCircle(0, 0, STOPWATCH_WIDTH / 2 + 6);
     } else if (this.currentTime >= THRESHOLD_SECONDS * 0.25) {
       // Low warning - yellow tint
       this.timeText.setColor('#ffff44');
@@ -142,16 +160,27 @@ export class StopwatchComponent {
     
     // Draw progress arc
     if (this.currentTime > 0) {
-      this.warningGraphics.lineStyle(3, this.getProgressColor(), 0.8);
+      this.warningGraphics.lineStyle(4, this.getProgressColor(), 0.9);
       this.warningGraphics.beginPath();
       this.warningGraphics.arc(
         0, 0,
-        STOPWATCH_WIDTH / 2 + 8,
+        STOPWATCH_WIDTH / 2 + 10,
         -Math.PI / 2,
         -Math.PI / 2 + (progress * Math.PI * 2),
         false
       );
       this.warningGraphics.strokePath();
+    }
+    
+    // Update threshold indicator
+    const crossings = this.getThresholdCrossings();
+    if (crossings > 0) {
+      const plural = crossings > 1 ? 's' : '';
+      this.thresholdText.setText(`+${crossings} card${plural}`);
+      this.thresholdText.setColor('#66ff66');
+    } else {
+      this.thresholdText.setText(`Draw @ ${THRESHOLD_SECONDS}s`);
+      this.thresholdText.setColor('#888888');
     }
   }
 
@@ -213,6 +242,20 @@ export class StopwatchComponent {
    */
   getContainer(): Phaser.GameObjects.Container {
     return this.container;
+  }
+
+  /**
+   * Get the time text (for animations)
+   */
+  getTimeText(): Phaser.GameObjects.Text {
+    return this.timeText;
+  }
+
+  /**
+   * Set the label text
+   */
+  setLabel(label: string): void {
+    this.labelText.setText(label);
   }
 
   /**

@@ -405,8 +405,10 @@ export class ChessBoardComponent {
     this.container.add(zone);
     
     zone.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      const localX = pointer.x - this.x;
-      const localY = pointer.y - this.y;
+      const scaleX = this.container.scaleX || 1;
+      const scaleY = this.container.scaleY || 1;
+      const localX = (pointer.x - this.x) / scaleX;
+      const localY = (pointer.y - this.y) / scaleY;
       
       const col = Math.floor(localX / size);
       const row = Math.floor(localY / size);
@@ -570,6 +572,21 @@ export class ChessBoardComponent {
    */
   getContainer(): Phaser.GameObjects.Container {
     return this.container;
+  }
+
+  /**
+   * Get the sprite for a piece on a square (for animations)
+   */
+  getPieceSprite(square: Square): Phaser.GameObjects.Image | null {
+    return this.pieceSprites.get(square) || null;
+  }
+
+  /**
+   * Get texture key for a piece (for animation helpers)
+   */
+  getPieceTextureKey(type: PieceSymbol, color: Color): string | null {
+    const assetKey = `${color === 'w' ? 'w' : 'b'}${type.toUpperCase()}`;
+    return PIECE_ASSETS[assetKey] || null;
   }
 
   /**

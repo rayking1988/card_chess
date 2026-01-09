@@ -243,6 +243,13 @@ export class EnergyBarComponent {
   }
 
   /**
+   * Get the energy text (for animations)
+   */
+  getEnergyText(): Phaser.GameObjects.Text {
+    return this.energyText;
+  }
+
+  /**
    * Get dimensions
    */
   getDimensions(): { width: number; height: number } {
