@@ -1,7 +1,23 @@
 /**
- * GameScene - Main gameplay scene with UI layout and game logic
+ * @fileoverview GameScene - Main gameplay scene with UI layout and game logic
  * 
- * Requirements: UI Layout, 3.1, 3.2, 3.4, 3.5, 3.6, 3.7, 3.8, 4.5
+ * This is the core gameplay scene that orchestrates all game elements:
+ * - Chess board with piece movement and card-based piece deployment
+ * - Card hand with fan display and drag-to-play mechanics
+ * - Clocks, stopwatches, and energy management
+ * - P2P networking for multiplayer synchronization
+ * - Mulligan phase and turn management
+ * 
+ * Requirements addressed:
+ * - UI Layout: Responsive layout with chess board, card hand, clocks, event log
+ * - 3.1: Initialize and shuffle deck at game start
+ * - 3.2: Mulligan phase with redraw option
+ * - 3.4: Draw card at turn start
+ * - 3.5: End turn after move
+ * - 3.6: Enforce max hand size (7 cards)
+ * - 3.7: King capture ends game
+ * - 3.8: Checkmate/stalemate detection
+ * - 4.5: Card targeting with control power validation
  * 
  * UI Layout (from requirements document):
  * ┌──────────────────────────────────────────────────────────────────────────────┐
@@ -27,6 +43,16 @@
  * │  │  (preview)  │    │ A │ │ A │ │ A │ │ A │ │ A │ │ A │                     │
  * │  └─────────────┘    └───┘ └───┘ └───┘ └───┘ └───┘ └───┘                     │
  * └──────────────────────────────────────────────────────────────────────────────┘
+ * 
+ * @module scenes/GameScene
+ * @requires phaser
+ * @requires chess.js
+ * @requires components/*
+ * @requires managers/*
+ * @requires utils/controlPower
+ * @requires data/cards
+ * 
+ * Used by: MenuScene (game start), EndScene (rematch)
  */
 
 import Phaser from 'phaser';
@@ -36,7 +62,7 @@ import { CardHandComponent } from '../components/CardHand';
 import { ClockComponent } from '../components/Clock';
 import { StopwatchComponent } from '../components/Stopwatch';
 import { EnergyBarComponent } from '../components/EnergyBar';
-import { EventLogComponent, LOG_WIDTH } from '../components/EventLog';
+import { EventLogComponent } from '../components/EventLog';
 import { FocusDisturbToggleComponent } from '../components/FocusDisturbToggle';
 import { CardComponent } from '../components/Card';
 import { GameStateManager, PlayerColor, Card, PieceType } from '../managers/GameStateManager';
@@ -46,176 +72,390 @@ import { calculateControlPower, playerControlsSquare } from '../utils/controlPow
 import { CARD_DEFINITIONS } from '../data/cards';
 import { createGameAnimationManager, GameAnimationManager } from '../managers/AnimationManager';
 
-// Layout constants - base sizes at 1920x1080
-const BASE_BOARD_SIZE = 512; // 8 squares * 64 pixels
-const BASE_LEFT_PANEL_WIDTH = 150;
-const BASE_RIGHT_PANEL_WIDTH = 210;
-const BASE_TOP_ZONE_HEIGHT = 100;
-const BASE_BOTTOM_ZONE_HEIGHT = 210;
-const BASE_PADDING = 16;
-const MAX_HAND_SIZE = 7;
-const MAX_PILE_LAYERS = 6;
+// Import from extracted modules
+import { GameSceneData, UISnapshot, GameLayout } from './game/GameTypes';
+import { MAX_HAND_SIZE, MAX_PILE_LAYERS } from './game/GameConstants';
+import { calculateLayout } from './game/GameLayout';
+import {
+  createImageButton,
+  createPileStack,
+  layoutPileStack,
+  makeCardComponentClickable,
+  drawTargetArrow
+} from './game/GameUIHelpers';
 
-// Reference resolution for scaling
-const REF_WIDTH = 1920;
-const REF_HEIGHT = 1080;
+/* ============================================
+ * GAME SCENE CLASS
+ * ============================================
+ */
 
-// Scene data passed from MenuScene
-interface GameSceneData {
-  playerName: string;
-  localColor: PlayerColor;
-  networkManager: NetworkManager | null;
-  opponentName: string;
-}
-
-interface UISnapshot {
-  localClock: number;
-  opponentClock: number;
-  localStopwatch: number;
-  opponentStopwatch: number;
-  localEnergy: number;
-  localEnergyCap: number;
-  currentTurn: PlayerColor;
-  localHand: number;
-  opponentHand: number;
-  localDeck: number;
-  localDiscard: number;
-  opponentDeck: number;
-  opponentDiscard: number;
-}
-
+/**
+ * GameScene - Main gameplay scene
+ * 
+ * Orchestrates all game elements including:
+ * - Chess board with move validation and piece animations
+ * - Card hand with fan display and targeting
+ * - Clocks, stopwatches, and energy management
+ * - Event log for game history
+ * - P2P networking for multiplayer
+ * - Mulligan and discard phases
+ * 
+ * Used by: MenuScene (game start), EndScene (rematch)
+ */
 export class GameScene extends Phaser.Scene {
-  // Background
+  /* ----------------------------------------
+   * Background and Animation
+   * ---------------------------------------- */
+  
+  /** Background image */
   private background!: Phaser.GameObjects.Image;
   
-  // Animation manager
+  /** Animation manager for UI transitions */
   private animations!: GameAnimationManager;
   
-  // UI Components
+  /* ----------------------------------------
+   * Core UI Components
+   * ---------------------------------------- */
+  
+  /** Chess board component */
   private chessBoard!: ChessBoardComponent;
+  
+  /** Player's card hand component */
   private cardHand!: CardHandComponent;
+  
+  /** Opponent's clock display */
   private opponentClock!: ClockComponent;
+  
+  /** Player's clock display */
   private playerClock!: ClockComponent;
+  
+  /** Opponent's stopwatch (turn timer) */
   private opponentStopwatch!: StopwatchComponent;
+  
+  /** Player's stopwatch (turn timer) */
   private playerStopwatch!: StopwatchComponent;
+  
+  /** Player's energy bar display */
   private energyBar!: EnergyBarComponent;
+  
+  /** Event log for game history */
   private eventLog!: EventLogComponent;
+  
+  /** Opponent's focus/disturb mode toggle (read-only) */
   private opponentFocusDisturb!: FocusDisturbToggleComponent;
+  
+  /** Player's focus/disturb mode toggle */
   private playerFocusDisturb!: FocusDisturbToggleComponent;
   
-  // Opponent deck display
+  /* ----------------------------------------
+   * Opponent Deck/Discard Display
+   * ---------------------------------------- */
+  
+  /** Opponent's deck card back image */
   private opponentDeckSprite!: Phaser.GameObjects.Image;
+  
+  /** Stack of images for opponent deck visual depth */
   private opponentDeckStack: Phaser.GameObjects.Image[] = [];
+  
+  /** Label text for opponent's deck */
   private opponentDeckLabelText!: Phaser.GameObjects.Text;
+  
+  /** Count text for opponent's deck */
   private opponentDeckCountText!: Phaser.GameObjects.Text;
+  
+  /** Opponent's discard pile image */
   private opponentDiscardSprite!: Phaser.GameObjects.Image;
+  
+  /** Stack of images for opponent discard visual depth */
   private opponentDiscardStack: Phaser.GameObjects.Image[] = [];
+  
+  /** Top card component for opponent's discard (shows last played card) */
   private opponentDiscardTopCard: CardComponent | null = null;
+  
+  /** Label text for opponent's discard */
   private opponentDiscardLabelText!: Phaser.GameObjects.Text;
+  
+  /** Count text for opponent's discard */
   private opponentDiscardCountText!: Phaser.GameObjects.Text;
   
-  // Player deck display
+  /* ----------------------------------------
+   * Player Deck/Discard Display
+   * ---------------------------------------- */
+  
+  /** Player's deck card back image */
   private playerDeckSprite!: Phaser.GameObjects.Image;
+  
+  /** Stack of images for player deck visual depth */
   private playerDeckStack: Phaser.GameObjects.Image[] = [];
+  
+  /** Label text for player's deck */
   private playerDeckLabelText!: Phaser.GameObjects.Text;
+  
+  /** Count text for player's deck */
   private playerDeckCountText!: Phaser.GameObjects.Text;
+  
+  /** Player's discard pile image */
   private playerDiscardSprite!: Phaser.GameObjects.Image;
+  
+  /** Stack of images for player discard visual depth */
   private playerDiscardStack: Phaser.GameObjects.Image[] = [];
+  
+  /** Top card component for player's discard (shows last played card) */
   private playerDiscardTopCard: CardComponent | null = null;
+  
+  /** Label text for player's discard */
   private playerDiscardLabelText!: Phaser.GameObjects.Text;
+  
+  /** Count text for player's discard */
   private playerDiscardCountText!: Phaser.GameObjects.Text;
   
-  // Opponent hand display
+  /* ----------------------------------------
+   * Opponent Hand Display
+   * ---------------------------------------- */
+  
+  /** Container for opponent's hand cards */
   private opponentHandContainer!: Phaser.GameObjects.Container;
+  
+  /** Array of card back images for opponent's hand */
   private opponentHandCards: Phaser.GameObjects.Image[] = [];
+  
+  /** Label text for opponent's hand */
   private opponentHandLabelText!: Phaser.GameObjects.Text;
+  
+  /** Count text for opponent's hand */
   private opponentHandCountText!: Phaser.GameObjects.Text;
   
-  // Card count indicator
+  /* ----------------------------------------
+   * UI Text Elements
+   * ---------------------------------------- */
+  
+  /** Card count indicator text (Hand: X / 7) */
   private cardCountText!: Phaser.GameObjects.Text;
   
-  // Player nameplates
+  /** Player's nameplate text */
   private playerNameText!: Phaser.GameObjects.Text;
+  
+  /** Opponent's nameplate text */
   private opponentNameText!: Phaser.GameObjects.Text;
   
-  // Turn banner
+  /* ----------------------------------------
+   * Turn Banner
+   * ---------------------------------------- */
+  
+  /** Container for turn announcement banner */
   private turnBanner: Phaser.GameObjects.Container | null = null;
+  
+  /** Text element within turn banner */
   private turnBannerText: Phaser.GameObjects.Text | null = null;
   
-  // Connection overlay
+  /* ----------------------------------------
+   * Connection Overlay
+   * ---------------------------------------- */
+  
+  /** Container for connection status overlay */
   private connectionOverlay: Phaser.GameObjects.Container | null = null;
-  private connectionOverlayBackground: Phaser.GameObjects.Graphics | null = null;
+  
+  /** Background graphics for connection overlay (using Rectangle for performance) */
+  private connectionOverlayBackground: Phaser.GameObjects.Rectangle | null = null;
+  
+  /** Status text for connection overlay */
   private connectionOverlayText: Phaser.GameObjects.Text | null = null;
+  
+  /** Return to menu button in connection overlay */
   private connectionOverlayButton: Phaser.GameObjects.Container | null = null;
+  
+  /** Flag indicating if game is paused due to connection issues */
   private isConnectionPaused: boolean = false;
   
-  // Game state management
+  /* ----------------------------------------
+   * Game State Management
+   * ---------------------------------------- */
+  
+  /** Central game state manager */
   private gameStateManager!: GameStateManager;
+  
+  /** Network manager for P2P communication (null in single-player) */
   private networkManager: NetworkManager | null = null;
+  
+  /** Deck manager for local player's deck operations */
   private localDeckManager!: DeckManager;
 
-  // Opponent stats tracking (from network sync)
+  /* ----------------------------------------
+   * Opponent Stats (from network sync)
+   * ---------------------------------------- */
+  
+  /** Opponent's clock time in seconds */
   private opponentClockTime: number = 600;
+  
+  /** Opponent's stopwatch time in seconds */
   private opponentStopwatchTime: number = 0;
+  
+  /** Opponent's current mode (focus/disturb) */
   private opponentMode: 'focus' | 'disturb' = 'focus';
+  
+  /** Opponent's deck card count */
   private opponentDeckCount: number = DECK_SIZE;
+  
+  /** Opponent's discard pile count */
   private opponentDiscardCount: number = 0;
+  
+  /** Opponent's hand card count */
   private opponentHandCount: number = INITIAL_DRAW_COUNT;
+  
+  /** Counter to suppress opponent hand animations during card play */
   private suppressOpponentHandAnimation: number = 0;
+  
+  /** Array of opponent's discarded cards (for discard viewer) */
   private opponentDiscardCards: Array<Card | null> = [];
+  
+  /** Counter to suppress local discard top card updates during animation */
   private suppressLocalDiscardTop: number = 0;
+  
+  /** Counter to suppress opponent discard top card updates during animation */
   private suppressOpponentDiscardTop: number = 0;
 
-  // Layout cache
-  private currentLayout: ReturnType<typeof this.calculateLayout> | null = null;
+  /* ----------------------------------------
+   * Layout Cache
+   * ---------------------------------------- */
+  
+  /** Cached layout calculations for current screen size */
+  private currentLayout: GameLayout | null = null;
+  
+  /** Top-left corner position of the chess board */
   private boardTopLeft = { x: 0, y: 0 };
+  
+  /** Size of each chess board square in pixels */
   private boardSquareSize: number = 64;
+  
+  /** Current scale factor for the chess board */
   private boardScale: number = 1;
   
-  // UI snapshot for animation diffs
+  /* ----------------------------------------
+   * UI Animation State
+   * ---------------------------------------- */
+  
+  /** Previous UI state snapshot for animation diffing */
   private lastStateSnapshot: UISnapshot | null = null;
   
-  // Scene data
+  /* ----------------------------------------
+   * Scene Data
+   * ---------------------------------------- */
+  
+  /** Local player's display name */
   private playerName: string = 'Player';
+  
+  /** Opponent's display name */
   private opponentName: string = 'Opponent';
+  
+  /** Local player's assigned color */
   private localColor: PlayerColor = 'white';
   
-  // Mulligan UI
+  /* ----------------------------------------
+   * Mulligan UI Elements
+   * ---------------------------------------- */
+  
+  /** Mulligan button container */
   private mulliganButton: Phaser.GameObjects.Container | null = null;
+  
+  /** Ready/Done button container */
   private readyButton: Phaser.GameObjects.Container | null = null;
-  private mulliganOverlay: Phaser.GameObjects.Graphics | null = null;
+  
+  /** Semi-transparent overlay for mulligan phase (using Rectangle for performance) */
+  private mulliganOverlay: Phaser.GameObjects.Rectangle | null = null;
+  
+  /** Title text for mulligan phase */
   private mulliganTitleText: Phaser.GameObjects.Text | null = null;
+  
+  /** Instruction text for mulligan phase */
   private mulliganInstructionText: Phaser.GameObjects.Text | null = null;
   
-  // Discard UI
-  private discardOverlay: Phaser.GameObjects.Graphics | null = null;
+  /* ----------------------------------------
+   * Discard Mode UI Elements
+   * ---------------------------------------- */
+  
+  /** Semi-transparent overlay for discard mode (using Rectangle for performance) */
+  private discardOverlay: Phaser.GameObjects.Rectangle | null = null;
+  
+  /** Prompt text for discard mode */
   private discardPromptText: Phaser.GameObjects.Text | null = null;
+  
+  /** Flag indicating if player is in discard mode */
   private isDiscardMode: boolean = false;
 
-  // Discard viewer overlay
+  /* ----------------------------------------
+   * Discard Viewer Overlay
+   * ---------------------------------------- */
+  
+  /** Container for discard pile viewer */
   private discardViewer: Phaser.GameObjects.Container | null = null;
-  private discardViewerBackground: Phaser.GameObjects.Graphics | null = null;
+  
+  /** Background graphics for discard viewer (using Rectangle for performance) */
+  private discardViewerBackground: Phaser.GameObjects.Rectangle | null = null;
+  
+  /** Panel graphics for discard viewer */
   private discardViewerPanel: Phaser.GameObjects.Graphics | null = null;
+  
+  /** Title text for discard viewer */
   private discardViewerTitleText: Phaser.GameObjects.Text | null = null;
+  
+  /** Close button for discard viewer */
   private discardViewerCloseButton: Phaser.GameObjects.Container | null = null;
+  
+  /** Content container for discard viewer cards */
   private discardViewerContent: Phaser.GameObjects.Container | null = null;
+  
+  /** Mask graphics for discard viewer scrolling */
   private discardViewerMask: Phaser.GameObjects.Graphics | null = null;
+  
+  /** Current scroll offset for discard viewer */
   private discardViewerScrollOffset: number = 0;
+  
+  /** Maximum scroll offset for discard viewer */
   private discardViewerMaxScroll: number = 0;
+  
+  /** Which side's discard pile is being viewed */
   private discardViewerSide: 'local' | 'opponent' | null = null;
+  
+  /** Array of card components in discard viewer */
   private discardViewerCards: CardComponent[] = [];
+  
+  /** Bounds of the discard viewer content area */
   private discardViewerBounds: { x: number; y: number; width: number; height: number } | null = null;
+  
+  /** Base Y position for discard viewer content */
   private discardViewerContentBaseY: number = 0;
+  
+  /** Vertical spacing between cards in discard viewer */
   private discardViewerCardSpacingY: number = 0;
   
-  // Ready state tracking for mulligan phase
+  /* ----------------------------------------
+   * Ready State Tracking
+   * ---------------------------------------- */
+  
+  /** Flag indicating if local player is ready (mulligan phase complete) */
   private localPlayerReady: boolean = false;
+  
+  /** Flag indicating if opponent is ready (mulligan phase complete) */
   private opponentPlayerReady: boolean = false;
 
+  /**
+   * Creates the GameScene instance
+   */
   constructor() {
     super({ key: 'GameScene' });
   }
 
+  /* ============================================
+   * SCENE LIFECYCLE
+   * ============================================ */
+
+  /**
+   * Initializes scene with data from MenuScene
+   * 
+   * @param data - Game initialization data from MenuScene
+   * 
+   * Used by: Phaser scene lifecycle
+   */
   init(data: GameSceneData): void {
     this.playerName = data?.playerName || 'Player';
     this.localColor = data?.localColor || 'white';
@@ -223,6 +463,19 @@ export class GameScene extends Phaser.Scene {
     this.opponentName = data?.opponentName || 'Opponent';
   }
 
+  /**
+   * Creates all scene elements and initializes the game
+   * 
+   * Algorithm:
+   * 1. Initialize game state and deck managers
+   * 2. Create background and calculate layout
+   * 3. Create all UI components (panels, board, hand, etc.)
+   * 4. Wire up callbacks for state, network, board, and hand
+   * 5. Initialize game (shuffle deck, draw hand, show mulligan)
+   * 6. Set up resize and input handlers
+   * 
+   * Used by: Phaser scene lifecycle
+   */
   create(): void {
     const { width, height } = this.scale;
     
@@ -241,7 +494,7 @@ export class GameScene extends Phaser.Scene {
     this.createBackground(width, height);
     
     // Calculate layout positions
-    const layout = this.calculateLayout(width, height);
+    const layout = calculateLayout(width, height);
     this.currentLayout = layout;
     
     // Create all UI components in proper positions
@@ -275,15 +528,27 @@ export class GameScene extends Phaser.Scene {
     this.scale.on('resize', this.handleResize, this);
     this.input.on('wheel', this.handleDiscardViewerWheel, this);
   }
+
+  /* ============================================
+   * RESIZE HANDLING
+   * ============================================ */
   
   /**
-   * Handle window resize - reposition all elements
+   * Handles window resize - repositions all UI elements
+   * 
+   * Algorithm:
+   * 1. Recalculate layout for new dimensions
+   * 2. Reposition background with cover scaling
+   * 3. Reposition all UI panels and components
+   * 4. Update overlays if visible
+   * 
+   * @private
    */
   private handleResize(): void {
     const { width, height } = this.scale;
     
     // Recalculate layout
-    const layout = this.calculateLayout(width, height);
+    const layout = calculateLayout(width, height);
     this.currentLayout = layout;
     
     // Reposition and rescale background to cover
@@ -301,6 +566,17 @@ export class GameScene extends Phaser.Scene {
     this.positionOverlays(layout);
   }
 
+  /* ============================================
+   * BACKGROUND MANAGEMENT
+   * ============================================ */
+
+  /**
+   * Creates the scene background
+   * 
+   * @param width - Screen width
+   * @param height - Screen height
+   * @private
+   */
   private createBackground(width: number, height: number): void {
     if (this.textures.exists('room_background')) {
       // Use room background with cover scaling
@@ -323,7 +599,10 @@ export class GameScene extends Phaser.Scene {
   }
   
   /**
-   * Scale background to cover entire viewport (may crop edges)
+   * Scales background to cover entire viewport (may crop edges)
+   * Uses CSS-like "background-size: cover" behavior
+   * 
+   * @private
    */
   private scaleBackgroundToCover(): void {
     if (!this.background) return;
@@ -341,111 +620,17 @@ export class GameScene extends Phaser.Scene {
     this.background.setPosition(width / 2, height / 2);
   }
 
-  private calculateLayout(width: number, height: number) {
-    // Base UI scale from reference resolution
-    const baseScale = Math.min(width / REF_WIDTH, height / REF_HEIGHT);
-    const panelScale = Math.max(0.7, Math.min(1.1, baseScale));
-    
-    const padding = BASE_PADDING * panelScale;
-    const leftPanelWidth = BASE_LEFT_PANEL_WIDTH * panelScale;
-    const rightPanelWidth = BASE_RIGHT_PANEL_WIDTH * panelScale;
-    const eventLogWidth = LOG_WIDTH * panelScale;
-    
-    const topZoneHeight = Math.max(40, Math.min(height * 0.08, BASE_TOP_ZONE_HEIGHT * panelScale * 0.5));
-    const bottomZoneHeight = Math.max(150, Math.min(height * 0.26, BASE_BOTTOM_ZONE_HEIGHT * panelScale));
-    const centerHeight = Math.max(160, height - topZoneHeight - bottomZoneHeight);
-    const boardSpaceHeight = Math.max(0, centerHeight - padding * 2);
-    
-    const availableWidth = Math.max(0, width - leftPanelWidth - rightPanelWidth - eventLogWidth - padding * 4);
-    const boardScale = Math.min(
-      1.5,
-      Math.min(
-        availableWidth / BASE_BOARD_SIZE,
-        boardSpaceHeight / BASE_BOARD_SIZE
-      )
-    );
-    const boardSize = BASE_BOARD_SIZE * boardScale;
-    const handScale = Math.max(0.6, Math.min(1.1, boardScale));
-    
-    const boardLeft = padding + leftPanelWidth + padding;
-    const rightPanelLeft = width - eventLogWidth - rightPanelWidth - padding;
-    const boardX = boardLeft + (rightPanelLeft - boardLeft) / 2;
-    const boardTop = topZoneHeight + padding + Math.max(0, (boardSpaceHeight - boardSize) / 2);
-    const boardY = boardTop + boardSize / 2;
-    
-    const rightPanelX = rightPanelLeft + rightPanelWidth / 2;
-    const rightPanelTop = boardTop + 6 * panelScale;
-    
-    const eventLogX = width - eventLogWidth / 2 - padding;
-    const eventLogY = height / 2;
-    
-    const cardHandY = height - bottomZoneHeight * 0.22;
-    // Position opponent hand higher so only ~1/3 of cards are visible
-    const opponentHandY = padding - 60 * panelScale;
-    const opponentHandLabelY = opponentHandY + 80 * panelScale;
-    const opponentHandCountY = opponentHandLabelY + 18 * panelScale;
-    
-    const leftPanelX = padding + leftPanelWidth / 2;
-    const pileSpacing = 120 * panelScale;
-    const opponentDeckY = topZoneHeight + padding + 18 * panelScale;
-    const opponentDiscardY = opponentDeckY + pileSpacing;
-    const playerDeckY = height - bottomZoneHeight - padding - 18 * panelScale;
-    const playerDiscardY = playerDeckY - pileSpacing;
-    
-    const opponentNameX = boardX;
-    const opponentNameY = boardTop - 24 * panelScale;
-    const playerNameX = boardX;
-    const playerNameY = height - bottomZoneHeight + 26 * panelScale;
+  /* ============================================
+   * POSITION UPDATE METHODS
+   * ============================================ */
 
-    const previewX = boardLeft + 80 * panelScale;
-    const previewY = height - bottomZoneHeight + 70 * panelScale;
-    
-    const turnBannerX = boardX;
-    const turnBannerY = boardTop - 40 * panelScale;
-
-    const playedCardX = boardLeft - 90 * panelScale;
-    const playedCardY = boardY - boardSize * 0.05;
-    
-    return {
-      boardX,
-      boardY,
-      boardSize,
-      boardScale,
-      panelScale,
-      handScale,
-      eventLogX,
-      eventLogY,
-      eventLogWidth,
-      rightPanelX,
-      rightPanelTop,
-      cardHandX: boardX,
-      cardHandY,
-      opponentHandX: boardX,
-      opponentHandY,
-      opponentHandLabelY,
-      opponentHandCountY,
-      leftPanelX,
-      opponentDeckY,
-      opponentDiscardY,
-      playerDeckY,
-      playerDiscardY,
-      opponentNameX,
-      opponentNameY,
-      playerNameX,
-      playerNameY,
-      previewX,
-      previewY,
-      turnBannerX,
-      turnBannerY,
-      playedCardX,
-      playedCardY,
-      width,
-      height,
-      padding
-    };
-  }
-
-  private positionBoard(layout: ReturnType<typeof this.calculateLayout>): void {
+  /**
+   * Updates chess board position and scale
+   * 
+   * @param layout - Current layout calculations
+   * @private
+   */
+  private positionBoard(layout: GameLayout): void {
     this.boardTopLeft = {
       x: layout.boardX - layout.boardSize / 2,
       y: layout.boardY - layout.boardSize / 2
@@ -466,13 +651,26 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private positionEventLog(layout: ReturnType<typeof this.calculateLayout>): void {
+  /**
+   * Updates event log position and scale
+   * 
+   * @param layout - Current layout calculations
+   * @private
+   */
+  private positionEventLog(layout: GameLayout): void {
     if (!this.eventLog) return;
     this.eventLog.setPosition(layout.eventLogX, layout.eventLogY);
     this.eventLog.setScale(layout.panelScale);
   }
 
-  private positionRightPanel(layout: ReturnType<typeof this.calculateLayout>): void {
+  /**
+   * Updates right panel positions (clocks, stopwatches, energy, toggles)
+   * Elements are stacked vertically with consistent spacing
+   * 
+   * @param layout - Current layout calculations
+   * @private
+   */
+  private positionRightPanel(layout: GameLayout): void {
     const scale = layout.panelScale;
     const rightX = layout.rightPanelX;
     let rightY = layout.rightPanelTop;
@@ -522,7 +720,14 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private positionLeftPanel(layout: ReturnType<typeof this.calculateLayout>): void {
+  /**
+   * Updates left panel positions (deck and discard piles)
+   * Includes visual stack effect based on card counts
+   * 
+   * @param layout - Current layout calculations
+   * @private
+   */
+  private positionLeftPanel(layout: GameLayout): void {
     const scale = layout.panelScale;
     const leftX = layout.leftPanelX;
     const deckScale = 0.14 * scale;
@@ -535,7 +740,7 @@ export class GameScene extends Phaser.Scene {
       this.opponentDeckSprite.setScale(deckScale);
       this.opponentDeckSprite.setVisible(this.opponentDeckCount > 0);
     }
-    this.layoutPileStack(this.opponentDeckStack, leftX, layout.opponentDeckY, deckScale, this.opponentDeckCount, 1);
+    layoutPileStack(this.opponentDeckStack, leftX, layout.opponentDeckY, deckScale, this.opponentDeckCount, 1);
     if (this.opponentDeckLabelText) {
       this.opponentDeckLabelText.setPosition(leftX, layout.opponentDeckY - 60 * scale);
       this.opponentDeckLabelText.setFontSize(labelSize);
@@ -550,7 +755,7 @@ export class GameScene extends Phaser.Scene {
       this.opponentDiscardSprite.setScale(deckScale);
       this.opponentDiscardSprite.setVisible(this.opponentDiscardCount > 0 || !!this.opponentDiscardTopCard);
     }
-    this.layoutPileStack(this.opponentDiscardStack, leftX, layout.opponentDiscardY, deckScale, this.opponentDiscardCount, 0.5);
+    layoutPileStack(this.opponentDiscardStack, leftX, layout.opponentDiscardY, deckScale, this.opponentDiscardCount, 0.5);
     if (this.opponentDiscardTopCard) {
       this.opponentDiscardTopCard.setPosition(leftX, layout.opponentDiscardY);
       this.opponentDiscardTopCard.setScale(topCardScale);
@@ -570,7 +775,7 @@ export class GameScene extends Phaser.Scene {
       this.playerDiscardSprite.setVisible(this.gameStateManager ? this.gameStateManager.getPlayer(this.localColor).discard.length > 0 || !!this.playerDiscardTopCard : false);
     }
     const localDiscardCount = this.gameStateManager ? this.gameStateManager.getPlayer(this.localColor).discard.length : 0;
-    this.layoutPileStack(this.playerDiscardStack, leftX, layout.playerDiscardY, deckScale, localDiscardCount, 0.5);
+    layoutPileStack(this.playerDiscardStack, leftX, layout.playerDiscardY, deckScale, localDiscardCount, 0.5);
     if (this.playerDiscardTopCard) {
       this.playerDiscardTopCard.setPosition(leftX, layout.playerDiscardY);
       this.playerDiscardTopCard.setScale(topCardScale);
@@ -590,7 +795,7 @@ export class GameScene extends Phaser.Scene {
       this.playerDeckSprite.setVisible(this.gameStateManager ? this.gameStateManager.getPlayer(this.localColor).deck.length > 0 : false);
     }
     const localDeckCount = this.gameStateManager ? this.gameStateManager.getPlayer(this.localColor).deck.length : 0;
-    this.layoutPileStack(this.playerDeckStack, leftX, layout.playerDeckY, deckScale, localDeckCount, 1);
+    layoutPileStack(this.playerDeckStack, leftX, layout.playerDeckY, deckScale, localDeckCount, 1);
     if (this.playerDeckLabelText) {
       this.playerDeckLabelText.setPosition(leftX, layout.playerDeckY - 60 * scale);
       this.playerDeckLabelText.setFontSize(labelSize);
@@ -601,7 +806,13 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private positionOpponentHand(layout: ReturnType<typeof this.calculateLayout>): void {
+  /**
+   * Updates opponent hand display position
+   * 
+   * @param layout - Current layout calculations
+   * @private
+   */
+  private positionOpponentHand(layout: GameLayout): void {
     if (!this.opponentHandContainer) return;
     this.opponentHandContainer.setPosition(layout.opponentHandX, layout.opponentHandY);
     this.opponentHandLabelText.setPosition(layout.opponentHandX, layout.opponentHandLabelY);
@@ -612,6 +823,19 @@ export class GameScene extends Phaser.Scene {
     this.updateOpponentHandDisplay(this.opponentHandCount);
   }
 
+  /**
+   * Updates opponent hand card display with fan layout
+   * Cards are displayed face-down in a fan pattern
+   * 
+   * Algorithm:
+   * 1. Clear existing card images
+   * 2. Calculate fan spread based on card count
+   * 3. Position each card with rotation and arc offset
+   * 4. Cards are flipped 180 degrees (opponent's perspective)
+   * 
+   * @param count - Number of cards in opponent's hand
+   * @private
+   */
   private updateOpponentHandDisplay(count: number): void {
     const layout = this.currentLayout;
     if (!layout || !this.opponentHandContainer) return;
@@ -648,7 +872,14 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private positionNameplates(layout: ReturnType<typeof this.calculateLayout>): void {
+  /**
+   * Updates player nameplate positions and colors
+   * White player gets white text, black player gets gray text
+   * 
+   * @param layout - Current layout calculations
+   * @private
+   */
+  private positionNameplates(layout: GameLayout): void {
     const fontSize = 20 * layout.panelScale;
     const colorLocal = this.localColor === 'white' ? '#ffffff' : '#cccccc';
     const colorOpponent = this.localColor === 'white' ? '#cccccc' : '#ffffff';
@@ -662,7 +893,13 @@ export class GameScene extends Phaser.Scene {
     this.opponentNameText.setColor(colorOpponent);
   }
 
-  private positionCardHand(layout: ReturnType<typeof this.calculateLayout>): void {
+  /**
+   * Updates card hand position and configures board bounds for targeting
+   * 
+   * @param layout - Current layout calculations
+   * @private
+   */
+  private positionCardHand(layout: GameLayout): void {
     if (!this.cardHand) return;
     this.cardHand.setPosition(layout.cardHandX, layout.cardHandY);
     this.cardHand.setScale(1);
@@ -684,25 +921,43 @@ export class GameScene extends Phaser.Scene {
     );
   }
 
-  private positionCardCount(layout: ReturnType<typeof this.calculateLayout>): void {
+  /**
+   * Updates card count indicator position
+   * 
+   * @param layout - Current layout calculations
+   * @private
+   */
+  private positionCardCount(layout: GameLayout): void {
     if (!this.cardCountText) return;
     this.cardCountText.setPosition(layout.boardX, layout.boardY + layout.boardSize / 2 + 18 * layout.panelScale);
     this.cardCountText.setFontSize(14 * layout.panelScale);
   }
 
-  private positionTurnBanner(layout: ReturnType<typeof this.calculateLayout>): void {
+  /**
+   * Updates turn banner position
+   * 
+   * @param layout - Current layout calculations
+   * @private
+   */
+  private positionTurnBanner(layout: GameLayout): void {
     if (!this.turnBanner) return;
     this.turnBanner.setPosition(layout.turnBannerX, layout.turnBannerY);
     this.turnBanner.setScale(layout.panelScale);
   }
 
-  private positionOverlays(layout: ReturnType<typeof this.calculateLayout>): void {
+  /**
+   * Updates all overlay positions (mulligan, discard, connection, viewer)
+   * 
+   * @param layout - Current layout calculations
+   * @private
+   */
+  private positionOverlays(layout: GameLayout): void {
     const { width, height } = layout;
     
     if (this.mulliganOverlay) {
-      this.mulliganOverlay.clear();
-      this.mulliganOverlay.fillStyle(0x000000, 0.5);
-      this.mulliganOverlay.fillRect(0, 0, width, height);
+      // Rectangle uses center origin, so position at center and set size
+      this.mulliganOverlay.setPosition(width / 2, height / 2);
+      this.mulliganOverlay.setSize(width, height);
     }
     if (this.mulliganTitleText) {
       this.mulliganTitleText.setPosition(width / 2, height / 2 - 180 * layout.panelScale);
@@ -724,9 +979,9 @@ export class GameScene extends Phaser.Scene {
     }
     
     if (this.discardOverlay) {
-      this.discardOverlay.clear();
-      this.discardOverlay.fillStyle(0x000000, 0.3);
-      this.discardOverlay.fillRect(0, 0, width, height);
+      // Rectangle uses center origin, so position at center and set size
+      this.discardOverlay.setPosition(width / 2, height / 2);
+      this.discardOverlay.setSize(width, height);
     }
     if (this.discardPromptText) {
       this.discardPromptText.setPosition(width / 2, height / 2 - 150 * layout.panelScale);
@@ -734,9 +989,9 @@ export class GameScene extends Phaser.Scene {
     }
     
     if (this.connectionOverlay && this.connectionOverlayBackground) {
-      this.connectionOverlayBackground.clear();
-      this.connectionOverlayBackground.fillStyle(0x000000, 0.6);
-      this.connectionOverlayBackground.fillRect(0, 0, width, height);
+      // Rectangle uses center origin, so position at center and set size
+      this.connectionOverlayBackground.setPosition(width / 2, height / 2);
+      this.connectionOverlayBackground.setSize(width, height);
       this.connectionOverlay.setPosition(0, 0);
     }
     if (this.connectionOverlayText) {
@@ -755,14 +1010,31 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private createEventLog(layout: ReturnType<typeof this.calculateLayout>): void {
+  /* ============================================
+   * UI COMPONENT CREATION
+   * ============================================ */
+
+  /**
+   * Creates the event log component
+   * 
+   * @param layout - Current layout calculations
+   * @private
+   */
+  private createEventLog(layout: GameLayout): void {
     // Event log on the right side, full height
     this.eventLog = new EventLogComponent(this, layout.eventLogX, layout.eventLogY);
     this.eventLog.setDepth(10);
     this.eventLog.setScale(layout.panelScale);
   }
 
-  private createChessBoard(layout: ReturnType<typeof this.calculateLayout>): void {
+  /**
+   * Creates the chess board component
+   * Board is flipped if local player is black (Requirement 1.8)
+   * 
+   * @param layout - Current layout calculations
+   * @private
+   */
+  private createChessBoard(layout: GameLayout): void {
     // Flip board if local player is black (Requirement 1.8)
     const isFlipped = this.localColor === 'black';
     
@@ -777,7 +1049,21 @@ export class GameScene extends Phaser.Scene {
     this.positionBoard(layout);
   }
 
-  private createRightPanel(layout: ReturnType<typeof this.calculateLayout>): void {
+  /**
+   * Creates the right panel with clocks, stopwatches, energy bar, and toggles
+   * Components are stacked vertically in order:
+   * 1. Opponent Clock
+   * 2. Opponent Stopwatch
+   * 3. Opponent Focus/Disturb toggle
+   * 4. Player Clock
+   * 5. Player Stopwatch
+   * 6. Energy Bar
+   * 7. Player Focus/Disturb toggle
+   * 
+   * @param layout - Current layout calculations
+   * @private
+   */
+  private createRightPanel(layout: GameLayout): void {
     const x = layout.rightPanelX;
     const scale = layout.panelScale;
     const y = layout.rightPanelTop;
@@ -836,14 +1122,14 @@ export class GameScene extends Phaser.Scene {
    * Top: Opponent's deck, opponent's discard
    * Bottom: Player's discard, player's deck
    */
-  private createLeftPanel(layout: ReturnType<typeof this.calculateLayout>): void {
+  private createLeftPanel(layout: GameLayout): void {
     const scale = layout.panelScale;
     const x = layout.leftPanelX;
     const deckScale = 0.14 * scale;
     const stackDepth = MAX_PILE_LAYERS;
     
     // === OPPONENT'S DECK (top) ===
-    this.opponentDeckStack = this.createPileStack(x, layout.opponentDeckY, deckScale, stackDepth, 1);
+    this.opponentDeckStack = createPileStack(this, x, layout.opponentDeckY, deckScale, stackDepth, 1);
     this.opponentDeckSprite = this.add.image(x, layout.opponentDeckY, 'card_back');
     this.opponentDeckSprite.setScale(deckScale);
     this.opponentDeckSprite.setDepth(10);
@@ -857,7 +1143,7 @@ export class GameScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(10);
     
     // === OPPONENT'S DISCARD (below deck) ===
-    this.opponentDiscardStack = this.createPileStack(x, layout.opponentDiscardY, deckScale, stackDepth, 0.5);
+    this.opponentDiscardStack = createPileStack(this, x, layout.opponentDiscardY, deckScale, stackDepth, 0.5);
     this.opponentDiscardSprite = this.add.image(x, layout.opponentDiscardY, 'card_back');
     this.opponentDiscardSprite.setScale(deckScale);
     this.opponentDiscardSprite.setDepth(10);
@@ -872,7 +1158,7 @@ export class GameScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(10);
     
     // === PLAYER'S DISCARD (above player deck) ===
-    this.playerDiscardStack = this.createPileStack(x, layout.playerDiscardY, deckScale, stackDepth, 0.5);
+    this.playerDiscardStack = createPileStack(this, x, layout.playerDiscardY, deckScale, stackDepth, 0.5);
     this.playerDiscardSprite = this.add.image(x, layout.playerDiscardY, 'card_back');
     this.playerDiscardSprite.setScale(deckScale);
     this.playerDiscardSprite.setDepth(10);
@@ -887,7 +1173,7 @@ export class GameScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(10);
     
     // === PLAYER'S DECK (bottom) ===
-    this.playerDeckStack = this.createPileStack(x, layout.playerDeckY, deckScale, stackDepth, 1);
+    this.playerDeckStack = createPileStack(this, x, layout.playerDeckY, deckScale, stackDepth, 1);
     this.playerDeckSprite = this.add.image(x, layout.playerDeckY, 'card_back');
     this.playerDeckSprite.setScale(deckScale);
     this.playerDeckSprite.setDepth(10);
@@ -906,7 +1192,14 @@ export class GameScene extends Phaser.Scene {
     this.positionLeftPanel(layout);
   }
 
-  private createOpponentHand(layout: ReturnType<typeof this.calculateLayout>): void {
+  /**
+   * Creates the opponent's hand display container
+   * Shows face-down cards in a fan pattern
+   * 
+   * @param layout - Current layout calculations
+   * @private
+   */
+  private createOpponentHand(layout: GameLayout): void {
     this.opponentHandContainer = this.add.container(layout.opponentHandX, layout.opponentHandY);
     this.opponentHandContainer.setDepth(12);
     
@@ -928,7 +1221,13 @@ export class GameScene extends Phaser.Scene {
     this.positionOpponentHand(layout);
   }
 
-  private createNameplates(layout: ReturnType<typeof this.calculateLayout>): void {
+  /**
+   * Creates player nameplates above and below the board
+   * 
+   * @param layout - Current layout calculations
+   * @private
+   */
+  private createNameplates(layout: GameLayout): void {
     this.opponentNameText = this.add.text(
       layout.opponentNameX,
       layout.opponentNameY,
@@ -946,7 +1245,13 @@ export class GameScene extends Phaser.Scene {
     this.positionNameplates(layout);
   }
 
-  private createCardHand(layout: ReturnType<typeof this.calculateLayout>): void {
+  /**
+   * Creates the player's card hand component
+   * 
+   * @param layout - Current layout calculations
+   * @private
+   */
+  private createCardHand(layout: GameLayout): void {
     this.cardHand = new CardHandComponent(
       this, layout.cardHandX, layout.cardHandY,
       layout.previewX, layout.previewY
@@ -959,7 +1264,13 @@ export class GameScene extends Phaser.Scene {
     this.cardHand.enableInteraction();
   }
 
-  private createCardCountIndicator(layout: ReturnType<typeof this.calculateLayout>): void {
+  /**
+   * Creates the card count indicator text
+   * 
+   * @param layout - Current layout calculations
+   * @private
+   */
+  private createCardCountIndicator(layout: GameLayout): void {
     this.cardCountText = this.add.text(
       layout.boardX, layout.boardY + layout.boardSize / 2 + 18 * layout.panelScale, 'Hand: 0 / 7',
       { fontSize: `${14 * layout.panelScale}px`, fontFamily: 'BoldPixels, Arial', color: '#ffffff' }
@@ -967,7 +1278,14 @@ export class GameScene extends Phaser.Scene {
     this.positionCardCount(layout);
   }
 
-  private createTurnBanner(layout: ReturnType<typeof this.calculateLayout>): void {
+  /**
+   * Creates the turn announcement banner
+   * Banner appears briefly at turn changes
+   * 
+   * @param layout - Current layout calculations
+   * @private
+   */
+  private createTurnBanner(layout: GameLayout): void {
     this.turnBanner = this.add.container(layout.turnBannerX, layout.turnBannerY);
     this.turnBanner.setDepth(100);
     this.turnBanner.setVisible(false);
@@ -989,12 +1307,34 @@ export class GameScene extends Phaser.Scene {
   // Game State Callbacks
   // ============================================
 
+  /**
+   * Sets up callback for game state changes
+   * 
+   * @private
+   */
   private setupGameStateCallbacks(): void {
     this.gameStateManager.setOnStateChange((_state) => {
       this.updateUIFromState();
     });
   }
 
+  /**
+   * Updates all UI components from current game state
+   * 
+   * Algorithm:
+   * 1. Get current state from game state manager
+   * 2. Update clocks, stopwatches, energy bar
+   * 3. Update deck/discard counts and displays
+   * 4. Update hand displays if changed
+   * 5. Update chess board if FEN changed
+   * 6. Check for discard mode trigger
+   * 7. Run UI animations for state changes
+   * 8. Send stats to opponent if networked
+   * 
+   * @param options - Options for update behavior
+   * @param options.sendStats - Whether to send stats to opponent (default: true)
+   * @private
+   */
   private updateUIFromState(options: { sendStats?: boolean } = {}): void {
     const state = this.gameStateManager.getState();
     const localPlayer = state.players[this.localColor];
@@ -1033,11 +1373,19 @@ export class GameScene extends Phaser.Scene {
 
     // Update player deck counts
     this.updatePlayerDeckCounts(localPlayer.deck.length, localPlayer.discard.length);
-    if (this.currentLayout) {
+    
+    // Only reposition left panel if deck/discard counts changed (performance optimization)
+    const deckCountsChanged = !this.lastStateSnapshot || 
+      this.lastStateSnapshot.localDeck !== localPlayer.deck.length ||
+      this.lastStateSnapshot.localDiscard !== localPlayer.discard.length ||
+      this.lastStateSnapshot.opponentDeck !== opponentDeckCount ||
+      this.lastStateSnapshot.opponentDiscard !== opponentDiscardCount;
+    
+    if (deckCountsChanged && this.currentLayout) {
       this.positionLeftPanel(this.currentLayout);
     }
     this.refreshDiscardTopCards();
-    if (this.discardViewer && this.currentLayout) {
+    if (this.discardViewer && this.currentLayout && deckCountsChanged) {
       this.buildDiscardViewerCards(this.currentLayout);
     }
 
@@ -1090,6 +1438,14 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Runs UI animations based on state changes
+   * Compares previous and current snapshots to trigger appropriate animations
+   * 
+   * @param prev - Previous UI state snapshot
+   * @param next - Current UI state snapshot
+   * @private
+   */
   private runUIAnimations(prev: UISnapshot, next: UISnapshot): void {
     const layout = this.currentLayout;
     if (!layout) return;
@@ -1169,6 +1525,14 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Animates stopwatch value change with bounce and color flash
+   * 
+   * @param component - Stopwatch component to animate
+   * @param oldValue - Previous time value
+   * @param newValue - New time value
+   * @private
+   */
   private animateStopwatchChange(component: StopwatchComponent, oldValue: number, newValue: number): void {
     const diff = newValue - oldValue;
     if (diff === 0) return;
@@ -1195,6 +1559,14 @@ export class GameScene extends Phaser.Scene {
     );
   }
 
+  /**
+   * Animates cards being drawn from deck to hand
+   * Creates temporary card images that arc from deck to hand position
+   * 
+   * @param side - Which player is drawing ('local' or 'opponent')
+   * @param count - Number of cards being drawn
+   * @private
+   */
   private animateCardDraw(side: 'local' | 'opponent', count: number): void {
     const layout = this.currentLayout;
     if (!layout || count <= 0) return;
@@ -1222,6 +1594,14 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Animates cards being discarded from hand to discard pile
+   * Creates temporary card images that move from hand to discard
+   * 
+   * @param side - Which player is discarding ('local' or 'opponent')
+   * @param count - Number of cards being discarded
+   * @private
+   */
   private animateCardDiscard(side: 'local' | 'opponent', count: number): void {
     const layout = this.currentLayout;
     if (!layout || count <= 0) return;
@@ -1255,6 +1635,17 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Creates a floating delta text that animates upward and fades out
+   * Used to show value changes (+5s, -10s, etc.)
+   * 
+   * @param x - X position
+   * @param y - Y position
+   * @param value - Delta value to display
+   * @param color - Text color
+   * @param suffix - Optional suffix (e.g., 's' for seconds)
+   * @private
+   */
   private createFloatingDelta(x: number, y: number, value: number, color: string, suffix: string = ''): void {
     const sign = value >= 0 ? '+' : '';
     const layout = this.currentLayout;
@@ -1278,6 +1669,13 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * Shows the turn announcement banner with animation
+   * Banner pops in, displays briefly, then fades out
+   * 
+   * @param turn - Which player's turn it is
+   * @private
+   */
   private showTurnBanner(turn: PlayerColor): void {
     if (!this.turnBanner || !this.turnBannerText) return;
     const layout = this.currentLayout;
@@ -1321,17 +1719,28 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * Shows the connection status overlay
+   * Displays message and return to menu button
+   * Pauses game interaction while visible
+   * 
+   * @param message - Status message to display
+   * @private
+   */
   private showConnectionOverlay(message: string): void {
-    const layout = this.currentLayout ?? this.calculateLayout(this.scale.width, this.scale.height);
+    const layout = this.currentLayout ?? calculateLayout(this.scale.width, this.scale.height);
     this.currentLayout = layout;
     
     if (!this.connectionOverlay) {
       this.connectionOverlay = this.add.container(0, 0);
       this.connectionOverlay.setDepth(200);
       
-      this.connectionOverlayBackground = this.add.graphics();
-      this.connectionOverlayBackground.fillStyle(0x000000, 0.6);
-      this.connectionOverlayBackground.fillRect(0, 0, layout.width, layout.height);
+      // Using Rectangle for better performance than Graphics
+      this.connectionOverlayBackground = this.add.rectangle(
+        layout.width / 2, layout.height / 2, 
+        layout.width, layout.height, 
+        0x000000, 0.6
+      );
       this.connectionOverlay.add(this.connectionOverlayBackground);
       
       this.connectionOverlayText = this.add.text(layout.width / 2, layout.height / 2 - 40 * layout.panelScale, message, {
@@ -1343,7 +1752,7 @@ export class GameScene extends Phaser.Scene {
       }).setOrigin(0.5);
       this.connectionOverlay.add(this.connectionOverlayText);
       
-      this.connectionOverlayButton = this.createImageButton(
+      this.connectionOverlayButton = createImageButton(this, 
         layout.width / 2,
         layout.height / 2 + 40 * layout.panelScale,
         'RETURN TO MENU',
@@ -1366,6 +1775,12 @@ export class GameScene extends Phaser.Scene {
     this.cardHand?.disableInteraction();
   }
 
+  /**
+   * Hides the connection status overlay
+   * Resumes game interaction
+   * 
+   * @private
+   */
   private hideConnectionOverlay(): void {
     if (this.connectionOverlay) {
       this.connectionOverlay.setVisible(false);
@@ -1374,8 +1789,15 @@ export class GameScene extends Phaser.Scene {
     this.cardHand?.enableInteraction();
   }
 
+  /**
+   * Shows the discard pile viewer overlay
+   * Displays all cards in the selected discard pile with scrolling
+   * 
+   * @param side - Which discard pile to view ('local' or 'opponent')
+   * @private
+   */
   private showDiscardViewer(side: 'local' | 'opponent'): void {
-    const layout = this.currentLayout ?? this.calculateLayout(this.scale.width, this.scale.height);
+    const layout = this.currentLayout ?? calculateLayout(this.scale.width, this.scale.height);
     this.currentLayout = layout;
 
     this.hideDiscardViewer();
@@ -1385,10 +1807,13 @@ export class GameScene extends Phaser.Scene {
     this.discardViewer = this.add.container(0, 0);
     this.discardViewer.setDepth(220);
 
-    this.discardViewerBackground = this.add.graphics();
-    this.discardViewerBackground.fillStyle(0x000000, 0.6);
-    this.discardViewerBackground.fillRect(0, 0, layout.width, layout.height);
-    this.discardViewerBackground.setInteractive(new Phaser.Geom.Rectangle(0, 0, layout.width, layout.height), Phaser.Geom.Rectangle.Contains);
+    // Using Rectangle for better performance than Graphics
+    this.discardViewerBackground = this.add.rectangle(
+      layout.width / 2, layout.height / 2,
+      layout.width, layout.height,
+      0x000000, 0.6
+    );
+    this.discardViewerBackground.setInteractive();
     this.discardViewerBackground.on('pointerdown', () => this.hideDiscardViewer());
     this.discardViewer.add(this.discardViewerBackground);
 
@@ -1403,7 +1828,7 @@ export class GameScene extends Phaser.Scene {
     }).setOrigin(0.5, 0.5);
     this.discardViewer.add(this.discardViewerTitleText);
 
-    this.discardViewerCloseButton = this.createImageButton(
+    this.discardViewerCloseButton = createImageButton(this, 
       0,
       0,
       'CLOSE',
@@ -1426,6 +1851,12 @@ export class GameScene extends Phaser.Scene {
     this.cardHand?.disableInteraction();
   }
 
+  /**
+   * Hides the discard pile viewer overlay
+   * Cleans up all viewer elements and re-enables interaction
+   * 
+   * @private
+   */
   private hideDiscardViewer(): void {
     this.discardViewerCards.forEach(card => card.destroy());
     this.discardViewerCards = [];
@@ -1450,7 +1881,13 @@ export class GameScene extends Phaser.Scene {
     this.cardHand?.enableInteraction();
   }
 
-  private layoutDiscardViewer(layout: ReturnType<typeof this.calculateLayout>): void {
+  /**
+   * Lays out the discard viewer panel and content area
+   * 
+   * @param layout - Current layout calculations
+   * @private
+   */
+  private layoutDiscardViewer(layout: GameLayout): void {
     if (!this.discardViewer || !this.discardViewerPanel || !this.discardViewerTitleText || !this.discardViewerCloseButton || !this.discardViewerMask) {
       return;
     }
@@ -1507,15 +1944,22 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.discardViewerBackground) {
-      this.discardViewerBackground.clear();
-      this.discardViewerBackground.fillStyle(0x000000, 0.6);
-      this.discardViewerBackground.fillRect(0, 0, layout.width, layout.height);
+      // Rectangle uses center origin, so position at center and set size
+      this.discardViewerBackground.setPosition(layout.width / 2, layout.height / 2);
+      this.discardViewerBackground.setSize(layout.width, layout.height);
     }
 
     this.updateDiscardViewerScroll();
   }
 
-  private buildDiscardViewerCards(layout: ReturnType<typeof this.calculateLayout>): void {
+  /**
+   * Builds card components for the discard viewer
+   * Cards are arranged in a grid with scrolling support
+   * 
+   * @param layout - Current layout calculations
+   * @private
+   */
+  private buildDiscardViewerCards(layout: GameLayout): void {
     if (!this.discardViewerContent || !this.discardViewerBounds || !this.discardViewerSide) return;
 
     this.discardViewerCards.forEach(card => card.destroy());
@@ -1555,12 +1999,26 @@ export class GameScene extends Phaser.Scene {
     this.updateDiscardViewerScroll();
   }
 
+  /**
+   * Updates the discard viewer scroll position
+   * 
+   * @private
+   */
   private updateDiscardViewerScroll(): void {
     if (!this.discardViewerContent) return;
     const offset = this.discardViewerScrollOffset * this.discardViewerCardSpacingY;
     this.discardViewerContent.setY(this.discardViewerContentBaseY - offset);
   }
 
+  /**
+   * Handles mouse wheel scrolling in the discard viewer
+   * 
+   * @param _pointer - Phaser pointer (unused)
+   * @param _gameObjects - Game objects under pointer (unused)
+   * @param _deltaX - Horizontal scroll delta (unused)
+   * @param deltaY - Vertical scroll delta
+   * @private
+   */
   private handleDiscardViewerWheel(
     _pointer: Phaser.Input.Pointer,
     _gameObjects: Phaser.GameObjects.GameObject[],
@@ -1582,6 +2040,13 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Checks if pointer is within the discard viewer bounds
+   * 
+   * @param pointer - Phaser input pointer
+   * @returns true if pointer is inside viewer bounds
+   * @private
+   */
   private isPointerInDiscardViewer(pointer: Phaser.Input.Pointer): boolean {
     if (!this.discardViewerBounds) return false;
     const { x, y, width, height } = this.discardViewerBounds;
@@ -1589,6 +2054,12 @@ export class GameScene extends Phaser.Scene {
       pointer.y >= y && pointer.y <= y + height;
   }
 
+  /**
+   * Refreshes all name displays (clocks, stopwatches, nameplates)
+   * Called when opponent name is received via network
+   * 
+   * @private
+   */
   private refreshNameDisplays(): void {
     if (this.opponentClock) {
       this.opponentClock.setLabel(this.opponentName);
@@ -1617,6 +2088,13 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Logs an event to the event log
+   * 
+   * @param player - Player color or 'system' for system messages
+   * @param message - Message to log
+   * @private
+   */
   private logEvent(player: PlayerColor | 'system', message: string): void {
     const displayName = player === 'system'
       ? undefined
@@ -1626,6 +2104,14 @@ export class GameScene extends Phaser.Scene {
     this.eventLog.addEntry(player === 'system' ? 'system' : player, message, displayName);
   }
 
+  /**
+   * Gets card data by card name from definitions
+   * Used to reconstruct card data from network messages
+   * 
+   * @param name - Card name to look up
+   * @returns Card data or null if not found
+   * @private
+   */
   private getCardDataByName(name: string): Card | null {
     const definition = Object.values(CARD_DEFINITIONS).find((def) => def.name === name);
     if (!definition) return null;
@@ -1642,6 +2128,14 @@ export class GameScene extends Phaser.Scene {
     };
   }
 
+  /**
+   * Converts a chess square to pixel coordinates
+   * Accounts for board position and flipping
+   * 
+   * @param square - Chess square notation (e.g., 'e4')
+   * @returns Pixel coordinates or null if layout not ready
+   * @private
+   */
   private getSquarePixel(square: Square): { x: number; y: number } | null {
     if (!this.currentLayout) return null;
     
@@ -1661,6 +2155,14 @@ export class GameScene extends Phaser.Scene {
     };
   }
 
+  /**
+   * Gets the world position of a container
+   * Accounts for parent transforms
+   * 
+   * @param container - Container to get position of
+   * @returns World coordinates
+   * @private
+   */
   private getWorldPosition(container: Phaser.GameObjects.Container): { x: number; y: number } {
     const matrix = container.getWorldTransformMatrix();
     const point = new Phaser.Math.Vector2();
@@ -1668,6 +2170,15 @@ export class GameScene extends Phaser.Scene {
     return { x: point.x, y: point.y };
   }
 
+  /**
+   * Animates a card being played
+   * Card moves from hand to display position, shows target arrow, then moves to discard
+   * 
+   * @param cardData - Card data (null for face-down)
+   * @param side - Which player played the card
+   * @param target - Optional target square for the card effect
+   * @private
+   */
   private animateCardPlay(cardData: Card | null, side: 'local' | 'opponent', target?: Square): void {
     const layout = this.currentLayout;
     if (!layout) return;
@@ -1704,7 +2215,7 @@ export class GameScene extends Phaser.Scene {
       onComplete: () => {
         const targetPos = target ? this.getSquarePixel(target) : null;
         const arrow = targetPos
-          ? this.drawTargetArrow(displayPos, targetPos, 0xffcc00, 18 * layout.panelScale, 4 * layout.panelScale)
+          ? drawTargetArrow(this, displayPos, targetPos, 0xffcc00, 18 * layout.panelScale, 4 * layout.panelScale)
           : null;
         
         this.time.delayedCall(3000, () => {
@@ -1733,43 +2244,16 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private drawTargetArrow(
-    from: { x: number; y: number },
-    to: { x: number; y: number },
-    color: number,
-    headSize: number,
-    lineWidth: number
-  ): Phaser.GameObjects.Graphics {
-    const arrow = this.add.graphics();
-    arrow.setDepth(45);
-    arrow.lineStyle(lineWidth, color, 0.9);
-    arrow.beginPath();
-    arrow.moveTo(from.x, from.y);
-    arrow.lineTo(to.x, to.y);
-    arrow.strokePath();
-
-    const angle = Phaser.Math.Angle.Between(from.x, from.y, to.x, to.y);
-    const headLength = headSize;
-    const headWidth = headSize * 0.75;
-
-    const tipX = to.x;
-    const tipY = to.y;
-    const leftX = tipX - headLength * Math.cos(angle) + headWidth * Math.sin(angle);
-    const leftY = tipY - headLength * Math.sin(angle) - headWidth * Math.cos(angle);
-    const rightX = tipX - headLength * Math.cos(angle) - headWidth * Math.sin(angle);
-    const rightY = tipY - headLength * Math.sin(angle) + headWidth * Math.cos(angle);
-
-    arrow.fillStyle(color, 0.95);
-    arrow.beginPath();
-    arrow.moveTo(tipX, tipY);
-    arrow.lineTo(leftX, leftY);
-    arrow.lineTo(rightX, rightY);
-    arrow.closePath();
-    arrow.fillPath();
-
-    return arrow;
-  }
-
+  /**
+   * Animates a piece moving on the board
+   * Creates a ghost image that moves from source to destination
+   * 
+   * @param from - Source square
+   * @param to - Destination square
+   * @param movingPiece - Piece being moved
+   * @param capturedPiece - Piece being captured (if any)
+   * @private
+   */
   private animatePieceMove(
     from: Square,
     to: Square,
@@ -1806,6 +2290,13 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * Animates a piece being deployed (placed on board)
+   * Uses pop-in animation
+   * 
+   * @param square - Square where piece was deployed
+   * @private
+   */
   private animatePieceDeploy(square: Square): void {
     const sprite = this.chessBoard.getPieceSprite(square);
     if (!sprite) return;
@@ -1814,6 +2305,14 @@ export class GameScene extends Phaser.Scene {
     this.animations.popIn(sprite, targetScale);
   }
 
+  /**
+   * Animates a piece being destroyed (removed from board)
+   * Creates a ghost image that fades out
+   * 
+   * @param piece - Piece being destroyed
+   * @param square - Square where piece was located
+   * @private
+   */
   private animatePieceDestroy(piece: { type: PieceSymbol; color: Color }, square: Square): void {
     const textureKey = this.chessBoard.getPieceTextureKey(piece.type, piece.color);
     const pos = this.getSquarePixel(square);
@@ -1829,6 +2328,12 @@ export class GameScene extends Phaser.Scene {
   // Network Callbacks
   // ============================================
 
+  /**
+   * Sets up callbacks for network events
+   * Handles peer join/leave, actions, state sync, and errors
+   * 
+   * @private
+   */
   private setupNetworkCallbacks(): void {
     if (!this.networkManager) return;
     
@@ -1870,6 +2375,13 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Handles incoming network actions from opponent
+   * Routes actions to appropriate handlers
+   * 
+   * @param action - Network action received
+   * @private
+   */
   private handleNetworkAction(action: GameAction): void {
     switch (action.type) {
       case 'PLAY_CARD':
@@ -1939,6 +2451,17 @@ export class GameScene extends Phaser.Scene {
     );
   }
 
+  /**
+   * Handles opponent playing a card
+   * Updates local state and triggers animations
+   * 
+   * @param _cardId - Card ID (unused, for logging)
+   * @param cardName - Name of the card played
+   * @param target - Target square (if applicable)
+   * @param pieceType - Piece type for deployment cards
+   * @param effectAction - Card effect action type
+   * @private
+   */
   private handleOpponentPlayCard(_cardId: string, cardName: string, target?: string, pieceType?: string, effectAction?: string): void {
     const opponentColor = this.localColor === 'white' ? 'black' : 'white';
     const cardData = this.getCardDataByName(cardName);
@@ -1978,6 +2501,14 @@ export class GameScene extends Phaser.Scene {
     this.updateUIFromState();
   }
 
+  /**
+   * Handles opponent moving a piece
+   * Validates move, updates board, and checks game end conditions
+   * 
+   * @param from - Source square
+   * @param to - Destination square
+   * @private
+   */
   private handleOpponentMovePiece(from: string, to: string): void {
     const opponentColor = this.localColor === 'white' ? 'black' : 'white';
     const movingPiece = this.chessBoard.getWrapper().getPiece(from as Square);
@@ -2013,6 +2544,12 @@ export class GameScene extends Phaser.Scene {
     this.updateUIFromState();
   }
 
+  /**
+   * Handles opponent performing a mulligan
+   * Deducts time cost and logs event
+   * 
+   * @private
+   */
   private handleOpponentMulligan(): void {
     const opponentColor = this.localColor === 'white' ? 'black' : 'white';
     this.gameStateManager.deductMulliganTimeCost(opponentColor);
@@ -2021,6 +2558,12 @@ export class GameScene extends Phaser.Scene {
     this.updateUIFromState();
   }
 
+  /**
+   * Handles opponent signaling ready
+   * Checks if both players are ready to start
+   * 
+   * @private
+   */
   private handleOpponentReady(): void {
     this.opponentPlayerReady = true;
     this.logEvent('system', 'Opponent is ready');
@@ -2032,12 +2575,32 @@ export class GameScene extends Phaser.Scene {
   // Chess Board Callbacks
   // ============================================
 
+  /**
+   * Sets up callback for chess board move attempts
+   * 
+   * @private
+   */
   private setupChessBoardCallbacks(): void {
     this.chessBoard.onMoveAttempt = (from: Square, to: Square) => {
       this.handleLocalMove(from, to);
     };
   }
 
+  /**
+   * Handles local player attempting to move a piece
+   * 
+   * Algorithm:
+   * 1. Validate turn and game state
+   * 2. Verify piece ownership
+   * 3. Check if piece can move (not deployed this turn)
+   * 4. Execute move and update state
+   * 5. Check for king capture and game end conditions
+   * 6. Handle hand size enforcement or end turn
+   * 
+   * @param from - Source square
+   * @param to - Destination square
+   * @private
+   */
   private handleLocalMove(from: Square, to: Square): void {
     // In single-player mode (no network), allow controlling both sides
     const isSinglePlayer = !this.networkManager;
@@ -2143,6 +2706,12 @@ export class GameScene extends Phaser.Scene {
   // Card Hand Callbacks
   // ============================================
 
+  /**
+   * Sets up callbacks for card hand interactions
+   * Configures target validation and card play handlers
+   * 
+   * @private
+   */
   private setupCardHandCallbacks(): void {
     // Set target validator for piece deployment and destruction
     this.cardHand.setTargetValidator((square, card) => {
@@ -2160,6 +2729,15 @@ export class GameScene extends Phaser.Scene {
     };
   }
 
+  /**
+   * Validates if a card can target a specific square
+   * Uses control power to determine valid targets
+   * 
+   * @param card - Card being played
+   * @param square - Target square
+   * @returns true if target is valid
+   * @private
+   */
   private validateCardTarget(card: Card, square: Square): boolean {
     const controlMap = calculateControlPower(this.chessBoard.getWrapper());
     const playerControls = playerControlsSquare(controlMap, square, this.localColor);
@@ -2188,6 +2766,20 @@ export class GameScene extends Phaser.Scene {
     return false;
   }
 
+  /**
+   * Handles local player playing a card
+   * 
+   * Algorithm:
+   * 1. Validate turn and game state
+   * 2. Check if in discard mode (discard instead of play)
+   * 3. Validate card can be played (cost, requirements)
+   * 4. Execute card effect on board
+   * 5. Send to network and update UI
+   * 
+   * @param card - Card being played
+   * @param target - Target square (for targeted cards)
+   * @private
+   */
   private handleLocalCardPlay(card: Card, target?: Square): void {
     // Check if it's our turn
     if (!this.gameStateManager.isLocalPlayerTurn()) {
@@ -2263,6 +2855,19 @@ export class GameScene extends Phaser.Scene {
   // Game Initialization
   // ============================================
 
+  /**
+   * Initializes the game state
+   * Requirement 3.1: Initialize and shuffle deck at game start
+   * 
+   * Algorithm:
+   * 1. Initialize and shuffle deck
+   * 2. Set deck in game state
+   * 3. Draw initial hand (7 cards)
+   * 4. Initialize opponent UI counts
+   * 5. Show mulligan UI
+   * 
+   * @private
+   */
   private initializeGame(): void {
     // Initialize and shuffle deck (Requirement 3.1)
     this.localDeckManager.initializeDeck();
@@ -2295,12 +2900,23 @@ export class GameScene extends Phaser.Scene {
     this.updateUIFromState();
   }
 
+  /**
+   * Updates the card hand display from game state
+   * 
+   * @private
+   */
   private updateHandDisplay(): void {
     const hand = this.gameStateManager.getHand(this.localColor);
     this.cardHand.setCards(hand);
     this.updateCardCount();
   }
 
+  /**
+   * Updates the card count indicator text
+   * Changes color based on hand size (red if over limit)
+   * 
+   * @private
+   */
   private updateCardCount(): void {
     const count = this.cardHand.getCardCount();
     this.cardCountText.setText(`Hand: ${count} / ${MAX_HAND_SIZE}`);
@@ -2318,15 +2934,19 @@ export class GameScene extends Phaser.Scene {
   // Mulligan Phase (Requirement 3.2)
   // ============================================
 
+  /**
+   * Shows the mulligan phase UI
+   * Displays overlay with mulligan and ready buttons
+   * 
+   * @private
+   */
   private showMulliganUI(): void {
     const { width, height } = this.scale;
-    const layout = this.currentLayout ?? this.calculateLayout(width, height);
+    const layout = this.currentLayout ?? calculateLayout(width, height);
     const scale = layout.panelScale;
     
-    // Semi-transparent overlay
-    this.mulliganOverlay = this.add.graphics();
-    this.mulliganOverlay.fillStyle(0x000000, 0.5);
-    this.mulliganOverlay.fillRect(0, 0, width, height);
+    // Semi-transparent overlay (using Rectangle for better performance)
+    this.mulliganOverlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.5);
     this.mulliganOverlay.setDepth(50);
     
     // Instructions - title
@@ -2344,7 +2964,7 @@ export class GameScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(51);
     
     // Mulligan button (red) - more space from text
-    this.mulliganButton = this.createImageButton(
+    this.mulliganButton = createImageButton(this, 
       width / 2 - 140 * scale, height / 2 - 40 * scale,
       'MULLIGAN (-10s)',
       'red_button',
@@ -2356,7 +2976,7 @@ export class GameScene extends Phaser.Scene {
     this.mulliganButton.setScale(scale);
     
     // Ready button (blue)
-    this.readyButton = this.createImageButton(
+    this.readyButton = createImageButton(this, 
       width / 2 + 140 * scale, height / 2 - 40 * scale,
       'DONE',
       'blue_button',
@@ -2368,6 +2988,13 @@ export class GameScene extends Phaser.Scene {
     this.readyButton.setScale(scale);
   }
 
+  /**
+   * Handles mulligan button click
+   * Returns hand to deck, reshuffles, and draws new hand
+   * Deducts 10 seconds from clock
+   * 
+   * @private
+   */
   private handleMulligan(): void {
     // Deduct mulligan time cost (Requirement 3.2)
     this.gameStateManager.deductMulliganTimeCost(this.localColor);
@@ -2400,6 +3027,12 @@ export class GameScene extends Phaser.Scene {
     this.updateUIFromState();
   }
 
+  /**
+   * Handles ready button click
+   * Marks local player as ready and checks if game can start
+   * 
+   * @private
+   */
   private handleReady(): void {
     // Mark local player as ready
     this.localPlayerReady = true;
@@ -2418,6 +3051,11 @@ export class GameScene extends Phaser.Scene {
     this.updateUIFromState();
   }
 
+  /**
+   * Hides the mulligan UI elements
+   * 
+   * @private
+   */
   private hideMulliganUI(): void {
     if (this.mulliganOverlay) {
       this.mulliganOverlay.destroy();
@@ -2441,6 +3079,12 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Checks if both players are ready to start the game
+   * In single-player mode, starts immediately when local player is ready
+   * 
+   * @private
+   */
   private checkGameStart(): void {
     // In single player mode (no network), start immediately when local player is ready
     if (!this.networkManager && this.localPlayerReady) {
@@ -2464,16 +3108,20 @@ export class GameScene extends Phaser.Scene {
   // Discard Mode (Requirement 3.6)
   // ============================================
 
+  /**
+   * Enters discard mode when hand exceeds maximum size
+   * Shows overlay prompting player to discard cards
+   * 
+   * @private
+   */
   private enterDiscardMode(): void {
     this.isDiscardMode = true;
     const { width, height } = this.scale;
-    const layout = this.currentLayout ?? this.calculateLayout(width, height);
+    const layout = this.currentLayout ?? calculateLayout(width, height);
     const scale = layout.panelScale;
     
-    // Semi-transparent overlay
-    this.discardOverlay = this.add.graphics();
-    this.discardOverlay.fillStyle(0x000000, 0.3);
-    this.discardOverlay.fillRect(0, 0, width, height);
+    // Semi-transparent overlay (using Rectangle for better performance)
+    this.discardOverlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.3);
     this.discardOverlay.setDepth(45);
     
     // Prompt text
@@ -2493,6 +3141,13 @@ export class GameScene extends Phaser.Scene {
     this.logEvent('system', `Hand size exceeds 7. Discard ${toDiscard} card(s).`);
   }
 
+  /**
+   * Discards a card from hand
+   * Called when clicking a card in discard mode
+   * 
+   * @param card - Card to discard
+   * @private
+   */
   private discardCard(card: Card): void {
     // Remove card from hand and add to discard
     const state = this.gameStateManager.getState();
@@ -2529,6 +3184,12 @@ export class GameScene extends Phaser.Scene {
     this.updateUIFromState();
   }
 
+  /**
+   * Exits discard mode
+   * Cleans up overlay elements
+   * 
+   * @private
+   */
   private exitDiscardMode(): void {
     this.isDiscardMode = false;
     
@@ -2546,6 +3207,14 @@ export class GameScene extends Phaser.Scene {
   // Game End Conditions (Requirements 3.7, 3.8, 4.5)
   // ============================================
 
+  /**
+   * Checks for game-ending conditions
+   * - Checkmate (Requirement 3.8)
+   * - Stalemate (Requirement 3.8)
+   * - Clock timeout (Requirement 4.5)
+   * 
+   * @private
+   */
   private checkGameEndConditions(): void {
     const wrapper = this.chessBoard.getWrapper();
     
@@ -2563,24 +3232,43 @@ export class GameScene extends Phaser.Scene {
     }
     
     // Check for clock timeout (Requirement 4.5)
-    const opponentColor = this.localColor === 'white' ? 'black' : 'white';
+    // In multiplayer, only check local player's clock - opponent handles their own timeout
+    // In single player, check both clocks
     const localClock = this.gameStateManager.getPlayer(this.localColor).clock;
-    const opponentClock = this.networkManager
-      ? this.opponentClockTime
-      : this.gameStateManager.getPlayer(opponentColor).clock;
-    const whiteClock = this.localColor === 'white' ? localClock : opponentClock;
-    const blackClock = this.localColor === 'black' ? localClock : opponentClock;
+    
+    if (this.networkManager) {
+      // Multiplayer: only check local player's clock
+      if (localClock <= 0) {
+        const winner = this.localColor === 'white' ? 'black' : 'white';
+        this.handleGameEnd(winner as PlayerColor, `${this.localColor === 'white' ? 'White' : 'Black'} ran out of time!`);
+        return;
+      }
+    } else {
+      // Single player: check both clocks
+      const opponentColor = this.localColor === 'white' ? 'black' : 'white';
+      const opponentClock = this.gameStateManager.getPlayer(opponentColor).clock;
+      const whiteClock = this.localColor === 'white' ? localClock : opponentClock;
+      const blackClock = this.localColor === 'black' ? localClock : opponentClock;
 
-    if (whiteClock <= 0) {
-      this.handleGameEnd('black', 'White ran out of time!');
-      return;
-    }
-    if (blackClock <= 0) {
-      this.handleGameEnd('white', 'Black ran out of time!');
-      return;
+      if (whiteClock <= 0) {
+        this.handleGameEnd('black', 'White ran out of time!');
+        return;
+      }
+      if (blackClock <= 0) {
+        this.handleGameEnd('white', 'Black ran out of time!');
+        return;
+      }
     }
   }
 
+  /**
+   * Handles game end
+   * Logs result and transitions to EndScene
+   * 
+   * @param winner - Winning player color (null for draw)
+   * @param reason - Text description of how game ended
+   * @private
+   */
   private handleGameEnd(winner: PlayerColor | null, reason: string): void {
     this.gameStateManager.endGame();
     
@@ -2611,125 +3299,15 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  // ============================================
-  // Helper Methods
-  // ============================================
-
   /**
-   * Helper to create an image-based button
+   * Makes a discard pile sprite clickable to open the discard viewer
+   * 
+   * @param sprite - Discard pile image to make interactive
+   * @param side - Which player's discard pile ('local' or 'opponent')
+   * 
+   * Used by: createLeftPanel()
+   * @private
    */
-  private createImageButton(
-    x: number,
-    y: number,
-    text: string,
-    normalTexture: string,
-    pressedTexture: string,
-    onClick: () => void
-  ): Phaser.GameObjects.Container {
-    const container = this.add.container(x, y);
-    
-    const bgNormal = this.add.image(0, 0, normalTexture);
-    const bgPressed = this.add.image(0, 0, pressedTexture);
-    bgPressed.setVisible(false);
-    
-    const buttonText = this.add.text(0, -2, text, {
-      fontFamily: 'BoldPixels, Arial',
-      fontSize: '20px',
-      color: '#ffffff',
-      stroke: '#000000',
-      strokeThickness: 2
-    }).setOrigin(0.5);
-    
-    container.add([bgNormal, bgPressed, buttonText]);
-    
-    const hitWidth = bgNormal.width;
-    const hitHeight = bgNormal.height;
-    container.setSize(hitWidth, hitHeight);
-    container.setInteractive({ useHandCursor: true });
-    container.setData('baseScale', 1);
-    
-    const applyScale = (multiplier: number) => {
-      const baseScale = (container.getData('baseScale') as number) ?? 1;
-      container.setScale(baseScale * multiplier);
-    };
-    
-    container.on('pointerover', () => {
-      applyScale(1.05);
-    });
-    
-    container.on('pointerout', () => {
-      applyScale(1);
-      bgNormal.setVisible(true);
-      bgPressed.setVisible(false);
-    });
-    
-    container.on('pointerdown', () => {
-      bgNormal.setVisible(false);
-      bgPressed.setVisible(true);
-      applyScale(0.98);
-    });
-    
-    container.on('pointerup', () => {
-      bgNormal.setVisible(true);
-      bgPressed.setVisible(false);
-      applyScale(1.05);
-      onClick();
-    });
-    
-    return container;
-  }
-
-  private createPileStack(
-    x: number,
-    y: number,
-    scale: number,
-    maxLayers: number,
-    alpha: number
-  ): Phaser.GameObjects.Image[] {
-    const stack: Phaser.GameObjects.Image[] = [];
-    for (let i = 0; i < maxLayers; i++) {
-      const card = this.add.image(x, y, 'card_back');
-      card.setScale(scale);
-      card.setAlpha(alpha);
-      card.setDepth(7 + i);
-      card.setVisible(false);
-      stack.push(card);
-    }
-    return stack;
-  }
-
-  private getPileLayerCount(count: number): number {
-    if (count <= 0) return 0;
-    const cardsPerLayer = DECK_SIZE / MAX_PILE_LAYERS;
-    const layers = Math.ceil(count / cardsPerLayer);
-    return Math.min(MAX_PILE_LAYERS, Math.max(1, Math.min(count, layers)));
-  }
-
-  private layoutPileStack(
-    stack: Phaser.GameObjects.Image[],
-    x: number,
-    y: number,
-    scale: number,
-    count: number,
-    alpha: number
-  ): void {
-    const layers = this.getPileLayerCount(count);
-    const offsetX = 2 * scale;
-    const offsetY = 3 * scale;
-    for (let i = 0; i < stack.length; i++) {
-      const card = stack[i];
-      if (i < layers) {
-        const layerOffset = layers - i - 1;
-        card.setPosition(x + layerOffset * offsetX, y + layerOffset * offsetY);
-        card.setScale(scale);
-        card.setAlpha(alpha);
-        card.setVisible(true);
-      } else {
-        card.setVisible(false);
-      }
-    }
-  }
-
   private makeDiscardPileInteractive(sprite: Phaser.GameObjects.Image, side: 'local' | 'opponent'): void {
     sprite.setInteractive({ useHandCursor: true });
     sprite.on('pointerdown', () => {
@@ -2737,6 +3315,23 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * Sets or clears the top card display on a discard pile
+   * Shows the most recently discarded card face-up (or card back for opponent)
+   * 
+   * Algorithm:
+   * 1. Destroy existing top card component if present
+   * 2. For opponent with no card data but cards in pile, show card back
+   * 3. For null card data, clear the top card reference
+   * 4. Create new CardComponent for the top card
+   * 5. Position at discard pile location and make clickable
+   * 
+   * @param side - Which player's discard pile ('local' or 'opponent')
+   * @param cardData - Card to display (null to clear)
+   * 
+   * Used by: refreshDiscardTopCards()
+   * @private
+   */
   private setDiscardTopCard(side: 'local' | 'opponent', cardData: Card | null): void {
     const layout = this.currentLayout;
     if (!layout) return;
@@ -2754,7 +3349,7 @@ export class GameScene extends Phaser.Scene {
       const backCard = new CardComponent(this, 0, 0, null, true, scale);
       backCard.setDepth(11);
       backCard.getContainer().setPosition(layout.leftPanelX, layout.opponentDiscardY);
-      this.makeCardComponentClickable(backCard, () => this.showDiscardViewer('opponent'));
+      makeCardComponentClickable(backCard, () => this.showDiscardViewer('opponent'));
       this.opponentDiscardTopCard = backCard;
       return;
     }
@@ -2770,7 +3365,7 @@ export class GameScene extends Phaser.Scene {
     topCard.setDepth(11);
     const position = isOpponent ? layout.opponentDiscardY : layout.playerDiscardY;
     topCard.getContainer().setPosition(layout.leftPanelX, position);
-    this.makeCardComponentClickable(topCard, () => this.showDiscardViewer(side));
+    makeCardComponentClickable(topCard, () => this.showDiscardViewer(side));
     if (isOpponent) {
       this.opponentDiscardTopCard = topCard;
     } else {
@@ -2778,6 +3373,19 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Refreshes both discard pile top card displays
+   * Respects suppression flags to avoid updates during animations
+   * 
+   * Algorithm:
+   * 1. Check if local discard updates are suppressed
+   * 2. If not suppressed, get local discard top and update display
+   * 3. Check if opponent discard updates are suppressed
+   * 4. If not suppressed, get opponent discard top and update display
+   * 
+   * Used by: releaseDiscardTop(), updateUIFromState()
+   * @private
+   */
   private refreshDiscardTopCards(): void {
     if (!this.currentLayout) return;
     if (this.suppressLocalDiscardTop === 0) {
@@ -2794,6 +3402,15 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Locks discard top card updates for a side during animations
+   * Increments suppression counter to allow nested locks
+   * 
+   * @param side - Which player's discard to lock ('local' or 'opponent')
+   * 
+   * Used by: animateCardDiscard()
+   * @private
+   */
   private lockDiscardTop(side: 'local' | 'opponent'): void {
     if (side === 'local') {
       this.suppressLocalDiscardTop++;
@@ -2802,6 +3419,15 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Releases discard top card lock and refreshes display if fully unlocked
+   * Decrements suppression counter (clamped to 0)
+   * 
+   * @param side - Which player's discard to unlock ('local' or 'opponent')
+   * 
+   * Used by: animateCardDiscard() completion callback
+   * @private
+   */
   private releaseDiscardTop(side: 'local' | 'opponent'): void {
     if (side === 'local') {
       this.suppressLocalDiscardTop = Math.max(0, this.suppressLocalDiscardTop - 1);
@@ -2811,21 +3437,15 @@ export class GameScene extends Phaser.Scene {
     this.refreshDiscardTopCards();
   }
 
-  private makeCardComponentClickable(card: CardComponent, onClick: () => void): void {
-    const container = card.getContainer();
-    const bounds = container.getBounds();
-    const scaleX = container.scaleX || 1;
-    const scaleY = container.scaleY || 1;
-    const width = bounds.width / scaleX;
-    const height = bounds.height / scaleY;
-    const hitArea = new Phaser.Geom.Rectangle(-width / 2, -height / 2, width, height);
-    container.setInteractive(hitArea, Phaser.Geom.Rectangle.Contains);
-    container.on('pointerdown', () => onClick());
-    if (container.input) {
-      container.input.cursor = 'pointer';
-    }
-  }
-
+  /**
+   * Updates opponent's deck and discard count displays
+   * Called when receiving network sync data
+   * 
+   * @param deckCount - Number of cards in opponent's deck
+   * @param discardCount - Number of cards in opponent's discard pile
+   * 
+   * Used by: Network callbacks (handleOpponentSync)
+   */
   updateOpponentDeckCounts(deckCount: number, discardCount: number): void {
     this.opponentDeckCount = deckCount;
     this.opponentDiscardCount = discardCount;
@@ -2833,17 +3453,46 @@ export class GameScene extends Phaser.Scene {
     this.opponentDiscardCountText.setText(`${discardCount}`);
   }
 
+  /**
+   * Updates local player's deck and discard count displays
+   * 
+   * @param deckCount - Number of cards in player's deck
+   * @param discardCount - Number of cards in player's discard pile
+   * 
+   * Used by: updateUIFromState()
+   */
   updatePlayerDeckCounts(deckCount: number, discardCount: number): void {
     this.playerDeckCountText.setText(`${deckCount}`);
     this.playerDiscardCountText.setText(`${discardCount}`);
   }
 
-  // ============================================
-  // Public Accessors
-  // ============================================
+  /* ============================================
+   * PUBLIC ACCESSORS
+   * ============================================
+   * Getters for accessing scene components from external code
+   */
 
+  /**
+   * Gets the chess board component
+   * @returns ChessBoardComponent instance
+   */
   getChessBoard(): ChessBoardComponent { return this.chessBoard; }
+  
+  /**
+   * Gets the card hand component
+   * @returns CardHandComponent instance
+   */
   getCardHand(): CardHandComponent { return this.cardHand; }
+  
+  /**
+   * Gets the event log component
+   * @returns EventLogComponent instance
+   */
   getEventLog(): EventLogComponent { return this.eventLog; }
+  
+  /**
+   * Gets the game state manager
+   * @returns GameStateManager instance
+   */
   getGameStateManager(): GameStateManager { return this.gameStateManager; }
 }

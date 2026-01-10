@@ -1,7 +1,14 @@
 /**
- * AnimationManager - Centralized animation system for Card Chess
+ * @fileoverview AnimationManager - Centralized animation system for Card Chess
  * 
- * Requirements: 13.1-13.7
+ * This module provides a comprehensive animation system with:
+ * - Core tween helpers (move, scale, fade, rotate)
+ * - Effect animations (shake, bounce, pulse, flash)
+ * - Card-specific animations (draw, play, discard, shuffle)
+ * - Board-specific animations (piece move, deploy, destroy)
+ * - UI animations (clock, energy, victory/defeat)
+ * 
+ * Requirements addressed:
  * - 13.1: Animate deck shuffling
  * - 13.2: Animate cards moving from deck to hand
  * - 13.3: Animate card play from hand
@@ -9,40 +16,87 @@
  * - 13.5: Animate piece deployment and destruction
  * - 13.6: Animate clock and energy changes
  * - 13.7: Display victory/defeat/draw animations
+ * 
+ * @module managers/AnimationManager
+ * @requires phaser
  */
 
 import Phaser from 'phaser';
 
-// Animation duration constants (in milliseconds)
+/* ============================================
+ * ANIMATION DURATION CONSTANTS
+ * ============================================
+ * All durations are in milliseconds.
+ */
+
 export const ANIM_DURATION = {
+  /** Card draw animation duration */
   CARD_DRAW: 400,
+  /** Card play animation duration */
   CARD_PLAY: 300,
+  /** Card discard animation duration */
   CARD_DISCARD: 250,
+  /** Deck shuffle animation duration */
   DECK_SHUFFLE: 600,
+  /** Piece move animation duration */
   PIECE_MOVE: 350,
+  /** Piece deploy animation duration */
   PIECE_DEPLOY: 400,
+  /** Piece destroy animation duration */
   PIECE_DESTROY: 350,
+  /** Clock change animation duration */
   CLOCK_CHANGE: 200,
+  /** Energy change animation duration */
   ENERGY_CHANGE: 250,
+  /** Victory reveal animation duration */
   VICTORY_REVEAL: 800,
+  /** Flash effect duration */
   FLASH: 150,
+  /** Bounce effect duration */
   BOUNCE: 200,
+  /** Shake effect duration */
   SHAKE: 100,
 };
 
-// Easing functions
+/* ============================================
+ * EASING FUNCTION CONSTANTS
+ * ============================================
+ * Phaser easing function names for different animation feels.
+ */
+
 export const EASING = {
+  /** Smooth sine wave easing */
   SMOOTH: 'Sine.easeInOut',
+  /** Bouncy ending */
   BOUNCE_OUT: 'Bounce.easeOut',
+  /** Overshoot then settle */
   BACK_OUT: 'Back.easeOut',
+  /** Springy ending */
   ELASTIC_OUT: 'Elastic.easeOut',
+  /** Quadratic ease out */
   QUAD_OUT: 'Quad.easeOut',
+  /** Cubic ease out */
   CUBIC_OUT: 'Cubic.easeOut',
+  /** Exponential ease out */
   EXPO_OUT: 'Expo.easeOut',
 };
 
+/* ============================================
+ * TYPE DEFINITIONS
+ * ============================================
+ */
+
 /**
  * Animation configuration for tweens
+ * 
+ * @property duration - Animation duration in ms
+ * @property ease - Easing function name
+ * @property delay - Delay before starting
+ * @property yoyo - Whether to reverse animation
+ * @property repeat - Number of repeats (-1 for infinite)
+ * @property onComplete - Callback when animation completes
+ * @property onStart - Callback when animation starts
+ * @property onUpdate - Callback on each frame
  */
 export interface TweenConfig {
   duration?: number;
@@ -57,29 +111,65 @@ export interface TweenConfig {
 
 /**
  * Position interface for animations
+ * 
+ * @property x - X coordinate
+ * @property y - Y coordinate
  */
 export interface Position {
   x: number;
   y: number;
 }
 
+/* ============================================
+ * BASE ANIMATION MANAGER CLASS
+ * ============================================
+ */
+
 /**
  * AnimationManager - Provides tween helpers for common game animations
+ * 
+ * Base class with core animation functionality:
+ * - Movement, scaling, fading, rotation
+ * - Effect animations (shake, bounce, pulse, flash)
+ * - Compound animations (arc movement, fly away)
+ * - Animation chaining and parallel execution
+ * 
+ * @example
+ * const anim = new AnimationManager(scene);
+ * anim.moveTo(sprite, 100, 200, { duration: 500 });
+ * anim.bounce(sprite);
+ * 
+ * Used by: CardAnimationManager, BoardAnimationManager, GameAnimationManager
  */
 export class AnimationManager {
+  /** Reference to the Phaser scene */
   private scene: Phaser.Scene;
+  
+  /** Set of currently active tweens */
   private activeTweens: Set<Phaser.Tweens.Tween> = new Set();
 
+  /**
+   * Creates a new AnimationManager
+   * 
+   * @param scene - The Phaser scene
+   */
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
   }
 
-  // ============================================
-  // Core Tween Helpers
-  // ============================================
+  /* ============================================
+   * CORE TWEEN HELPERS
+   * ============================================
+   */
 
   /**
-   * Move a game object from one position to another
+   * Moves a game object from current position to target
+   * 
+   * @param target - Object to move
+   * @param toX - Target X coordinate
+   * @param toY - Target Y coordinate
+   * @param config - Animation configuration
+   * @returns The created tween
    */
   moveTo(
     target: Phaser.GameObjects.GameObject,
@@ -109,7 +199,12 @@ export class AnimationManager {
   }
 
   /**
-   * Scale a game object
+   * Scales a game object
+   * 
+   * @param target - Object to scale
+   * @param scale - Target scale
+   * @param config - Animation configuration
+   * @returns The created tween
    */
   scaleTo(
     target: Phaser.GameObjects.GameObject,
@@ -137,7 +232,12 @@ export class AnimationManager {
   }
 
   /**
-   * Fade a game object in or out
+   * Fades a game object in or out
+   * 
+   * @param target - Object to fade
+   * @param alpha - Target alpha (0-1)
+   * @param config - Animation configuration
+   * @returns The created tween
    */
   fadeTo(
     target: Phaser.GameObjects.GameObject,
@@ -164,7 +264,12 @@ export class AnimationManager {
   }
 
   /**
-   * Rotate a game object
+   * Rotates a game object
+   * 
+   * @param target - Object to rotate
+   * @param angle - Target angle in radians
+   * @param config - Animation configuration
+   * @returns The created tween
    */
   rotateTo(
     target: Phaser.GameObjects.GameObject,
@@ -190,12 +295,18 @@ export class AnimationManager {
     return tween;
   }
 
-  // ============================================
-  // Effect Animations
-  // ============================================
+  /* ============================================
+   * EFFECT ANIMATIONS
+   * ============================================
+   */
 
   /**
    * Shake effect for invalid actions or damage
+   * 
+   * @param target - Object to shake
+   * @param intensity - Shake intensity in pixels
+   * @param config - Animation configuration
+   * @returns The created tween
    */
   shake(
     target: Phaser.GameObjects.GameObject,
@@ -225,6 +336,10 @@ export class AnimationManager {
 
   /**
    * Bounce effect for emphasis
+   * 
+   * @param target - Object to bounce
+   * @param config - Animation configuration
+   * @returns The created tween
    */
   bounce(
     target: Phaser.GameObjects.GameObject,
@@ -249,6 +364,11 @@ export class AnimationManager {
 
   /**
    * Pulse effect for highlighting
+   * 
+   * @param target - Object to pulse
+   * @param minAlpha - Minimum alpha during pulse
+   * @param config - Animation configuration
+   * @returns The created tween
    */
   pulse(
     target: Phaser.GameObjects.GameObject,
@@ -274,6 +394,10 @@ export class AnimationManager {
 
   /**
    * Flash effect (quick alpha change)
+   * 
+   * @param target - Object to flash
+   * @param config - Animation configuration
+   * @returns The created tween
    */
   flash(
     target: Phaser.GameObjects.GameObject,
@@ -298,6 +422,11 @@ export class AnimationManager {
 
   /**
    * Pop in effect (scale from 0 to target)
+   * 
+   * @param target - Object to pop in
+   * @param targetScale - Final scale
+   * @param config - Animation configuration
+   * @returns The created tween
    */
   popIn(
     target: Phaser.GameObjects.GameObject,
@@ -327,6 +456,10 @@ export class AnimationManager {
 
   /**
    * Pop out effect (scale to 0)
+   * 
+   * @param target - Object to pop out
+   * @param config - Animation configuration
+   * @returns The created tween
    */
   popOut(
     target: Phaser.GameObjects.GameObject,
@@ -351,12 +484,22 @@ export class AnimationManager {
     return tween;
   }
 
-  // ============================================
-  // Compound Animations
-  // ============================================
+  /* ============================================
+   * COMPOUND ANIMATIONS
+   * ============================================
+   */
 
   /**
    * Arc movement (for card draw animations)
+   * 
+   * Uses quadratic bezier curve for smooth arc.
+   * 
+   * @param target - Object to move
+   * @param from - Starting position
+   * @param to - Ending position
+   * @param arcHeight - Height of arc above line
+   * @param config - Animation configuration
+   * @returns The created tween
    */
   arcMove(
     target: Phaser.GameObjects.GameObject,
@@ -372,7 +515,6 @@ export class AnimationManager {
     const midX = (from.x + to.x) / 2;
     const midY = Math.min(from.y, to.y) - arcHeight;
     
-    // Use a timeline for smooth arc movement
     const duration = config.duration ?? ANIM_DURATION.CARD_DRAW;
     
     const tween = this.scene.tweens.add({
@@ -406,6 +548,12 @@ export class AnimationManager {
 
   /**
    * Fly away animation (for discarded cards)
+   * 
+   * @param target - Object to fly away
+   * @param direction - Direction to fly
+   * @param distance - Distance to travel
+   * @param config - Animation configuration
+   * @returns The created tween
    */
   flyAway(
     target: Phaser.GameObjects.GameObject,
@@ -444,12 +592,16 @@ export class AnimationManager {
     return tween;
   }
 
-  // ============================================
-  // Utility Methods
-  // ============================================
+  /* ============================================
+   * UTILITY METHODS
+   * ============================================
+   */
 
   /**
-   * Chain multiple animations in sequence
+   * Chains multiple animations in sequence
+   * 
+   * @param animations - Array of animation creator functions
+   * @param onComplete - Callback when all complete
    */
   chain(
     animations: Array<() => Phaser.Tweens.Tween>,
@@ -480,7 +632,10 @@ export class AnimationManager {
   }
 
   /**
-   * Run multiple animations in parallel
+   * Runs multiple animations in parallel
+   * 
+   * @param animations - Array of animation creator functions
+   * @param onComplete - Callback when all complete
    */
   parallel(
     animations: Array<() => Phaser.Tweens.Tween>,
@@ -506,7 +661,10 @@ export class AnimationManager {
   }
 
   /**
-   * Delay execution
+   * Delays execution
+   * 
+   * @param ms - Milliseconds to delay
+   * @returns Promise that resolves after delay
    */
   delay(ms: number): Promise<void> {
     return new Promise(resolve => {
@@ -515,7 +673,7 @@ export class AnimationManager {
   }
 
   /**
-   * Stop all active tweens
+   * Stops all active tweens
    */
   stopAll(): void {
     for (const tween of this.activeTweens) {
@@ -525,7 +683,9 @@ export class AnimationManager {
   }
 
   /**
-   * Stop a specific tween
+   * Stops a specific tween
+   * 
+   * @param tween - Tween to stop
    */
   stop(tween: Phaser.Tweens.Tween): void {
     tween.stop();
@@ -533,21 +693,25 @@ export class AnimationManager {
   }
 
   /**
-   * Check if any animations are running
+   * Checks if any animations are running
+   * 
+   * @returns True if animations are active
    */
   isAnimating(): boolean {
     return this.activeTweens.size > 0;
   }
 
   /**
-   * Get count of active animations
+   * Gets count of active animations
+   * 
+   * @returns Number of active tweens
    */
   getActiveCount(): number {
     return this.activeTweens.size;
   }
 
   /**
-   * Destroy the manager and clean up
+   * Destroys the manager and cleans up
    */
   destroy(): void {
     this.stopAll();
@@ -555,19 +719,27 @@ export class AnimationManager {
 }
 
 /**
- * Create an AnimationManager instance
+ * Creates an AnimationManager instance
+ * 
+ * @param scene - The Phaser scene
+ * @returns New AnimationManager
  */
 export function createAnimationManager(scene: Phaser.Scene): AnimationManager {
   return new AnimationManager(scene);
 }
 
-
-// ============================================
-// Card Animation Extensions
-// ============================================
+/* ============================================
+ * CARD ANIMATION MANAGER CLASS
+ * ============================================
+ */
 
 /**
  * Card animation configuration
+ * 
+ * @property deckPosition - Position of the deck
+ * @property handPosition - Position of the hand
+ * @property playZonePosition - Position of the play zone
+ * @property discardPosition - Position of the discard pile
  */
 export interface CardAnimationConfig {
   deckPosition: Position;
@@ -577,20 +749,41 @@ export interface CardAnimationConfig {
 }
 
 /**
- * Extended AnimationManager with card-specific animations
- * Requirements: 13.1, 13.2, 13.3, 13.4
+ * CardAnimationManager - Extended AnimationManager with card-specific animations
+ * 
+ * Provides animations for:
+ * - Deck shuffling (Requirement 13.1)
+ * - Card drawing (Requirement 13.2)
+ * - Card playing (Requirement 13.3)
+ * - Card discarding
+ * 
+ * @example
+ * const cardAnim = new CardAnimationManager(scene);
+ * cardAnim.animateDrawCard(card, deckPos, handPos);
+ * 
+ * Used by: BoardAnimationManager, GameScene
  */
 export class CardAnimationManager extends AnimationManager {
   constructor(scene: Phaser.Scene) {
     super(scene);
   }
 
-  // ============================================
-  // Deck Shuffle Animation (Requirement 13.1)
-  // ============================================
+  /* ============================================
+   * DECK SHUFFLE ANIMATION (Requirement 13.1)
+   * ============================================
+   */
 
   /**
-   * Animate deck shuffling with card scatter and gather effect
+   * Animates deck shuffling with card scatter and gather effect
+   * 
+   * Algorithm:
+   * 1. Scatter cards outward from deck
+   * 2. Gather cards back to deck
+   * 3. Bounce deck to indicate completion
+   * 
+   * @param deckContainer - The deck container
+   * @param cardSprites - Array of card sprites to animate
+   * @param onComplete - Callback when complete
    */
   animateDeckShuffle(
     deckContainer: Phaser.GameObjects.Container,
@@ -669,6 +862,9 @@ export class CardAnimationManager extends AnimationManager {
 
   /**
    * Simple deck shuffle animation (single container bounce)
+   * 
+   * @param deckContainer - The deck container
+   * @param onComplete - Callback when complete
    */
   animateDeckShuffleSimple(
     deckContainer: Phaser.GameObjects.Container,
@@ -676,7 +872,6 @@ export class CardAnimationManager extends AnimationManager {
   ): void {
     const scene = (this as unknown as { scene: Phaser.Scene }).scene;
     
-    // Shake and bounce effect
     scene.tweens.add({
       targets: deckContainer,
       x: deckContainer.x + 5,
@@ -696,12 +891,22 @@ export class CardAnimationManager extends AnimationManager {
     });
   }
 
-  // ============================================
-  // Draw Card Animation (Requirement 13.2)
-  // ============================================
+  /* ============================================
+   * DRAW CARD ANIMATION (Requirement 13.2)
+   * ============================================
+   */
 
   /**
-   * Animate card moving from deck to hand
+   * Animates card moving from deck to hand
+   * 
+   * Uses arc movement with scale up effect.
+   * 
+   * @param cardContainer - The card container
+   * @param fromPosition - Starting position (deck)
+   * @param toPosition - Ending position (hand)
+   * @param config - Animation configuration
+   * @param onComplete - Callback when complete
+   * @returns The created tween
    */
   animateDrawCard(
     cardContainer: Phaser.GameObjects.Container,
@@ -752,7 +957,13 @@ export class CardAnimationManager extends AnimationManager {
   }
 
   /**
-   * Animate multiple cards being drawn in sequence
+   * Animates multiple cards being drawn in sequence
+   * 
+   * @param cardContainers - Array of card containers
+   * @param fromPosition - Starting position (deck)
+   * @param toPositions - Array of ending positions
+   * @param delayBetween - Delay between each card
+   * @param onComplete - Callback when all complete
    */
   animateDrawMultipleCards(
     cardContainers: Phaser.GameObjects.Container[],
@@ -785,12 +996,19 @@ export class CardAnimationManager extends AnimationManager {
     }
   }
 
-  // ============================================
-  // Play Card Animation (Requirement 13.3)
-  // ============================================
+  /* ============================================
+   * PLAY CARD ANIMATION (Requirement 13.3)
+   * ============================================
+   */
 
   /**
-   * Animate card being played from hand to board
+   * Animates card being played from hand to board
+   * 
+   * @param cardContainer - The card container
+   * @param toPosition - Target position
+   * @param config - Animation configuration
+   * @param onComplete - Callback when complete
+   * @returns The created tween
    */
   animatePlayCard(
     cardContainer: Phaser.GameObjects.Container,
@@ -800,7 +1018,6 @@ export class CardAnimationManager extends AnimationManager {
   ): Phaser.Tweens.Tween {
     const scene = (this as unknown as { scene: Phaser.Scene }).scene;
     
-    // Scale up and move to play position
     return scene.tweens.add({
       targets: cardContainer,
       x: toPosition.x,
@@ -829,7 +1046,12 @@ export class CardAnimationManager extends AnimationManager {
   }
 
   /**
-   * Animate card being played with targeting arrow
+   * Animates card being played with targeting arrow
+   * 
+   * @param cardContainer - The card container
+   * @param targetPosition - Target position
+   * @param config - Animation configuration
+   * @param onComplete - Callback when complete
    */
   animatePlayCardWithTarget(
     cardContainer: Phaser.GameObjects.Container,
@@ -868,12 +1090,19 @@ export class CardAnimationManager extends AnimationManager {
     });
   }
 
-  // ============================================
-  // Discard Animation (Requirement 13.4)
-  // ============================================
+  /* ============================================
+   * DISCARD ANIMATION
+   * ============================================
+   */
 
   /**
-   * Animate card being discarded
+   * Animates card being discarded
+   * 
+   * @param cardContainer - The card container
+   * @param discardPosition - Discard pile position
+   * @param config - Animation configuration
+   * @param onComplete - Callback when complete
+   * @returns The created tween
    */
   animateDiscard(
     cardContainer: Phaser.GameObjects.Container,
@@ -902,7 +1131,13 @@ export class CardAnimationManager extends AnimationManager {
   }
 
   /**
-   * Animate card flying off screen (for dramatic discard)
+   * Animates card flying off screen (for dramatic discard)
+   * 
+   * @param cardContainer - The card container
+   * @param direction - Direction to fly
+   * @param config - Animation configuration
+   * @param onComplete - Callback when complete
+   * @returns The created tween
    */
   animateDiscardFlyOff(
     cardContainer: Phaser.GameObjects.Container,
@@ -917,15 +1152,9 @@ export class CardAnimationManager extends AnimationManager {
     const distance = 500;
     
     switch (direction) {
-      case 'left':
-        targetX -= distance;
-        break;
-      case 'right':
-        targetX += distance;
-        break;
-      case 'up':
-        targetY -= distance;
-        break;
+      case 'left': targetX -= distance; break;
+      case 'right': targetX += distance; break;
+      case 'up': targetY -= distance; break;
     }
     
     return scene.tweens.add({
@@ -946,19 +1175,27 @@ export class CardAnimationManager extends AnimationManager {
 }
 
 /**
- * Create a CardAnimationManager instance
+ * Creates a CardAnimationManager instance
+ * 
+ * @param scene - The Phaser scene
+ * @returns New CardAnimationManager
  */
 export function createCardAnimationManager(scene: Phaser.Scene): CardAnimationManager {
   return new CardAnimationManager(scene);
 }
 
-
-// ============================================
-// Board Animation Extensions
-// ============================================
+/* ============================================
+ * BOARD ANIMATION MANAGER CLASS
+ * ============================================
+ */
 
 /**
  * Board animation configuration
+ * 
+ * @property squareSize - Size of each chess square
+ * @property boardX - Board left edge X
+ * @property boardY - Board top edge Y
+ * @property isFlipped - Whether board is flipped
  */
 export interface BoardAnimationConfig {
   squareSize: number;
@@ -968,10 +1205,22 @@ export interface BoardAnimationConfig {
 }
 
 /**
- * Extended AnimationManager with board-specific animations
- * Requirements: 13.5, 13.6
+ * BoardAnimationManager - Extended CardAnimationManager with board-specific animations
+ * 
+ * Provides animations for:
+ * - Piece movement (Requirement 13.4)
+ * - Piece deployment (Requirement 13.5)
+ * - Piece destruction (Requirement 13.5)
+ * 
+ * @example
+ * const boardAnim = new BoardAnimationManager(scene);
+ * boardAnim.setBoardConfig({ squareSize: 64, boardX: 100, boardY: 100, isFlipped: false });
+ * boardAnim.animatePieceMove(sprite, 'e2', 'e4');
+ * 
+ * Used by: GameAnimationManager, GameScene
  */
 export class BoardAnimationManager extends CardAnimationManager {
+  /** Board configuration for coordinate conversion */
   private boardConfig: BoardAnimationConfig | null = null;
 
   constructor(scene: Phaser.Scene) {
@@ -979,14 +1228,20 @@ export class BoardAnimationManager extends CardAnimationManager {
   }
 
   /**
-   * Configure board animation settings
+   * Configures board animation settings
+   * 
+   * @param config - Board configuration
    */
   setBoardConfig(config: BoardAnimationConfig): void {
     this.boardConfig = config;
   }
 
   /**
-   * Convert square notation to pixel position
+   * Converts square notation to pixel position
+   * 
+   * @param square - Chess square notation (e.g., 'e4')
+   * @returns Pixel position or null if not configured
+   * @private
    */
   private squareToPixel(square: string): Position | null {
     if (!this.boardConfig) return null;
@@ -1008,12 +1263,20 @@ export class BoardAnimationManager extends CardAnimationManager {
     };
   }
 
-  // ============================================
-  // Piece Move Animation (Requirement 13.5)
-  // ============================================
+  /* ============================================
+   * PIECE MOVE ANIMATION (Requirement 13.4)
+   * ============================================
+   */
 
   /**
-   * Animate piece moving from one square to another
+   * Animates piece moving from one square to another
+   * 
+   * @param pieceSprite - The piece sprite
+   * @param fromSquare - Starting square
+   * @param toSquare - Ending square
+   * @param config - Animation configuration
+   * @param onComplete - Callback when complete
+   * @returns The created tween or null
    */
   animatePieceMove(
     pieceSprite: Phaser.GameObjects.Image,
@@ -1032,10 +1295,7 @@ export class BoardAnimationManager extends CardAnimationManager {
       return null;
     }
     
-    // Set starting position
     pieceSprite.setPosition(fromPos.x, fromPos.y);
-    
-    // Lift piece slightly during move
     const originalScale = pieceSprite.scaleX;
     
     return scene.tweens.add({
@@ -1066,7 +1326,14 @@ export class BoardAnimationManager extends CardAnimationManager {
   }
 
   /**
-   * Animate piece move with capture effect
+   * Animates piece move with capture effect
+   * 
+   * @param movingPiece - The moving piece sprite
+   * @param capturedPiece - The captured piece sprite
+   * @param fromSquare - Starting square
+   * @param toSquare - Ending square
+   * @param config - Animation configuration
+   * @param onComplete - Callback when complete
    */
   animatePieceMoveWithCapture(
     movingPiece: Phaser.GameObjects.Image,
@@ -1076,7 +1343,7 @@ export class BoardAnimationManager extends CardAnimationManager {
     config: TweenConfig = {},
     onComplete?: () => void
   ): void {
-    // First animate the capture (piece being taken)
+    // First animate the capture
     this.animatePieceDestroy(capturedPiece, toSquare, {
       duration: ANIM_DURATION.PIECE_DESTROY / 2,
     });
@@ -1092,12 +1359,19 @@ export class BoardAnimationManager extends CardAnimationManager {
     });
   }
 
-  // ============================================
-  // Piece Deploy Animation (Requirement 13.6)
-  // ============================================
+  /* ============================================
+   * PIECE DEPLOY ANIMATION (Requirement 13.5)
+   * ============================================
+   */
 
   /**
-   * Animate piece being deployed to a square
+   * Animates piece being deployed to a square
+   * 
+   * @param pieceSprite - The piece sprite
+   * @param square - Target square
+   * @param config - Animation configuration
+   * @param onComplete - Callback when complete
+   * @returns The created tween or null
    */
   animatePieceDeploy(
     pieceSprite: Phaser.GameObjects.Image,
@@ -1118,7 +1392,6 @@ export class BoardAnimationManager extends CardAnimationManager {
     pieceSprite.setScale(0);
     pieceSprite.setAlpha(0);
     
-    // Pop in with glow effect
     return scene.tweens.add({
       targets: pieceSprite,
       scaleX: pieceSprite.scaleX || 0.8,
@@ -1128,7 +1401,6 @@ export class BoardAnimationManager extends CardAnimationManager {
       ease: config.ease ?? EASING.BACK_OUT,
       delay: config.delay ?? 0,
       onStart: () => {
-        // Create deploy flash effect
         this.createDeployFlash(scene, pos.x, pos.y);
         config.onStart?.();
       },
@@ -1140,7 +1412,12 @@ export class BoardAnimationManager extends CardAnimationManager {
   }
 
   /**
-   * Create a flash effect at deploy position
+   * Creates a flash effect at deploy position
+   * 
+   * @param scene - The Phaser scene
+   * @param x - X position
+   * @param y - Y position
+   * @private
    */
   private createDeployFlash(scene: Phaser.Scene, x: number, y: number): void {
     const flash = scene.add.graphics();
@@ -1160,7 +1437,13 @@ export class BoardAnimationManager extends CardAnimationManager {
   }
 
   /**
-   * Animate piece deploying from a card
+   * Animates piece deploying from a card
+   * 
+   * @param pieceSprite - The piece sprite
+   * @param cardPosition - Card position
+   * @param square - Target square
+   * @param config - Animation configuration
+   * @param onComplete - Callback when complete
    */
   animatePieceDeployFromCard(
     pieceSprite: Phaser.GameObjects.Image,
@@ -1217,12 +1500,19 @@ export class BoardAnimationManager extends CardAnimationManager {
     });
   }
 
-  // ============================================
-  // Piece Destroy Animation (Requirement 13.6)
-  // ============================================
+  /* ============================================
+   * PIECE DESTROY ANIMATION (Requirement 13.5)
+   * ============================================
+   */
 
   /**
-   * Animate piece being destroyed/captured
+   * Animates piece being destroyed/captured
+   * 
+   * @param pieceSprite - The piece sprite
+   * @param square - Square where piece is
+   * @param config - Animation configuration
+   * @param onComplete - Callback when complete
+   * @returns The created tween or null
    */
   animatePieceDestroy(
     pieceSprite: Phaser.GameObjects.Image,
@@ -1241,7 +1531,6 @@ export class BoardAnimationManager extends CardAnimationManager {
     // Create destruction particles
     this.createDestroyParticles(scene, pos.x, pos.y);
     
-    // Shrink and fade out
     return scene.tweens.add({
       targets: pieceSprite,
       scaleX: 0,
@@ -1259,10 +1548,14 @@ export class BoardAnimationManager extends CardAnimationManager {
   }
 
   /**
-   * Create particle effect for piece destruction
+   * Creates particle effect for piece destruction
+   * 
+   * @param scene - The Phaser scene
+   * @param x - X position
+   * @param y - Y position
+   * @private
    */
   private createDestroyParticles(scene: Phaser.Scene, x: number, y: number): void {
-    // Create multiple small particles
     const particleCount = 8;
     
     for (let i = 0; i < particleCount; i++) {
@@ -1293,7 +1586,12 @@ export class BoardAnimationManager extends CardAnimationManager {
   }
 
   /**
-   * Animate piece exploding (dramatic destruction)
+   * Animates piece exploding (dramatic destruction)
+   * 
+   * @param pieceSprite - The piece sprite
+   * @param square - Square where piece is
+   * @param config - Animation configuration
+   * @param onComplete - Callback when complete
    */
   animatePieceExplode(
     pieceSprite: Phaser.GameObjects.Image,
@@ -1320,10 +1618,8 @@ export class BoardAnimationManager extends CardAnimationManager {
       duration: 100,
       ease: EASING.QUAD_OUT,
       onComplete: () => {
-        // Create explosion effect
         this.createExplosionEffect(scene, pos.x, pos.y);
         
-        // Destroy piece
         this.animatePieceDestroy(pieceSprite, square, {
           ...config,
           duration: (config.duration ?? ANIM_DURATION.PIECE_DESTROY) / 2,
@@ -1337,7 +1633,12 @@ export class BoardAnimationManager extends CardAnimationManager {
   }
 
   /**
-   * Create explosion visual effect
+   * Creates explosion visual effect
+   * 
+   * @param scene - The Phaser scene
+   * @param x - X position
+   * @param y - Y position
+   * @private
    */
   private createExplosionEffect(scene: Phaser.Scene, x: number, y: number): void {
     // Central flash
@@ -1372,38 +1673,60 @@ export class BoardAnimationManager extends CardAnimationManager {
       onComplete: () => ring.destroy(),
     });
     
-    // Particles
     this.createDestroyParticles(scene, x, y);
   }
 }
 
 /**
- * Create a BoardAnimationManager instance
+ * Creates a BoardAnimationManager instance
+ * 
+ * @param scene - The Phaser scene
+ * @returns New BoardAnimationManager
  */
 export function createBoardAnimationManager(scene: Phaser.Scene): BoardAnimationManager {
   return new BoardAnimationManager(scene);
 }
 
-
-// ============================================
-// UI Animation Extensions
-// ============================================
+/* ============================================
+ * GAME ANIMATION MANAGER CLASS
+ * ============================================
+ */
 
 /**
- * Full-featured AnimationManager with all game animations
- * Requirements: 13.7
+ * GameAnimationManager - Full-featured animation manager with all game animations
+ * 
+ * Provides animations for:
+ * - Clock changes (Requirement 13.6)
+ * - Energy changes (Requirement 13.6)
+ * - Victory/defeat/draw screens (Requirement 13.7)
+ * - Screen effects (shake, flash, transitions)
+ * 
+ * @example
+ * const gameAnim = new GameAnimationManager(scene);
+ * gameAnim.animateVictory(scene, resultText);
+ * gameAnim.screenShake(scene, 10);
+ * 
+ * Used by: GameScene
  */
 export class GameAnimationManager extends BoardAnimationManager {
   constructor(scene: Phaser.Scene) {
     super(scene);
   }
 
-  // ============================================
-  // Clock Change Animation (Requirement 13.7)
-  // ============================================
+  /* ============================================
+   * CLOCK CHANGE ANIMATION (Requirement 13.6)
+   * ============================================
+   */
 
   /**
-   * Animate clock time change with visual feedback
+   * Animates clock time change with visual feedback
+   * 
+   * @param clockContainer - The clock container
+   * @param timeText - The time text object
+   * @param oldTime - Previous time value
+   * @param newTime - New time value
+   * @param config - Animation configuration
+   * @param onComplete - Callback when complete
    */
   animateClockChange(
     clockContainer: Phaser.GameObjects.Container,
@@ -1426,7 +1749,6 @@ export class GameAnimationManager extends BoardAnimationManager {
       flashColor = 0xffff44; // Yellow for small time loss
     }
     
-    // Flash the clock
     scene.tweens.add({
       targets: clockContainer,
       scaleX: 1.1,
@@ -1435,7 +1757,6 @@ export class GameAnimationManager extends BoardAnimationManager {
       ease: EASING.QUAD_OUT,
       yoyo: true,
       onStart: () => {
-        // Apply color tint
         clockContainer.list.forEach(child => {
           if (child instanceof Phaser.GameObjects.Image) {
             child.setTint(flashColor);
@@ -1444,7 +1765,6 @@ export class GameAnimationManager extends BoardAnimationManager {
         config.onStart?.();
       },
       onComplete: () => {
-        // Restore original tint
         clockContainer.list.forEach(child => {
           if (child instanceof Phaser.GameObjects.Image) {
             child.clearTint();
@@ -1455,14 +1775,18 @@ export class GameAnimationManager extends BoardAnimationManager {
       },
     });
     
-    // Animate the text change
     if (timeText) {
       this.animateTextChange(timeText, flashColor, config);
     }
   }
 
   /**
-   * Animate text with color flash
+   * Animates text with color flash
+   * 
+   * @param text - The text object
+   * @param flashColor - Color to flash
+   * @param config - Animation configuration
+   * @private
    */
   private animateTextChange(
     text: Phaser.GameObjects.Text,
@@ -1472,7 +1796,6 @@ export class GameAnimationManager extends BoardAnimationManager {
     const scene = (this as unknown as { scene: Phaser.Scene }).scene;
     const originalColor = text.style.color;
     
-    // Convert hex color to string
     const colorStr = '#' + flashColor.toString(16).padStart(6, '0');
     text.setColor(colorStr);
     
@@ -1490,7 +1813,11 @@ export class GameAnimationManager extends BoardAnimationManager {
   }
 
   /**
-   * Animate clock running low warning
+   * Animates clock running low warning
+   * 
+   * @param clockContainer - The clock container
+   * @param config - Animation configuration
+   * @returns The created tween
    */
   animateClockWarning(
     clockContainer: Phaser.GameObjects.Container,
@@ -1509,12 +1836,20 @@ export class GameAnimationManager extends BoardAnimationManager {
     });
   }
 
-  // ============================================
-  // Energy Change Animation (Requirement 13.7)
-  // ============================================
+  /* ============================================
+   * ENERGY CHANGE ANIMATION (Requirement 13.6)
+   * ============================================
+   */
 
   /**
-   * Animate energy bar change
+   * Animates energy bar change
+   * 
+   * @param energyContainer - The energy container
+   * @param energyText - The energy text object
+   * @param oldEnergy - Previous energy value
+   * @param newEnergy - New energy value
+   * @param config - Animation configuration
+   * @param onComplete - Callback when complete
    */
   animateEnergyChange(
     energyContainer: Phaser.GameObjects.Container,
@@ -1527,7 +1862,6 @@ export class GameAnimationManager extends BoardAnimationManager {
     const scene = (this as unknown as { scene: Phaser.Scene }).scene;
     const energyDiff = newEnergy - oldEnergy;
     
-    // Determine animation based on change
     let flashColor: number;
     if (energyDiff > 0) {
       flashColor = 0x44ff44; // Green for energy gain
@@ -1535,7 +1869,6 @@ export class GameAnimationManager extends BoardAnimationManager {
       flashColor = 0xff8844; // Orange for energy spend
     }
     
-    // Bounce effect
     scene.tweens.add({
       targets: energyContainer,
       scaleX: energyDiff > 0 ? 1.15 : 0.9,
@@ -1549,12 +1882,10 @@ export class GameAnimationManager extends BoardAnimationManager {
       },
     });
     
-    // Text flash
     if (energyText) {
       this.animateTextChange(energyText, flashColor, config);
     }
     
-    // Create floating number indicator
     this.createFloatingNumber(
       scene,
       energyContainer.x,
@@ -1565,7 +1896,14 @@ export class GameAnimationManager extends BoardAnimationManager {
   }
 
   /**
-   * Create floating number indicator (+X or -X)
+   * Creates floating number indicator (+X or -X)
+   * 
+   * @param scene - The Phaser scene
+   * @param x - X position
+   * @param y - Y position
+   * @param value - Number value
+   * @param color - Text color
+   * @private
    */
   private createFloatingNumber(
     scene: Phaser.Scene,
@@ -1596,7 +1934,11 @@ export class GameAnimationManager extends BoardAnimationManager {
   }
 
   /**
-   * Animate energy cap increase
+   * Animates energy cap increase
+   * 
+   * @param energyContainer - The energy container
+   * @param config - Animation configuration
+   * @param onComplete - Callback when complete
    */
   animateEnergyCapIncrease(
     energyContainer: Phaser.GameObjects.Container,
@@ -1605,7 +1947,6 @@ export class GameAnimationManager extends BoardAnimationManager {
   ): void {
     const scene = (this as unknown as { scene: Phaser.Scene }).scene;
     
-    // Glow effect
     const glow = scene.add.graphics();
     glow.fillStyle(0xffd700, 0.5);
     glow.fillCircle(energyContainer.x, energyContainer.y, 50);
@@ -1625,7 +1966,6 @@ export class GameAnimationManager extends BoardAnimationManager {
       },
     });
     
-    // Bounce the container
     scene.tweens.add({
       targets: energyContainer,
       scaleX: 1.2,
@@ -1636,12 +1976,18 @@ export class GameAnimationManager extends BoardAnimationManager {
     });
   }
 
-  // ============================================
-  // Victory/Defeat/Draw Animations (Requirement 13.7)
-  // ============================================
+  /* ============================================
+   * VICTORY/DEFEAT/DRAW ANIMATIONS (Requirement 13.7)
+   * ============================================
+   */
 
   /**
-   * Animate victory screen reveal
+   * Animates victory screen reveal
+   * 
+   * @param scene - The Phaser scene
+   * @param resultText - The result text object
+   * @param config - Animation configuration
+   * @param onComplete - Callback when complete
    */
   animateVictory(
     scene: Phaser.Scene,
@@ -1649,11 +1995,9 @@ export class GameAnimationManager extends BoardAnimationManager {
     config: TweenConfig = {},
     onComplete?: () => void
   ): void {
-    // Start scaled down and transparent
     resultText.setScale(0);
     resultText.setAlpha(0);
     
-    // Dramatic reveal
     scene.tweens.add({
       targets: resultText,
       scaleX: 1.5,
@@ -1662,7 +2006,6 @@ export class GameAnimationManager extends BoardAnimationManager {
       duration: config.duration ?? ANIM_DURATION.VICTORY_REVEAL,
       ease: EASING.ELASTIC_OUT,
       onComplete: () => {
-        // Settle to normal size
         scene.tweens.add({
           targets: resultText,
           scaleX: 1,
@@ -1670,7 +2013,6 @@ export class GameAnimationManager extends BoardAnimationManager {
           duration: 300,
           ease: EASING.QUAD_OUT,
           onComplete: () => {
-            // Add subtle pulse
             scene.tweens.add({
               targets: resultText,
               scaleX: 1.05,
@@ -1687,12 +2029,16 @@ export class GameAnimationManager extends BoardAnimationManager {
       },
     });
     
-    // Create celebration particles
     this.createVictoryParticles(scene, resultText.x, resultText.y);
   }
 
   /**
-   * Create victory celebration particles
+   * Creates victory celebration particles
+   * 
+   * @param scene - The Phaser scene
+   * @param x - X position
+   * @param y - Y position
+   * @private
    */
   private createVictoryParticles(scene: Phaser.Scene, x: number, y: number): void {
     const colors = [0xffd700, 0x44ff44, 0x44ffff, 0xff44ff];
@@ -1704,7 +2050,6 @@ export class GameAnimationManager extends BoardAnimationManager {
       
       const particle = scene.add.graphics();
       particle.fillStyle(color, 1);
-      // Draw a simple diamond shape for particles
       particle.fillTriangle(-6, 0, 0, -8, 6, 0);
       particle.fillTriangle(-6, 0, 0, 8, 6, 0);
       particle.setPosition(x, y);
@@ -1728,7 +2073,12 @@ export class GameAnimationManager extends BoardAnimationManager {
   }
 
   /**
-   * Animate defeat screen reveal
+   * Animates defeat screen reveal
+   * 
+   * @param scene - The Phaser scene
+   * @param resultText - The result text object
+   * @param config - Animation configuration
+   * @param onComplete - Callback when complete
    */
   animateDefeat(
     scene: Phaser.Scene,
@@ -1736,12 +2086,10 @@ export class GameAnimationManager extends BoardAnimationManager {
     config: TweenConfig = {},
     onComplete?: () => void
   ): void {
-    // Start above and transparent
     const targetY = resultText.y;
     resultText.setY(targetY - 100);
     resultText.setAlpha(0);
     
-    // Drop down with shake
     scene.tweens.add({
       targets: resultText,
       y: targetY,
@@ -1749,7 +2097,6 @@ export class GameAnimationManager extends BoardAnimationManager {
       duration: config.duration ?? ANIM_DURATION.VICTORY_REVEAL,
       ease: EASING.BOUNCE_OUT,
       onComplete: () => {
-        // Shake effect
         this.shake(resultText, 10, {
           onComplete: () => {
             onComplete?.();
@@ -1761,7 +2108,12 @@ export class GameAnimationManager extends BoardAnimationManager {
   }
 
   /**
-   * Animate draw screen reveal
+   * Animates draw screen reveal
+   * 
+   * @param scene - The Phaser scene
+   * @param resultText - The result text object
+   * @param config - Animation configuration
+   * @param onComplete - Callback when complete
    */
   animateDraw(
     scene: Phaser.Scene,
@@ -1769,12 +2121,10 @@ export class GameAnimationManager extends BoardAnimationManager {
     config: TweenConfig = {},
     onComplete?: () => void
   ): void {
-    // Start scaled and rotated
     resultText.setScale(2);
     resultText.setAlpha(0);
     resultText.setRotation(-0.1);
     
-    // Spin in and settle
     scene.tweens.add({
       targets: resultText,
       scaleX: 1,
@@ -1791,7 +2141,11 @@ export class GameAnimationManager extends BoardAnimationManager {
   }
 
   /**
-   * Animate screen transition (fade to black and back)
+   * Animates screen transition (fade to black and back)
+   * 
+   * @param scene - The Phaser scene
+   * @param onMidpoint - Callback at midpoint (when fully black)
+   * @param onComplete - Callback when complete
    */
   animateScreenTransition(
     scene: Phaser.Scene,
@@ -1800,14 +2154,12 @@ export class GameAnimationManager extends BoardAnimationManager {
   ): void {
     const { width, height } = scene.scale;
     
-    // Create black overlay
     const overlay = scene.add.graphics();
     overlay.fillStyle(0x000000, 1);
     overlay.fillRect(0, 0, width, height);
     overlay.setAlpha(0);
     overlay.setDepth(10000);
     
-    // Fade to black
     scene.tweens.add({
       targets: overlay,
       alpha: 1,
@@ -1816,7 +2168,6 @@ export class GameAnimationManager extends BoardAnimationManager {
       onComplete: () => {
         onMidpoint?.();
         
-        // Fade back
         scene.tweens.add({
           targets: overlay,
           alpha: 0,
@@ -1832,7 +2183,11 @@ export class GameAnimationManager extends BoardAnimationManager {
   }
 
   /**
-   * Create screen shake effect
+   * Creates screen shake effect
+   * 
+   * @param scene - The Phaser scene
+   * @param intensity - Shake intensity
+   * @param duration - Shake duration
    */
   screenShake(
     scene: Phaser.Scene,
@@ -1843,7 +2198,11 @@ export class GameAnimationManager extends BoardAnimationManager {
   }
 
   /**
-   * Create screen flash effect
+   * Creates screen flash effect
+   * 
+   * @param scene - The Phaser scene
+   * @param color - Flash color
+   * @param duration - Flash duration
    */
   screenFlash(
     scene: Phaser.Scene,
@@ -1859,7 +2218,10 @@ export class GameAnimationManager extends BoardAnimationManager {
 }
 
 /**
- * Create a full GameAnimationManager instance
+ * Creates a full GameAnimationManager instance
+ * 
+ * @param scene - The Phaser scene
+ * @returns New GameAnimationManager
  */
 export function createGameAnimationManager(scene: Phaser.Scene): GameAnimationManager {
   return new GameAnimationManager(scene);

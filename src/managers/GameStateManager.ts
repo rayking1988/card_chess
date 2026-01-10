@@ -1,13 +1,47 @@
 /**
- * GameStateManager - Central state management for Card Chess
- * Handles game state, turn flow, and action execution
+ * @fileoverview GameStateManager - Central state management for Card Chess
  * 
- * Requirements: 3.1, 3.3, 3.5, 4.3, 4.5, 4.7, 5.3, 5.4, 6.3, 6.4, 6.5, 6.6, 8.1-8.4
+ * This manager handles all game state including:
+ * - Turn flow and phase management
+ * - Clock and stopwatch tracking
+ * - Energy and energy cap management
+ * - Focus/Disturb mode mechanics
+ * - Deck, hand, and discard pile operations
+ * - Card effect resolution
+ * 
+ * Requirements addressed:
+ * - 3.1, 3.3, 3.5: Turn flow and card play rules
+ * - 4.3, 4.5, 4.7: Clock management
+ * - 5.3, 5.4: Stopwatch threshold mechanics
+ * - 6.3, 6.4, 6.5, 6.6: Energy system
+ * - 8.1-8.4: Focus/Disturb mode
+ * - 11.6-11.8: Card effect resolution
+ * 
+ * @module managers/GameStateManager
+ * @requires chess.js
  */
 
 import { Chess, Square as ChessSquare } from 'chess.js';
 
-// Card effect types
+/* ============================================
+ * TYPE DEFINITIONS
+ * ============================================
+ */
+
+/**
+ * Card effect action types
+ * 
+ * Each effect defines what happens when a card is played:
+ * - SHUFFLE_DECK: Randomize deck order
+ * - DRAW_CARDS: Draw cards from deck
+ * - DISCARD_TO_CAP: Discard excess cards
+ * - DEPLOY_PIECE: Place a piece on the board
+ * - DESTROY_PIECE: Remove a piece from the board
+ * - MODIFY_TIME: Add or subtract clock time
+ * - MODIFY_ENERGY: Add or subtract energy
+ * - MODIFY_ENERGY_CAP: Change maximum energy
+ * - ENERGY_CARD: Standard energy card effect
+ */
 export type CardEffect =
   | { action: 'SHUFFLE_DECK' }
   | { action: 'DRAW_CARDS'; count: number; respectCap: boolean }
@@ -19,8 +53,21 @@ export type CardEffect =
   | { action: 'MODIFY_ENERGY_CAP'; amount: number }
   | { action: 'ENERGY_CARD' };
 
+/** Chess piece type (lowercase) */
 export type PieceType = 'p' | 'n' | 'b' | 'r' | 'q' | 'k';
 
+/**
+ * Card data structure
+ * 
+ * @property id - Unique identifier
+ * @property name - Display name
+ * @property type - Card category (energy, piece, spell)
+ * @property energyCost - Energy required to play (null if none)
+ * @property timeCost - Time deducted when played (null if none)
+ * @property effect - What happens when played
+ * @property artAsset - Texture key for card art
+ * @property frameColor - Card frame color variant
+ */
 export interface Card {
   id: string;
   name: string;
@@ -32,54 +79,102 @@ export interface Card {
   frameColor: string;
 }
 
+/**
+ * Player state data structure
+ * 
+ * @property name - Player display name
+ * @property clock - Remaining time in seconds (starts at 600)
+ * @property stopwatch - Accumulated turn time cost
+ * @property energy - Current energy available
+ * @property energyCap - Maximum energy capacity
+ * @property disturbTags - Disturb debuff count
+ * @property mode - Current mode (focus or disturb)
+ * @property energyPlayedThisTurn - Whether energy card was played
+ * @property hasPlayedCardThisTurn - Whether any card was played
+ * @property deployedPiecesThisTurn - Squares where pieces were deployed
+ * @property deck - Cards in deck
+ * @property hand - Cards in hand
+ * @property discard - Cards in discard pile
+ */
 export interface PlayerState {
   name: string;
-  clock: number;           // seconds remaining (starts at 600)
-  stopwatch: number;       // accumulated turn time cost
-  energy: number;          // current energy
-  energyCap: number;       // max energy
-  disturbTags: number;     // disturb debuff count
+  clock: number;
+  stopwatch: number;
+  energy: number;
+  energyCap: number;
+  disturbTags: number;
   mode: 'focus' | 'disturb';
   energyPlayedThisTurn: boolean;
   hasPlayedCardThisTurn: boolean;
-  deployedPiecesThisTurn: string[];  // squares where pieces were deployed this turn
-  
-  // Deck state
+  deployedPiecesThisTurn: string[];
   deck: Card[];
   hand: Card[];
   discard: Card[];
 }
 
+/** Game phase type */
 export type GamePhase = 'mulligan' | 'playing' | 'ended';
+
+/** Player color type */
 export type PlayerColor = 'white' | 'black';
 
+/**
+ * Complete game state structure
+ * 
+ * @property phase - Current game phase
+ * @property currentTurn - Whose turn it is
+ * @property localPlayer - Which color the local player controls
+ * @property turnNumber - Current turn number
+ * @property boardFEN - Chess position in FEN notation
+ * @property players - State for both players
+ */
 export interface GameState {
   phase: GamePhase;
   currentTurn: PlayerColor;
   localPlayer: PlayerColor;
   turnNumber: number;
-  
-  // Chess state
   boardFEN: string;
-  
-  // Player states
   players: {
     white: PlayerState;
     black: PlayerState;
   };
 }
 
+/* ============================================
+ * GAME CONSTANTS
+ * ============================================
+ */
 
-// Constants
-const INITIAL_CLOCK_SECONDS = 600; // 10:00
+/** Initial clock time in seconds (10 minutes) */
+const INITIAL_CLOCK_SECONDS = 600;
+
+/** Time cost for making a chess move (seconds) */
 const MOVE_TIME_COST = 3;
+
+/** Time cost for mulligan action (seconds) */
 const MULLIGAN_TIME_COST = 10;
+
+/** Stopwatch threshold for opponent draw (seconds) */
 const STOPWATCH_THRESHOLD = 60;
+
+/** Maximum cards allowed in hand */
 const MAX_HAND_SIZE = 7;
+
+/** Number of cards drawn at game start */
 const INITIAL_DRAW_COUNT = 7;
+
+/* ============================================
+ * HELPER FUNCTIONS
+ * ============================================
+ */
 
 /**
  * Creates a new empty player state
+ * 
+ * @param name - Player display name
+ * @returns Fresh PlayerState with default values
+ * 
+ * Used by: createInitialGameState()
  */
 function createPlayerState(name: string): PlayerState {
   return {
@@ -101,7 +196,17 @@ function createPlayerState(name: string): PlayerState {
 
 /**
  * Creates initial game state for a new game
- * Board starts with only two kings (White King on e1, Black King on e8)
+ * 
+ * Board starts with only two kings:
+ * - White King on e1
+ * - Black King on e8
+ * 
+ * @param localPlayer - Which color the local player controls
+ * @param whiteName - White player's display name
+ * @param blackName - Black player's display name
+ * @returns Fresh GameState ready for play
+ * 
+ * Used by: GameStateManager constructor, GameScene.startNewGame()
  */
 export function createInitialGameState(
   localPlayer: PlayerColor,
@@ -122,13 +227,45 @@ export function createInitialGameState(
   };
 }
 
+/* ============================================
+ * GAME STATE MANAGER CLASS
+ * ============================================
+ */
+
 /**
- * GameStateManager class - manages all game state and actions
+ * GameStateManager - Central state management for Card Chess
+ * 
+ * Manages all game state and provides methods for:
+ * - Phase and turn management
+ * - Clock and stopwatch operations
+ * - Energy system
+ * - Focus/Disturb mode
+ * - Deck operations
+ * - Card effect resolution
+ * 
+ * @example
+ * const manager = new GameStateManager('white', 'Player 1', 'Player 2');
+ * manager.setOnStateChange((state) => updateUI(state));
+ * manager.startGame();
+ * 
+ * Used by: GameScene (creates and manages game state)
  */
 export class GameStateManager {
+  /** Current game state */
   private state: GameState;
+  
+  /** Callback for state changes */
   private onStateChange?: (state: GameState) => void;
 
+  /**
+   * Creates a new GameStateManager
+   * 
+   * @param localPlayer - Which color the local player controls
+   * @param whiteName - White player's display name
+   * @param blackName - Black player's display name
+   * 
+   * Used by: GameScene.create()
+   */
   constructor(
     localPlayer: PlayerColor = 'white',
     whiteName: string = 'White',
@@ -137,22 +274,33 @@ export class GameStateManager {
     this.state = createInitialGameState(localPlayer, whiteName, blackName);
   }
 
+  /* ============================================
+   * STATE ACCESS METHODS
+   * ============================================
+   */
+
   /**
-   * Get current game state (immutable copy)
+   * Gets current game state (immutable copy)
+   * 
+   * @returns Copy of current state
    */
   getState(): GameState {
     return { ...this.state };
   }
 
   /**
-   * Set state change callback
+   * Sets state change callback
+   * 
+   * @param callback - Function called when state changes
    */
   setOnStateChange(callback: (state: GameState) => void): void {
     this.onStateChange = callback;
   }
 
   /**
-   * Notify listeners of state change
+   * Notifies listeners of state change
+   * 
+   * @private
    */
   private notifyStateChange(): void {
     if (this.onStateChange) {
@@ -161,14 +309,18 @@ export class GameStateManager {
   }
 
   /**
-   * Get current player state
+   * Gets current player state
+   * 
+   * @returns State of player whose turn it is
    */
   getCurrentPlayer(): PlayerState {
     return this.state.players[this.state.currentTurn];
   }
 
   /**
-   * Get opponent player state
+   * Gets opponent player state
+   * 
+   * @returns State of player whose turn it isn't
    */
   getOpponentPlayer(): PlayerState {
     const opponent = this.state.currentTurn === 'white' ? 'black' : 'white';
@@ -176,18 +328,25 @@ export class GameStateManager {
   }
 
   /**
-   * Get player state by color
+   * Gets player state by color
+   * 
+   * @param color - Player color
+   * @returns Player state
    */
   getPlayer(color: PlayerColor): PlayerState {
     return this.state.players[color];
   }
 
-  // ============================================
-  // Phase and Turn Management (Requirements 3.1, 3.3, 3.5)
-  // ============================================
+  /* ============================================
+   * PHASE AND TURN MANAGEMENT
+   * Requirements: 3.1, 3.3, 3.5
+   * ============================================
+   */
 
   /**
-   * Start the game (transition from mulligan to playing)
+   * Starts the game (transition from mulligan to playing)
+   * 
+   * Used by: GameScene (after mulligan phase)
    */
   startGame(): void {
     if (this.state.phase !== 'mulligan') return;
@@ -196,9 +355,21 @@ export class GameStateManager {
   }
 
   /**
-   * End current turn and pass to opponent
-   * Requirement 3.3: White doesn't draw on first turn, others draw 1 at turn start
+   * Ends current turn and passes to opponent
+   * 
+   * Algorithm:
+   * 1. Process end-of-turn Focus/Disturb mode effects
+   * 2. Process stopwatch threshold (opponent draws if >= 60s)
+   * 3. Reset stopwatch and turn-specific flags
+   * 4. Switch turn to opponent
+   * 5. Refill new player's energy to cap
+   * 6. Increment turn number if white's turn
+   * 7. Draw card (except white's first turn)
+   * 
+   * Requirement 3.3: White doesn't draw on first turn
    * Requirement 3.5: Can play any number of cards during turn
+   * 
+   * Used by: GameScene.endTurn()
    */
   endTurn(): void {
     if (this.state.phase !== 'playing') return;
@@ -231,9 +402,10 @@ export class GameStateManager {
       this.state.turnNumber++;
     }
 
-    // Draw card at turn start (except white's first turn)
-    const isWhiteFirstTurn = this.state.currentTurn === 'white' && this.state.turnNumber === 1;
-    if (!isWhiteFirstTurn) {
+    // Draw card at turn start (except white's very first turn - turn 1, white's turn)
+    // Black should draw on their first turn (turn 1, black's turn)
+    const isWhiteVeryFirstTurn = this.state.currentTurn === 'white' && this.state.turnNumber === 1;
+    if (!isWhiteVeryFirstTurn) {
       this.drawCards(this.state.currentTurn, 1, true);
     }
 
@@ -241,43 +413,58 @@ export class GameStateManager {
   }
 
   /**
-   * Get current game phase
+   * Gets current game phase
+   * 
+   * @returns Current phase
    */
   getPhase(): GamePhase {
     return this.state.phase;
   }
 
   /**
-   * Get current turn color
+   * Gets current turn color
+   * 
+   * @returns Color of player whose turn it is
    */
   getCurrentTurn(): PlayerColor {
     return this.state.currentTurn;
   }
 
   /**
-   * Check if it's the local player's turn
+   * Checks if it's the local player's turn
+   * 
+   * @returns True if local player's turn
    */
   isLocalPlayerTurn(): boolean {
     return this.state.currentTurn === this.state.localPlayer;
   }
 
   /**
-   * End the game
+   * Ends the game
+   * 
+   * Used by: GameScene (when game ends)
    */
   endGame(): void {
     this.state.phase = 'ended';
     this.notifyStateChange();
   }
 
-
-  // ============================================
-  // Clock Management (Requirements 4.3, 4.5, 4.7)
-  // ============================================
+  /* ============================================
+   * CLOCK MANAGEMENT
+   * Requirements: 4.3, 4.5, 4.7
+   * ============================================
+   */
 
   /**
-   * Deduct time from player's clock
+   * Deducts time from player's clock
+   * 
+   * Also adds to stopwatch for current turn tracking.
+   * 
    * Requirement 4.3: Deduct card's time cost when played
    * Requirement 4.7: Deduct 3 seconds when moving a piece
+   * 
+   * @param player - Player color
+   * @param seconds - Seconds to deduct
    */
   deductTime(player: PlayerColor, seconds: number): void {
     const playerState = this.state.players[player];
@@ -292,7 +479,10 @@ export class GameStateManager {
   }
 
   /**
-   * Add time to player's clock
+   * Adds time to player's clock
+   * 
+   * @param player - Player color
+   * @param seconds - Seconds to add
    */
   addTime(player: PlayerColor, seconds: number): void {
     const playerState = this.state.players[player];
@@ -301,7 +491,10 @@ export class GameStateManager {
   }
 
   /**
-   * Modify time (can be positive or negative)
+   * Modifies time (can be positive or negative)
+   * 
+   * @param player - Player color
+   * @param seconds - Seconds to modify (positive adds, negative deducts)
    */
   modifyTime(player: PlayerColor, seconds: number): void {
     if (seconds >= 0) {
@@ -312,43 +505,61 @@ export class GameStateManager {
   }
 
   /**
-   * Deduct time cost for moving a piece (3 seconds)
+   * Deducts time cost for moving a piece (3 seconds)
+   * 
    * Requirement 4.7
+   * 
+   * @param player - Player color
    */
   deductMoveTimeCost(player: PlayerColor): void {
     this.deductTime(player, MOVE_TIME_COST);
   }
 
   /**
-   * Deduct time cost for mulligan (10 seconds)
+   * Deducts time cost for mulligan (10 seconds)
+   * 
+   * @param player - Player color
    */
   deductMulliganTimeCost(player: PlayerColor): void {
     this.deductTime(player, MULLIGAN_TIME_COST);
   }
 
   /**
-   * Check if player has timed out
+   * Checks if player has timed out
+   * 
    * Requirement 4.5: Clock reaching 00:00 triggers loss
+   * 
+   * @param player - Player color
+   * @returns True if clock is at 0
    */
   hasTimedOut(player: PlayerColor): boolean {
     return this.state.players[player].clock <= 0;
   }
 
   /**
-   * Get player's remaining clock time in seconds
+   * Gets player's remaining clock time in seconds
+   * 
+   * @param player - Player color
+   * @returns Remaining seconds
    */
   getClockTime(player: PlayerColor): number {
     return this.state.players[player].clock;
   }
 
-  // ============================================
-  // Stopwatch Management (Requirements 5.3, 5.4)
-  // ============================================
+  /* ============================================
+   * STOPWATCH MANAGEMENT
+   * Requirements: 5.3, 5.4
+   * ============================================
+   */
 
   /**
-   * Process stopwatch threshold at end of turn
+   * Processes stopwatch threshold at end of turn
+   * 
    * Requirement 5.3: At 60+ seconds, subtract 60 and opponent draws 1 card
    * Requirement 5.4: Reset to 0 when turn ends
+   * 
+   * @param player - Player color
+   * @private
    */
   private processStopwatchThreshold(player: PlayerColor): void {
     const playerState = this.state.players[player];
@@ -362,19 +573,28 @@ export class GameStateManager {
   }
 
   /**
-   * Get player's current stopwatch value
+   * Gets player's current stopwatch value
+   * 
+   * @param player - Player color
+   * @returns Current stopwatch seconds
    */
   getStopwatch(player: PlayerColor): number {
     return this.state.players[player].stopwatch;
   }
 
-  // ============================================
-  // Energy Management (Requirements 6.3, 6.4, 6.5, 6.6)
-  // ============================================
+  /* ============================================
+   * ENERGY MANAGEMENT
+   * Requirements: 6.3, 6.4, 6.5, 6.6
+   * ============================================
+   */
 
   /**
-   * Add energy to player (capped at energyCap)
+   * Adds energy to player (capped at energyCap)
+   * 
    * Requirement 6.5: Deduct energy cost when playing non-energy cards
+   * 
+   * @param player - Player color
+   * @param amount - Energy to add
    */
   addEnergy(player: PlayerColor, amount: number): void {
     const playerState = this.state.players[player];
@@ -383,13 +603,18 @@ export class GameStateManager {
   }
 
   /**
-   * Deduct energy from player
+   * Deducts energy from player
+   * 
    * Requirement 6.6: Prevent card play if insufficient energy
+   * 
+   * @param player - Player color
+   * @param amount - Energy to deduct
+   * @returns True if successful, false if insufficient
    */
   deductEnergy(player: PlayerColor, amount: number): boolean {
     const playerState = this.state.players[player];
     if (playerState.energy < amount) {
-      return false; // Insufficient energy
+      return false;
     }
     playerState.energy -= amount;
     this.notifyStateChange();
@@ -397,7 +622,11 @@ export class GameStateManager {
   }
 
   /**
-   * Modify energy (can be positive or negative)
+   * Modifies energy (can be positive or negative)
+   * 
+   * @param player - Player color
+   * @param amount - Energy to modify
+   * @returns True if successful
    */
   modifyEnergy(player: PlayerColor, amount: number): boolean {
     if (amount >= 0) {
@@ -409,8 +638,12 @@ export class GameStateManager {
   }
 
   /**
-   * Increase energy cap
+   * Modifies energy cap
+   * 
    * Requirement 6.3: Energy card increases cap by 1, then current by 1
+   * 
+   * @param player - Player color
+   * @param amount - Amount to modify cap
    */
   modifyEnergyCap(player: PlayerColor, amount: number): void {
     const playerState = this.state.players[player];
@@ -419,23 +652,23 @@ export class GameStateManager {
   }
 
   /**
-   * Play energy card effect
+   * Plays energy card effect
+   * 
    * Requirement 6.3: Increase cap by 1, then current by 1
    * Requirement 6.4: Only 1 energy card per turn
+   * 
+   * @param player - Player color
+   * @returns True if successful
    */
   playEnergyCard(player: PlayerColor): boolean {
     const playerState = this.state.players[player];
     
-    // Check if energy card already played this turn
     if (playerState.energyPlayedThisTurn) {
       return false;
     }
     
-    // Increase cap by 1
     playerState.energyCap += 1;
-    // Increase current by 1 (capped at new cap)
     playerState.energy = Math.min(playerState.energyCap, playerState.energy + 1);
-    // Mark energy played this turn
     playerState.energyPlayedThisTurn = true;
     
     this.notifyStateChange();
@@ -443,40 +676,56 @@ export class GameStateManager {
   }
 
   /**
-   * Check if player can afford energy cost
+   * Checks if player can afford energy cost
+   * 
+   * @param player - Player color
+   * @param cost - Energy cost
+   * @returns True if affordable
    */
   canAffordEnergy(player: PlayerColor, cost: number): boolean {
     return this.state.players[player].energy >= cost;
   }
 
   /**
-   * Check if player can play energy card this turn
+   * Checks if player can play energy card this turn
+   * 
+   * @param player - Player color
+   * @returns True if energy card not yet played
    */
   canPlayEnergyCard(player: PlayerColor): boolean {
     return !this.state.players[player].energyPlayedThisTurn;
   }
 
   /**
-   * Get player's current energy
+   * Gets player's current energy
+   * 
+   * @param player - Player color
+   * @returns Current energy
    */
   getEnergy(player: PlayerColor): number {
     return this.state.players[player].energy;
   }
 
   /**
-   * Get player's energy cap
+   * Gets player's energy cap
+   * 
+   * @param player - Player color
+   * @returns Energy cap
    */
   getEnergyCap(player: PlayerColor): number {
     return this.state.players[player].energyCap;
   }
 
-
-  // ============================================
-  // Focus/Disturb Mode (Requirements 8.1, 8.2, 8.3, 8.4)
-  // ============================================
+  /* ============================================
+   * FOCUS/DISTURB MODE
+   * Requirements: 8.1, 8.2, 8.3, 8.4
+   * ============================================
+   */
 
   /**
-   * Toggle player's mode between Focus and Disturb
+   * Toggles player's mode between Focus and Disturb
+   * 
+   * @param player - Player color
    */
   toggleMode(player: PlayerColor): void {
     const playerState = this.state.players[player];
@@ -485,7 +734,10 @@ export class GameStateManager {
   }
 
   /**
-   * Set player's mode
+   * Sets player's mode
+   * 
+   * @param player - Player color
+   * @param mode - Mode to set
    */
   setMode(player: PlayerColor, mode: 'focus' | 'disturb'): void {
     this.state.players[player].mode = mode;
@@ -493,16 +745,23 @@ export class GameStateManager {
   }
 
   /**
-   * Get player's current mode
+   * Gets player's current mode
+   * 
+   * @param player - Player color
+   * @returns Current mode
    */
   getMode(player: PlayerColor): 'focus' | 'disturb' {
     return this.state.players[player].mode;
   }
 
   /**
-   * Process end-of-turn mode effects
+   * Processes end-of-turn mode effects
+   * 
    * Requirement 8.1: Focus mode converts leftover energy to time (1:1)
    * Requirement 8.2: Disturb mode converts leftover energy to opponent's Disturb tags
+   * 
+   * @param player - Player color
+   * @private
    */
   private processEndOfTurnMode(player: PlayerColor): void {
     const playerState = this.state.players[player];
@@ -523,7 +782,10 @@ export class GameStateManager {
   }
 
   /**
-   * Modify Disturb tags for a player
+   * Modifies Disturb tags for a player
+   * 
+   * @param player - Player color
+   * @param amount - Amount to modify
    */
   modifyDisturbTags(player: PlayerColor, amount: number): void {
     const playerState = this.state.players[player];
@@ -532,19 +794,63 @@ export class GameStateManager {
   }
 
   /**
-   * Get player's Disturb tag count
+   * Gets player's Disturb tag count
+   * 
+   * @param player - Player color
+   * @returns Disturb tag count
    */
   getDisturbTags(player: PlayerColor): number {
     return this.state.players[player].disturbTags;
   }
 
-  // ============================================
-  // Deployed Piece Tracking
-  // ============================================
+  /**
+   * Resolves Disturb tags when playing first card of turn
+   * 
+   * Requirement 8.3: First card play removes all tags, deducting 1 second per tag
+   * 
+   * @param player - Player color
+   */
+  resolveDisturbTagsOnCardPlay(player: PlayerColor): void {
+    const playerState = this.state.players[player];
+    
+    if (!playerState.hasPlayedCardThisTurn && playerState.disturbTags > 0) {
+      this.deductTime(player, playerState.disturbTags);
+      playerState.disturbTags = 0;
+    }
+    
+    playerState.hasPlayedCardThisTurn = true;
+    this.notifyStateChange();
+  }
 
   /**
-   * Track a deployed piece for this turn
-   * Deployed pieces cannot move on the same turn they are deployed
+   * Resolves Disturb tags when moving without playing cards
+   * 
+   * Requirement 8.4: Moving without cards clears tags without time cost
+   * 
+   * @param player - Player color
+   */
+  resolveDisturbTagsOnMove(player: PlayerColor): void {
+    const playerState = this.state.players[player];
+    
+    if (!playerState.hasPlayedCardThisTurn) {
+      playerState.disturbTags = 0;
+    }
+    
+    this.notifyStateChange();
+  }
+
+  /* ============================================
+   * DEPLOYED PIECE TRACKING
+   * ============================================
+   */
+
+  /**
+   * Tracks a deployed piece for this turn
+   * 
+   * Deployed pieces cannot move on the same turn they are deployed.
+   * 
+   * @param player - Player color
+   * @param square - Square where piece was deployed
    */
   trackDeployedPiece(player: PlayerColor, square: string): void {
     this.state.players[player].deployedPiecesThisTurn.push(square);
@@ -552,16 +858,22 @@ export class GameStateManager {
   }
 
   /**
-   * Check if a piece at a square was deployed this turn
-   * Returns true if the piece was deployed this turn (cannot move)
+   * Checks if a piece at a square was deployed this turn
+   * 
+   * @param player - Player color
+   * @param square - Square to check
+   * @returns True if piece was deployed this turn
    */
   wasDeployedThisTurn(player: PlayerColor, square: string): boolean {
     return this.state.players[player].deployedPiecesThisTurn.includes(square);
   }
 
   /**
-   * Check if a piece can move from a square
-   * Returns false if the piece was deployed this turn
+   * Checks if a piece can move from a square
+   * 
+   * @param player - Player color
+   * @param fromSquare - Square to move from
+   * @returns Object with canMove flag and reason
    */
   canMovePiece(player: PlayerColor, fromSquare: string): { canMove: boolean; reason: string } {
     if (this.wasDeployedThisTurn(player, fromSquare)) {
@@ -571,19 +883,25 @@ export class GameStateManager {
   }
 
   /**
-   * Get list of squares where pieces were deployed this turn
+   * Gets list of squares where pieces were deployed this turn
+   * 
+   * @param player - Player color
+   * @returns Array of square notations
    */
   getDeployedPiecesThisTurn(player: PlayerColor): string[] {
     return [...this.state.players[player].deployedPiecesThisTurn];
   }
 
   /**
-   * Check if deploying a piece at a square would give check to opponent's king
-   * This validation should be called before placing the piece
-   * Returns true if the deployment would give check (invalid deployment)
+   * Checks if deploying a piece would give check to opponent's king
    * 
-   * Note: This method requires a ChessBoardWrapper instance to be passed in
-   * since GameStateManager doesn't have direct access to the chess board
+   * This validation should be called before placing the piece.
+   * 
+   * @param targetSquare - Square to deploy to
+   * @param pieceType - Type of piece to deploy
+   * @param playerColor - Color of deploying player
+   * @param boardFEN - Current board position
+   * @returns True if deployment would give check (invalid)
    */
   wouldDeploymentGiveCheck(
     targetSquare: string,
@@ -591,7 +909,6 @@ export class GameStateManager {
     playerColor: PlayerColor,
     boardFEN: string
   ): boolean {
-    // Create a temporary board to test the deployment
     const tempChess = new Chess(boardFEN);
     
     // Find opponent's king
@@ -614,25 +931,20 @@ export class GameStateManager {
       if (kingSquare) break;
     }
     
-    if (!kingSquare) return false; // No opponent king found
+    if (!kingSquare) return false;
     
     // Place the piece temporarily
     const placed = tempChess.put({ type: pieceType, color: pieceColor }, targetSquare as ChessSquare);
     if (!placed) {
-      // chess.js won't allow placing pawns on rank 1 or 8
-      // In this case, we need to manually check if the piece would give check
-      // For pawns on rank 1/8, they can't give check anyway (no valid pawn moves)
-      // For other pieces that fail to place, assume no check
       return false;
     }
     
     // Check if the deployed piece can attack the king
-    // We need to check if the piece at targetSquare can move to kingSquare
     try {
       const moves = tempChess.moves({ square: targetSquare as ChessSquare, verbose: true });
       for (const move of moves) {
         if (move.to === kingSquare) {
-          return true; // Deployment would give check
+          return true;
         }
       }
     } catch {
@@ -642,46 +954,16 @@ export class GameStateManager {
     return false;
   }
 
-  /**
-   * Resolve Disturb tags when playing first card of turn
-   * Requirement 8.3: First card play removes all tags, deducting 1 second per tag
+  /* ============================================
+   * DECK OPERATIONS
+   * ============================================
    */
-  resolveDisturbTagsOnCardPlay(player: PlayerColor): void {
-    const playerState = this.state.players[player];
-    
-    if (!playerState.hasPlayedCardThisTurn && playerState.disturbTags > 0) {
-      // Deduct time equal to tag count
-      this.deductTime(player, playerState.disturbTags);
-      // Clear all tags
-      playerState.disturbTags = 0;
-    }
-    
-    // Mark that a card has been played this turn
-    playerState.hasPlayedCardThisTurn = true;
-    this.notifyStateChange();
-  }
 
   /**
-   * Resolve Disturb tags when moving without playing cards
-   * Requirement 8.4: Moving without cards clears tags without time cost
-   */
-  resolveDisturbTagsOnMove(player: PlayerColor): void {
-    const playerState = this.state.players[player];
-    
-    if (!playerState.hasPlayedCardThisTurn) {
-      // Clear tags without time cost
-      playerState.disturbTags = 0;
-    }
-    
-    this.notifyStateChange();
-  }
-
-  // ============================================
-  // Deck Operations (for DeckManager integration)
-  // ============================================
-
-  /**
-   * Set player's deck
+   * Sets player's deck
+   * 
+   * @param player - Player color
+   * @param deck - Array of cards
    */
   setDeck(player: PlayerColor, deck: Card[]): void {
     this.state.players[player].deck = [...deck];
@@ -689,8 +971,12 @@ export class GameStateManager {
   }
 
   /**
-   * Draw cards from deck to hand
-   * @param respectCap If true, won't draw beyond MAX_HAND_SIZE
+   * Draws cards from deck to hand
+   * 
+   * @param player - Player color
+   * @param count - Number of cards to draw
+   * @param respectCap - If true, won't draw beyond MAX_HAND_SIZE
+   * @returns Number of cards actually drawn
    */
   drawCards(player: PlayerColor, count: number, respectCap: boolean): number {
     const playerState = this.state.players[player];
@@ -712,11 +998,14 @@ export class GameStateManager {
   }
 
   /**
-   * Shuffle player's deck
+   * Shuffles player's deck
+   * 
+   * Uses Fisher-Yates shuffle algorithm.
+   * 
+   * @param player - Player color
    */
   shuffleDeck(player: PlayerColor): void {
     const deck = this.state.players[player].deck;
-    // Fisher-Yates shuffle
     for (let i = deck.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [deck[i], deck[j]] = [deck[j], deck[i]];
@@ -725,8 +1014,12 @@ export class GameStateManager {
   }
 
   /**
-   * Discard cards to max hand size
+   * Discards cards to max hand size
+   * 
    * Requirement 3.6: Force discard to 7 if hand > 7
+   * 
+   * @param player - Player color
+   * @returns Array of discarded cards
    */
   discardToHandSize(player: PlayerColor): Card[] {
     const playerState = this.state.players[player];
@@ -745,55 +1038,61 @@ export class GameStateManager {
   }
 
   /**
-   * Get hand size for player
+   * Gets hand size for player
+   * 
+   * @param player - Player color
+   * @returns Number of cards in hand
    */
   getHandSize(player: PlayerColor): number {
     return this.state.players[player].hand.length;
   }
 
   /**
-   * Check if hand exceeds max size
+   * Checks if hand exceeds max size
+   * 
+   * @param player - Player color
+   * @returns True if hand > MAX_HAND_SIZE
    */
   handExceedsMax(player: PlayerColor): boolean {
     return this.state.players[player].hand.length > MAX_HAND_SIZE;
   }
 
-  // ============================================
-  // Card Effect Resolution (Requirements 11.6, 11.7, 11.8)
-  // ============================================
+  /* ============================================
+   * CARD EFFECT RESOLUTION
+   * Requirements: 11.6, 11.7, 11.8
+   * ============================================
+   */
 
   /**
-   * Check if a card can be played
-   * Validates energy cost, time cost, and special conditions
+   * Checks if a card can be played
    * 
-   * @param card The card to check
-   * @param player The player attempting to play the card
-   * @returns Object with canPlay boolean and reason string
+   * Validates energy cost, time cost, and special conditions.
+   * 
+   * @param card - The card to check
+   * @param player - The player attempting to play
+   * @returns Object with canPlay flag and reason
    */
   canPlayCard(card: Card, player: PlayerColor): { canPlay: boolean; reason: string } {
     const playerState = this.state.players[player];
 
-    // Check if it's the player's turn
     if (this.state.currentTurn !== player) {
       return { canPlay: false, reason: 'Not your turn' };
     }
 
-    // Check game phase
     if (this.state.phase !== 'playing') {
       return { canPlay: false, reason: 'Game is not in playing phase' };
     }
 
-    // Check energy card limit (Requirement 6.4)
+    // Requirement 6.4: Only one energy card per turn
     if (card.type === 'energy' && playerState.energyPlayedThisTurn) {
       return { canPlay: false, reason: 'Already played an energy card this turn' };
     }
 
-    // Check energy cost (Requirement 6.6)
+    // Requirement 6.6: Check energy cost
     if (card.energyCost !== null && playerState.energy < card.energyCost) {
       return { canPlay: false, reason: 'Insufficient energy' };
     }
 
-    // Check time cost - player must have enough time
     if (card.timeCost !== null && playerState.clock < card.timeCost) {
       return { canPlay: false, reason: 'Insufficient time' };
     }
@@ -802,20 +1101,30 @@ export class GameStateManager {
   }
 
   /**
-   * Play a card from hand
-   * Requirement 11.6: Support "Deploy [piece] at a square you control" action
-   * Requirement 11.7: Support "Destroy target piece at a square you control" action
-   * Requirement 11.8: Support time and energy modification actions
+   * Plays a card from hand
    * 
-   * @param cardId ID of the card to play
-   * @param player The player playing the card
-   * @param target Optional target square for targeted effects
-   * @returns Object with success boolean and message
+   * Algorithm:
+   * 1. Find card in hand
+   * 2. Validate card can be played
+   * 3. Check target requirement
+   * 4. Resolve Disturb tags on first card
+   * 5. Deduct costs
+   * 6. Remove from hand
+   * 7. Resolve effect
+   * 8. Add to discard
+   * 
+   * Requirement 11.6: Support "Deploy [piece] at a square you control"
+   * Requirement 11.7: Support "Destroy target piece at a square you control"
+   * Requirement 11.8: Support time and energy modification
+   * 
+   * @param cardId - ID of the card to play
+   * @param player - The player playing the card
+   * @param target - Optional target square for targeted effects
+   * @returns Object with success flag and message
    */
   playCard(cardId: string, player: PlayerColor, target?: string): { success: boolean; message: string } {
     const playerState = this.state.players[player];
 
-    // Find card in hand
     const cardIndex = playerState.hand.findIndex(c => c.id === cardId);
     if (cardIndex === -1) {
       return { success: false, message: 'Card not found in hand' };
@@ -823,13 +1132,11 @@ export class GameStateManager {
 
     const card = playerState.hand[cardIndex];
 
-    // Validate card can be played
     const validation = this.canPlayCard(card, player);
     if (!validation.canPlay) {
       return { success: false, message: validation.reason };
     }
 
-    // Check if card requires target
     const requiresTarget = 'requiresTarget' in card.effect && card.effect.requiresTarget;
     if (requiresTarget && !target) {
       return { success: false, message: 'Card requires a target' };
@@ -861,19 +1168,19 @@ export class GameStateManager {
   }
 
   /**
-   * Resolve a card's effect
+   * Resolves a card's effect
    * 
-   * @param card The card being played
-   * @param player The player who played the card
-   * @param target Optional target for targeted effects
-   * @returns Object with success boolean and message
+   * @param card - The card being played
+   * @param player - The player who played the card
+   * @param target - Optional target for targeted effects
+   * @returns Object with success flag and message
+   * @private
    */
   resolveCardEffect(card: Card, player: PlayerColor, target?: string): { success: boolean; message: string } {
     const effect = card.effect;
 
     switch (effect.action) {
       case 'ENERGY_CARD':
-        // Energy card effect (Requirement 6.3)
         const energySuccess = this.playEnergyCard(player);
         return { 
           success: energySuccess, 
@@ -881,50 +1188,37 @@ export class GameStateManager {
         };
 
       case 'SHUFFLE_DECK':
-        // Shuffle deck (Requirement 11.2)
         this.shuffleDeck(player);
         return { success: true, message: 'Deck shuffled' };
 
       case 'DRAW_CARDS':
-        // Draw cards (Requirements 11.3, 11.4)
         const drawn = this.drawCards(player, effect.count, effect.respectCap);
         return { success: true, message: `Drew ${drawn} card(s)` };
 
       case 'DISCARD_TO_CAP':
-        // Discard to hand size (Requirement 11.5)
         const discarded = this.discardToHandSize(player);
         return { success: true, message: `Discarded ${discarded.length} card(s)` };
 
       case 'DEPLOY_PIECE':
-        // Deploy piece (Requirement 11.6)
-        // Note: Actual piece placement is handled by ChessBoardWrapper
-        // This just validates and signals the intent
-        // The deployed piece is tracked so it cannot move this turn
         if (!target) {
           return { success: false, message: 'No target square specified' };
         }
-        // Track the deployed piece so it cannot move this turn
         this.trackDeployedPiece(player, target);
         return { 
           success: true, 
           message: `Deploy ${effect.piece} to ${target}`,
-          // The actual piece placement will be done by the game scene
-          // which has access to the ChessBoardWrapper
         } as { success: boolean; message: string };
 
       case 'DESTROY_PIECE':
-        // Destroy piece (Requirement 11.7)
         if (!target) {
           return { success: false, message: 'No target square specified' };
         }
         return { 
           success: true, 
           message: `Destroy piece at ${target}`,
-          // The actual piece removal will be done by the game scene
         } as { success: boolean; message: string };
 
       case 'MODIFY_TIME':
-        // Modify time (Requirement 11.8)
         this.modifyTime(player, effect.amount);
         return { 
           success: true, 
@@ -932,7 +1226,6 @@ export class GameStateManager {
         };
 
       case 'MODIFY_ENERGY':
-        // Modify energy (Requirement 11.8)
         const energyModSuccess = this.modifyEnergy(player, effect.amount);
         return { 
           success: energyModSuccess, 
@@ -940,7 +1233,6 @@ export class GameStateManager {
         };
 
       case 'MODIFY_ENERGY_CAP':
-        // Modify energy cap (Requirement 11.8)
         this.modifyEnergyCap(player, effect.amount);
         return { 
           success: true, 
@@ -953,39 +1245,55 @@ export class GameStateManager {
   }
 
   /**
-   * Get a card from player's hand by ID
+   * Gets a card from player's hand by ID
+   * 
+   * @param player - Player color
+   * @param cardId - Card ID
+   * @returns Card or null if not found
    */
   getCardFromHand(player: PlayerColor, cardId: string): Card | null {
     return this.state.players[player].hand.find(c => c.id === cardId) || null;
   }
 
   /**
-   * Get player's hand
+   * Gets player's hand
+   * 
+   * @param player - Player color
+   * @returns Copy of hand array
    */
   getHand(player: PlayerColor): Card[] {
     return [...this.state.players[player].hand];
   }
 
   /**
-   * Get player's deck
+   * Gets player's deck
+   * 
+   * @param player - Player color
+   * @returns Copy of deck array
    */
   getDeck(player: PlayerColor): Card[] {
     return [...this.state.players[player].deck];
   }
 
   /**
-   * Get player's discard pile
+   * Gets player's discard pile
+   * 
+   * @param player - Player color
+   * @returns Copy of discard array
    */
   getDiscard(player: PlayerColor): Card[] {
     return [...this.state.players[player].discard];
   }
 
-  // ============================================
-  // Board State
-  // ============================================
+  /* ============================================
+   * BOARD STATE
+   * ============================================
+   */
 
   /**
-   * Update board FEN
+   * Updates board FEN
+   * 
+   * @param fen - FEN string
    */
   setBoardFEN(fen: string): void {
     this.state.boardFEN = fen;
@@ -993,18 +1301,23 @@ export class GameStateManager {
   }
 
   /**
-   * Get current board FEN
+   * Gets current board FEN
+   * 
+   * @returns FEN string
    */
   getBoardFEN(): string {
     return this.state.boardFEN;
   }
 
-  // ============================================
-  // State Import/Export (for P2P sync)
-  // ============================================
+  /* ============================================
+   * STATE IMPORT/EXPORT (for P2P sync)
+   * ============================================
+   */
 
   /**
-   * Import full game state (for P2P sync)
+   * Imports full game state (for P2P sync)
+   * 
+   * @param state - State to import
    */
   importState(state: GameState): void {
     this.state = { ...state };
@@ -1012,14 +1325,21 @@ export class GameStateManager {
   }
 
   /**
-   * Export full game state (for P2P sync)
+   * Exports full game state (for P2P sync)
+   * 
+   * @returns Copy of current state
    */
   exportState(): GameState {
     return { ...this.state };
   }
 }
 
-// Export constants for testing
+/* ============================================
+ * EXPORTS
+ * ============================================
+ */
+
+/** Export constants for testing */
 export {
   INITIAL_CLOCK_SECONDS,
   MOVE_TIME_COST,

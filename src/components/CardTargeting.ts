@@ -1,11 +1,21 @@
 /**
- * CardTargeting Component - Handles card drag-to-play and arrow targeting
+ * @fileoverview CardTargeting Component - Handles card drag-to-play and arrow targeting
  * 
- * Requirements: 9.3, 9.4, 9.5, 9.6
+ * This component manages the targeting mechanics for playing cards:
+ * - Non-targeted cards: Drag to play zone to activate
+ * - Targeted cards: Draw arrow from card to target square
+ * 
+ * Requirements addressed:
  * - 9.3: Drag card to board area to play (non-targeted cards)
  * - 9.4: Drag arrow from card to target (targeted cards)
  * - 9.5: Resolve effect when arrow released on valid target
  * - 9.6: Cancel and return to normal when released on invalid target
+ * 
+ * @module components/CardTargeting
+ * @requires phaser
+ * @requires ../managers/GameStateManager
+ * @requires ./Card
+ * @requires ../data/cards
  */
 
 import Phaser from 'phaser';
@@ -14,21 +24,55 @@ import { CardComponent } from './Card';
 import { cardRequiresTarget } from '../data/cards';
 import { Square } from 'chess.js';
 
-// Targeting constants
+/* ============================================
+ * TARGETING VISUAL CONSTANTS
+ * ============================================
+ */
+
+/** Color for the targeting arrow (yellow) */
 const ARROW_COLOR = 0xffcc00;
+
+/** Width of the arrow line in pixels */
 const ARROW_WIDTH = 4;
+
+/** Size of the arrow head in pixels */
 const ARROW_HEAD_SIZE = 15;
+
+/** Color for valid target highlights (green) */
 const VALID_TARGET_COLOR = 0x00ff00;
+
+/** Color for invalid target highlights (red) */
 const INVALID_TARGET_COLOR = 0xff0000;
+
+/** Alpha for play zone highlight */
 const PLAY_ZONE_ALPHA = 0.3;
+
+/* ============================================
+ * TYPE DEFINITIONS
+ * ============================================
+ */
 
 /**
  * Target validation function type
+ * 
+ * Called to determine if a square is a valid target for a card.
+ * 
+ * @param square - The chess square being targeted
+ * @param card - The card being played
+ * @returns True if the target is valid
  */
 export type TargetValidator = (square: Square, card: CardData) => boolean;
 
 /**
- * Play zone bounds
+ * Play zone bounds definition
+ * 
+ * Defines the rectangular area where non-targeted cards
+ * can be dropped to play them.
+ * 
+ * @property x - Left edge X coordinate
+ * @property y - Top edge Y coordinate
+ * @property width - Zone width
+ * @property height - Zone height
  */
 export interface PlayZoneBounds {
   x: number;
@@ -37,42 +81,143 @@ export interface PlayZoneBounds {
   height: number;
 }
 
+/* ============================================
+ * CARD TARGETING COMPONENT CLASS
+ * ============================================
+ */
+
 /**
  * CardTargetingComponent - Manages card targeting interactions
+ * 
+ * Handles two targeting modes:
+ * 1. Drag-to-play: Card follows cursor, dropped in play zone to activate
+ * 2. Arrow targeting: Card stays in place, arrow drawn to target square
+ * 
+ * Visual elements:
+ * - Arrow graphics (for targeted cards)
+ * - Play zone highlight (for non-targeted cards)
+ * - Target square highlight
+ * 
+ * @example
+ * const targeting = new CardTargetingComponent(scene);
+ * targeting.setPlayZone({ x: 100, y: 100, width: 400, height: 300 });
+ * targeting.setBoardBounds(200, 100, 512, 512, 64);
+ * 
+ * targeting.onCardPlayed = (card) => {
+ *   console.log('Card played:', card.name);
+ * };
+ * 
+ * Used by: CardHandComponent (delegates targeting to this component)
  */
 export class CardTargetingComponent {
+  /** Reference to the Phaser scene */
   private scene: Phaser.Scene;
+  
+  /** Graphics for drawing the targeting arrow */
   private arrowGraphics: Phaser.GameObjects.Graphics;
+  
+  /** Graphics for highlighting the play zone */
   private playZoneGraphics: Phaser.GameObjects.Graphics;
   
-  // State
+  /* ============================================
+   * STATE PROPERTIES
+   * ============================================
+   */
+  
+  /** Whether arrow targeting mode is active */
   private isTargeting: boolean = false;
+  
+  /** Whether drag-to-play mode is active */
   private isDragging: boolean = false;
+  
+  /** The card currently being targeted/dragged */
   private activeCard: CardData | null = null;
+  
+  /** The card component being targeted/dragged */
   private activeCardComponent: CardComponent | null = null;
+  
+  /** Starting X position of the drag/arrow */
   private startX: number = 0;
+  
+  /** Starting Y position of the drag/arrow */
   private startY: number = 0;
+  
+  /** Current X position of cursor */
   private currentX: number = 0;
+  
+  /** Current Y position of cursor */
   private currentY: number = 0;
   
-  // Configuration
+  /** Last coordinates used to render targeting (avoid duplicate redraws) */
+  private lastUpdateX: number | null = null;
+  private lastUpdateY: number | null = null;
+  
+  /** Cached play zone hit state to avoid redundant redraws */
+  private lastPlayZoneInBounds: boolean | null = null;
+  
+  /* ============================================
+   * CONFIGURATION PROPERTIES
+   * ============================================
+   */
+  
+  /** Play zone bounds for non-targeted cards */
   private playZone: PlayZoneBounds | null = null;
+  
+  /** Board bounds for targeted cards */
   private boardBounds: PlayZoneBounds | null = null;
+  
+  /** Function to validate targets */
   private targetValidator: TargetValidator | null = null;
+  
+  /** Size of each chess square in pixels */
   private squareSize: number = 64;
+  
+  /** Board left edge X coordinate */
   private boardX: number = 0;
+  
+  /** Board top edge Y coordinate */
   private boardY: number = 0;
+  
+  /** Whether board is flipped (black perspective) */
   private isFlipped: boolean = false;
   
-  // Callbacks
+  /* ============================================
+   * EVENT CALLBACKS
+   * ============================================
+   */
+  
+  /** Called when a non-targeted card is played (Req 9.3) */
   public onCardPlayed?: (card: CardData) => void;
+  
+  /** Called when a targeted card hits a valid target (Req 9.5) */
   public onCardTargeted?: (card: CardData, target: Square) => void;
+  
+  /** Called when targeting starts */
   public onTargetingStart?: (card: CardData) => void;
+  
+  /** Called when targeting is cancelled (Req 9.6) */
   public onTargetingCancel?: (card: CardData) => void;
+  
+  /** Bound input handlers for cleanup */
+  private boundPointerMove?: (pointer: Phaser.Input.Pointer) => void;
+  private boundPointerUp?: (pointer: Phaser.Input.Pointer) => void;
 
+  /**
+   * Creates a new CardTargetingComponent
+   * 
+   * Algorithm:
+   * 1. Create arrow graphics layer (depth 500)
+   * 2. Create play zone graphics layer (depth 499)
+   * 3. Setup input handlers for pointer events
+   * 
+   * @param scene - The Phaser scene
+   * 
+   * Used by: CardHandComponent constructor
+   */
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
     
+    // Create graphics layers
     this.arrowGraphics = scene.add.graphics();
     this.arrowGraphics.setDepth(500);
     
@@ -82,17 +227,48 @@ export class CardTargetingComponent {
     this.setupInputHandlers();
   }
 
+  /* ============================================
+   * CONFIGURATION METHODS
+   * ============================================
+   */
+
   /**
-   * Configure the play zone (area where non-targeted cards can be dropped)
+   * Configures the play zone for non-targeted cards
+   * 
+   * The play zone is the area where dragging a non-targeted
+   * card will trigger the play action.
+   * 
+   * @param bounds - Play zone boundaries
+   * 
+   * Used by: CardHandComponent.setPlayZone()
    */
   setPlayZone(bounds: PlayZoneBounds): void {
     this.playZone = bounds;
   }
 
   /**
-   * Configure the board bounds for targeting
+   * Configures the board bounds for targeted cards
+   * 
+   * Used to convert pointer position to chess square
+   * for arrow-based targeting.
+   * 
+   * @param x - Board left edge X
+   * @param y - Board top edge Y
+   * @param width - Board width
+   * @param height - Board height
+   * @param squareSize - Size of each chess square
+   * @param isFlipped - Whether board is flipped (black perspective)
+   * 
+   * Used by: CardHandComponent.setBoardBounds()
    */
-  setBoardBounds(x: number, y: number, width: number, height: number, squareSize: number, isFlipped: boolean = false): void {
+  setBoardBounds(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    squareSize: number,
+    isFlipped: boolean = false
+  ): void {
     this.boardBounds = { x, y, width, height };
     this.squareSize = squareSize;
     this.boardX = x;
@@ -101,22 +277,55 @@ export class CardTargetingComponent {
   }
 
   /**
-   * Set target validation function
+   * Sets the target validation function
+   * 
+   * The validator determines which squares are valid targets
+   * for a given card.
+   * 
+   * @param validator - Function that validates targets
+   * 
+   * Used by: CardHandComponent.setTargetValidator()
    */
   setTargetValidator(validator: TargetValidator): void {
     this.targetValidator = validator;
   }
 
-  /**
-   * Start targeting mode for a card
+  /* ============================================
+   * TARGETING LIFECYCLE METHODS
+   * ============================================
    */
-  startTargeting(card: CardData, cardComponent: CardComponent, startX: number, startY: number): void {
+
+  /**
+   * Starts targeting mode for a card
+   * 
+   * Algorithm:
+   * 1. Store card and position references
+   * 2. Check if card requires a target
+   * 3. If targeted: Enable arrow mode, notify start
+   * 4. If non-targeted: Enable drag mode, show play zone
+   * 
+   * @param card - The card being played
+   * @param cardComponent - The card's visual component
+   * @param startX - Starting X position
+   * @param startY - Starting Y position
+   * 
+   * Used by: CardHandComponent.handleCardDragStart()
+   */
+  startTargeting(
+    card: CardData,
+    cardComponent: CardComponent,
+    startX: number,
+    startY: number
+  ): void {
     this.activeCard = card;
     this.activeCardComponent = cardComponent;
     this.startX = startX;
     this.startY = startY;
     this.currentX = startX;
     this.currentY = startY;
+    this.lastUpdateX = null;
+    this.lastUpdateY = null;
+    this.lastPlayZoneInBounds = null;
     
     const requiresTarget = cardRequiresTarget(card);
     
@@ -138,11 +347,26 @@ export class CardTargetingComponent {
   }
 
   /**
-   * Update targeting position (called on pointer move)
+   * Updates targeting position (called on pointer move)
+   * 
+   * Algorithm:
+   * - If arrow targeting: Draw arrow from start to cursor
+   * - If drag-to-play: Move card to cursor, update play zone highlight
+   * 
+   * @param x - Current pointer X
+   * @param y - Current pointer Y
+   * 
+   * Used by: CardHandComponent.handleCardDrag()
    */
   updateTargeting(x: number, y: number): void {
     if (!this.activeCard) return;
     
+    if (this.lastUpdateX === x && this.lastUpdateY === y) {
+      return;
+    }
+    
+    this.lastUpdateX = x;
+    this.lastUpdateY = y;
     this.currentX = x;
     this.currentY = y;
     
@@ -159,28 +383,22 @@ export class CardTargetingComponent {
   }
 
   /**
-   * Update play zone highlight based on cursor position
-   */
-  private updatePlayZoneHighlight(x: number, y: number): void {
-    if (!this.playZone) return;
-    
-    const isInZone = this.isInPlayZone(x, y);
-    this.playZoneGraphics.clear();
-    
-    const color = isInZone ? VALID_TARGET_COLOR : ARROW_COLOR;
-    this.playZoneGraphics.fillStyle(color, PLAY_ZONE_ALPHA);
-    this.playZoneGraphics.fillRect(
-      this.playZone.x,
-      this.playZone.y,
-      this.playZone.width,
-      this.playZone.height
-    );
-  }
-
-  /**
-   * End targeting (called on pointer up)
-   * Requirement 9.5: Resolve effect when arrow released on valid target
-   * Requirement 9.6: Cancel and return to normal when released on invalid target
+   * Ends targeting (called on pointer up)
+   * 
+   * Algorithm:
+   * 1. If arrow targeting:
+   *    a. Get target square from position
+   *    b. If valid target → call onCardTargeted (Req 9.5)
+   *    c. If invalid → call onTargetingCancel (Req 9.6)
+   * 2. If drag-to-play:
+   *    a. If in play zone → call onCardPlayed (Req 9.5)
+   *    b. If outside → call onTargetingCancel (Req 9.6)
+   * 3. Clean up targeting state
+   * 
+   * @param x - Final pointer X
+   * @param y - Final pointer Y
+   * 
+   * Used by: CardHandComponent.handleCardDragEnd()
    */
   endTargeting(x: number, y: number): void {
     if (!this.activeCard) return;
@@ -221,81 +439,130 @@ export class CardTargetingComponent {
   }
 
   /**
-   * Cancel current targeting
+   * Cancels current targeting and cleans up
+   * 
+   * Used by: endTargeting(), external cancellation
    */
   cancelTargeting(): void {
     this.isTargeting = false;
     this.isDragging = false;
     this.activeCard = null;
     this.activeCardComponent = null;
+    this.lastUpdateX = null;
+    this.lastUpdateY = null;
+    this.lastPlayZoneInBounds = null;
     
     this.arrowGraphics.clear();
     this.hidePlayZone();
   }
 
+  /* ============================================
+   * STATE QUERY METHODS
+   * ============================================
+   */
+
   /**
-   * Check if currently targeting
+   * Checks if targeting is currently active
+   * 
+   * @returns True if in any targeting mode
    */
   isActive(): boolean {
     return this.isTargeting || this.isDragging;
   }
 
   /**
-   * Check if in arrow targeting mode (vs drag-to-play)
+   * Checks if in arrow targeting mode
+   * 
+   * @returns True if drawing targeting arrow
    */
   isArrowTargeting(): boolean {
     return this.isTargeting;
   }
 
   /**
-   * Check if in drag-to-play mode
+   * Checks if in drag-to-play mode
+   * 
+   * @returns True if dragging card to play zone
    */
   isDragToPlay(): boolean {
     return this.isDragging;
   }
 
   /**
-   * Get the active card
+   * Gets the currently active card
+   * 
+   * @returns The card being targeted, or null
    */
   getActiveCard(): CardData | null {
     return this.activeCard;
   }
 
   /**
-   * Get the active card component
+   * Gets the active card component
+   * 
+   * @returns The card component being targeted, or null
    */
   getActiveCardComponent(): CardComponent | null {
     return this.activeCardComponent;
   }
 
+  /* ============================================
+   * PRIVATE INPUT HANDLING
+   * ============================================
+   */
+
   /**
-   * Setup input handlers
+   * Sets up input handlers for pointer events
+   * 
+   * Listens for:
+   * - pointermove: Update targeting position
+   * - pointerup: End targeting
+   * 
+   * @private
    */
   private setupInputHandlers(): void {
-    this.scene.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+    this.boundPointerMove = (pointer: Phaser.Input.Pointer) => {
       if (this.isActive()) {
         this.updateTargeting(pointer.x, pointer.y);
       }
-    });
+    };
     
-    this.scene.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+    this.boundPointerUp = (pointer: Phaser.Input.Pointer) => {
       if (this.isActive()) {
         this.endTargeting(pointer.x, pointer.y);
       }
-    });
+    };
+    
+    this.scene.input.on('pointermove', this.boundPointerMove);
+    this.scene.input.on('pointerup', this.boundPointerUp);
   }
 
+  /* ============================================
+   * PRIVATE RENDERING METHODS
+   * ============================================
+   */
+
   /**
-   * Draw targeting arrow from card to cursor
+   * Draws the targeting arrow from card to cursor
+   * 
+   * Algorithm:
+   * 1. Clear previous arrow
+   * 2. Determine if target is valid (affects color)
+   * 3. Draw line from start to current position
+   * 4. Draw arrow head at current position
+   * 5. Highlight target square if over board
+   * 
+   * @private
    */
   private drawTargetingArrow(): void {
     this.arrowGraphics.clear();
     
+    // Determine arrow color based on target validity
     const target = this.getTargetSquare(this.currentX, this.currentY);
     const isValid = target && this.activeCard && this.isValidTarget(target, this.activeCard);
     const color = isValid ? VALID_TARGET_COLOR : ARROW_COLOR;
     
-    // Draw line
+    // Draw line from card to cursor
     this.arrowGraphics.lineStyle(ARROW_WIDTH, color, 1);
     this.arrowGraphics.beginPath();
     this.arrowGraphics.moveTo(this.startX, this.startY);
@@ -317,7 +584,7 @@ export class CardTargetingComponent {
     this.arrowGraphics.closePath();
     this.arrowGraphics.fillPath();
     
-    // Highlight target square if valid
+    // Highlight target square if over board
     if (target && this.boardBounds) {
       const { col, row } = this.squareToCoords(target);
       const squareX = this.boardX + col * this.squareSize;
@@ -330,7 +597,9 @@ export class CardTargetingComponent {
   }
 
   /**
-   * Show play zone highlight
+   * Shows the play zone highlight
+   * 
+   * @private
    */
   private showPlayZone(): void {
     if (!this.playZone) return;
@@ -346,14 +615,55 @@ export class CardTargetingComponent {
   }
 
   /**
-   * Hide play zone highlight
+   * Hides the play zone highlight
+   * 
+   * @private
    */
   private hidePlayZone(): void {
     this.playZoneGraphics.clear();
   }
 
   /**
-   * Check if point is in play zone
+   * Updates play zone highlight based on cursor position
+   * 
+   * Changes color to indicate if card will be played.
+   * 
+   * @param x - Cursor X position
+   * @param y - Cursor Y position
+   * @private
+   */
+  private updatePlayZoneHighlight(x: number, y: number): void {
+    if (!this.playZone) return;
+    
+    const isInZone = this.isInPlayZone(x, y);
+    if (this.lastPlayZoneInBounds === isInZone) {
+      return;
+    }
+    this.lastPlayZoneInBounds = isInZone;
+    this.playZoneGraphics.clear();
+    
+    const color = isInZone ? VALID_TARGET_COLOR : ARROW_COLOR;
+    this.playZoneGraphics.fillStyle(color, PLAY_ZONE_ALPHA);
+    this.playZoneGraphics.fillRect(
+      this.playZone.x,
+      this.playZone.y,
+      this.playZone.width,
+      this.playZone.height
+    );
+  }
+
+  /* ============================================
+   * PRIVATE COORDINATE CONVERSION
+   * ============================================
+   */
+
+  /**
+   * Checks if a point is within the play zone
+   * 
+   * @param x - X coordinate
+   * @param y - Y coordinate
+   * @returns True if point is in play zone
+   * @private
    */
   private isInPlayZone(x: number, y: number): boolean {
     if (!this.playZone) return false;
@@ -365,7 +675,12 @@ export class CardTargetingComponent {
   }
 
   /**
-   * Get target square from screen coordinates
+   * Gets the target square from screen coordinates
+   * 
+   * @param x - Screen X coordinate
+   * @param y - Screen Y coordinate
+   * @returns Chess square notation, or null if not over board
+   * @private
    */
   private getTargetSquare(x: number, y: number): Square | null {
     if (!this.boardBounds) return null;
@@ -385,7 +700,12 @@ export class CardTargetingComponent {
   }
 
   /**
-   * Convert board coordinates to square notation
+   * Converts board coordinates to square notation
+   * 
+   * @param col - Column (0-7)
+   * @param row - Row (0-7)
+   * @returns Chess square notation (e.g., 'e4')
+   * @private
    */
   private coordsToSquare(col: number, row: number): Square {
     const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
@@ -400,7 +720,11 @@ export class CardTargetingComponent {
   }
 
   /**
-   * Convert square notation to board coordinates
+   * Converts square notation to board coordinates
+   * 
+   * @param square - Chess square notation
+   * @returns Object with col and row
+   * @private
    */
   private squareToCoords(square: Square): { col: number; row: number } {
     const file = square.charCodeAt(0) - 'a'.charCodeAt(0);
@@ -418,7 +742,12 @@ export class CardTargetingComponent {
   }
 
   /**
-   * Check if target is valid for the card
+   * Checks if a target is valid for the card
+   * 
+   * @param target - Target square
+   * @param card - Card being played
+   * @returns True if target is valid
+   * @private
    */
   private isValidTarget(target: Square, card: CardData): boolean {
     if (this.targetValidator) {
@@ -428,8 +757,15 @@ export class CardTargetingComponent {
     return true;
   }
 
+  /* ============================================
+   * PUBLIC DISPLAY METHODS
+   * ============================================
+   */
+
   /**
-   * Set depth
+   * Sets the depth (z-index) for targeting graphics
+   * 
+   * @param depth - Depth value
    */
   setDepth(depth: number): void {
     this.arrowGraphics.setDepth(depth);
@@ -437,9 +773,19 @@ export class CardTargetingComponent {
   }
 
   /**
-   * Destroy the component
+   * Destroys the component and cleans up resources
+   * 
+   * Used by: CardHandComponent.destroy()
    */
   destroy(): void {
+    if (this.boundPointerMove) {
+      this.scene.input.off('pointermove', this.boundPointerMove);
+      this.boundPointerMove = undefined;
+    }
+    if (this.boundPointerUp) {
+      this.scene.input.off('pointerup', this.boundPointerUp);
+      this.boundPointerUp = undefined;
+    }
     this.arrowGraphics.destroy();
     this.playZoneGraphics.destroy();
   }
