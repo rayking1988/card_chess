@@ -379,9 +379,6 @@ export class GameStateManager {
     // Process end-of-turn Focus/Disturb mode effects
     this.processEndOfTurnMode(this.state.currentTurn);
     
-    // Process stopwatch threshold
-    this.processStopwatchThreshold(this.state.currentTurn);
-    
     // Reset stopwatch for next turn
     currentPlayer.stopwatch = 0;
     
@@ -406,7 +403,7 @@ export class GameStateManager {
     // Black should draw on their first turn (turn 1, black's turn)
     const isWhiteVeryFirstTurn = this.state.currentTurn === 'white' && this.state.turnNumber === 1;
     if (!isWhiteVeryFirstTurn) {
-      this.drawCards(this.state.currentTurn, 1, true);
+      this.drawCards(this.state.currentTurn, 1, false);
     }
 
     this.notifyStateChange();
@@ -473,6 +470,8 @@ export class GameStateManager {
     // Also add to stopwatch for current turn tracking
     if (player === this.state.currentTurn) {
       playerState.stopwatch += seconds;
+
+      this.processStopwatchThreshold(this.state.currentTurn);
     }
     
     this.notifyStateChange();

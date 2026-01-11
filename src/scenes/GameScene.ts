@@ -1407,11 +1407,6 @@ export class GameScene extends Phaser.Scene {
       this.chessBoard.setPosition(state.boardFEN);
     }
 
-    // Check for hand size enforcement (Requirement 3.6)
-    if (localPlayer.hand.length > MAX_HAND_SIZE && !this.isDiscardMode) {
-      this.enterDiscardMode();
-    }
-
     const snapshot: UISnapshot = {
       localClock: localPlayer.clock,
       opponentClock,
@@ -2496,6 +2491,8 @@ export class GameScene extends Phaser.Scene {
     if (cardData?.timeCost) {
       this.opponentClockTime = Math.max(0, this.opponentClockTime - cardData.timeCost);
       this.opponentStopwatchTime += cardData.timeCost;
+      // Deduct time through GameStateManager to trigger stopwatch threshold check
+      this.gameStateManager.deductTime(opponentColor, cardData.timeCost);
     }
     
     this.checkGameEndConditions();
