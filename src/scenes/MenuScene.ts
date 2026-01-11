@@ -1,11 +1,11 @@
-import Phaser from 'phaser';
-import { NetworkManager, ConnectionState } from '../managers/NetworkManager';
-import type { PlayerColor } from '../managers/GameStateManager';
-
 /**
- * MenuScene - Main menu with name input and matchmaking
+ * @fileoverview MenuScene - Main menu with name input and P2P matchmaking
  * 
- * Requirements:
+ * This scene provides the game's entry point with player name input,
+ * matchmaking queue functionality, and external links (Ko-fi, bug reports).
+ * Uses Trystero for P2P WebRTC connections.
+ * 
+ * Requirements addressed:
  * - 1.1: Display main menu with name input field
  * - 1.2: Store player name in localStorage
  * - 1.3: Connect to Trystero P2P network on "Join Queue"
@@ -13,34 +13,101 @@ import type { PlayerColor } from '../managers/GameStateManager';
  * - 1.5: Start new game with random color assignment
  * - 1.6: Display Ko-fi donation button
  * - 1.7: Display Discord redirect link
+ * 
+ * @module scenes/MenuScene
+ * @requires phaser
+ * @requires managers/NetworkManager
+ * @requires managers/GameStateManager
+ * 
+ * Used by: main.ts (scene registration), EndScene (return to menu)
  */
 
+import Phaser from 'phaser';
+import { NetworkManager, ConnectionState } from '../managers/NetworkManager';
+import type { PlayerColor } from '../managers/GameStateManager';
+
+/* ============================================
+ * CONFIGURATION CONSTANTS
+ * ============================================
+ */
+
+/** LocalStorage key for persisting player name (Requirement 1.2) */
 const STORAGE_KEY = 'card_chess_player_name';
+
+/** Default room ID for matchmaking lobby */
 const DEFAULT_ROOM_ID = 'card-chess-matchmaking-lobby';
+
+/** Ko-fi donation page URL (Requirement 1.6) */
 const KOFI_URL = 'https://ko-fi.com/cardchess';
+
+/** GitHub issues page for bug reports */
 const BUG_REPORT_URL = 'https://github.com/cardchess/issues';
 
-// Base design dimensions (UI is designed for this size)
+/** Base design height for UI scaling calculations */
 const BASE_HEIGHT = 1080;
 
+/* ============================================
+ * MENU SCENE CLASS
+ * ============================================ */
+
+/**
+ * MenuScene - Main menu with matchmaking functionality
+ * 
+ * Provides the game's main menu interface with:
+ * - Player name input with localStorage persistence
+ * - P2P matchmaking queue via Trystero
+ * - External links (Ko-fi, bug reports)
+ * - Animated waiting state during matchmaking
+ * 
+ * Flow:
+ * 1. Player enters name (saved to localStorage)
+ * 2. Player clicks "Join Queue"
+ * 3. NetworkManager connects to P2P room
+ * 4. When peer found, colors assigned randomly
+ * 5. Transition to GameScene with connection data
+ * 
+ * Used by: main.ts, EndScene (return to menu)
+ */
 export class MenuScene extends Phaser.Scene {
+  /** Network manager for P2P connections */
   private networkManager: NetworkManager | null = null;
+  
+  /** HTML input element for name entry */
   private nameInput: HTMLInputElement | null = null;
+  
+  /** Current player name */
   private playerName: string = '';
+  
+  /** Current connection state */
   private connectionState: ConnectionState = 'disconnected';
+  
+  /** Assigned player color after matchmaking */
   private localColor: PlayerColor | null = null;
   
-  // UI Elements
+  /** Background image */
   private background!: Phaser.GameObjects.Image;
+  
+  /** Container for all UI elements (for centering) */
   private uiContainer!: Phaser.GameObjects.Container;
+  
+  /** Join queue button */
   private joinButton!: Phaser.GameObjects.Container;
+  
+  /** Status text for matchmaking feedback */
   private statusText!: Phaser.GameObjects.Text;
+  
+  /** Cancel queue button (shown while waiting) */
   private cancelButton!: Phaser.GameObjects.Container;
 
   constructor() {
     super({ key: 'MenuScene' });
   }
 
+  /**
+   * Creates all scene elements
+   * 
+   * Used by: Phaser scene lifecycle
+   */
   create(): void {
     const { width, height } = this.scale;
     
@@ -75,7 +142,9 @@ export class MenuScene extends Phaser.Scene {
   }
   
   /**
-   * Scale background to cover entire viewport (may crop edges)
+   * Scales background to cover entire viewport (may crop edges)
+   * 
+   * @private
    */
   private scaleBackgroundToCover(): void {
     if (!this.background) return;
@@ -94,7 +163,10 @@ export class MenuScene extends Phaser.Scene {
   }
   
   /**
-   * Handle window resize
+   * Handles window resize events
+   * 
+   * @param gameSize - New game dimensions
+   * @private
    */
   private handleResize(gameSize: Phaser.Structs.Size): void {
     const width = gameSize.width;
@@ -113,7 +185,10 @@ export class MenuScene extends Phaser.Scene {
   }
 
   /**
-   * Load player name from localStorage
+   * Loads player name from localStorage
+   * Requirement 1.2
+   * 
+   * @private
    */
   private loadPlayerName(): void {
     const savedName = localStorage.getItem(STORAGE_KEY);
@@ -123,7 +198,10 @@ export class MenuScene extends Phaser.Scene {
   }
 
   /**
-   * Save player name to localStorage
+   * Saves player name to localStorage
+   * 
+   * @param name - Name to save
+   * @private
    */
   private savePlayerName(name: string): void {
     this.playerName = name;
@@ -131,7 +209,9 @@ export class MenuScene extends Phaser.Scene {
   }
 
   /**
-   * Create title text
+   * Creates the title and subtitle text
+   * 
+   * @private
    */
   private createTitle(): void {
     const title = this.add.text(0, -BASE_HEIGHT * 0.35, 'CARD CHESS', {
@@ -155,7 +235,10 @@ export class MenuScene extends Phaser.Scene {
   }
 
   /**
-   * Create name input field using HTML input
+   * Creates the HTML name input field
+   * Requirement 1.1
+   * 
+   * @private
    */
   private createNameInput(): void {
     // Label
@@ -206,7 +289,9 @@ export class MenuScene extends Phaser.Scene {
   }
 
   /**
-   * Position the HTML input element to match Phaser canvas
+   * Positions the HTML input element to match Phaser canvas
+   * 
+   * @private
    */
   private positionNameInput(): void {
     if (!this.nameInput) return;
@@ -224,7 +309,9 @@ export class MenuScene extends Phaser.Scene {
   }
 
   /**
-   * Create Join Queue button
+   * Creates the Join Queue button
+   * 
+   * @private
    */
   private createJoinButton(): void {
     this.joinButton = this.createImageButton(
@@ -239,7 +326,9 @@ export class MenuScene extends Phaser.Scene {
   }
 
   /**
-   * Create Bug Report button
+   * Creates the Bug Report button
+   * 
+   * @private
    */
   private createBugReportButton(): void {
     const btn = this.createImageButton(
@@ -254,7 +343,10 @@ export class MenuScene extends Phaser.Scene {
   }
 
   /**
-   * Create Ko-fi donation button
+   * Creates the Ko-fi donation button
+   * Requirement 1.6
+   * 
+   * @private
    */
   private createKofiButton(): void {
     const btn = this.createImageButton(
@@ -269,7 +361,9 @@ export class MenuScene extends Phaser.Scene {
   }
 
   /**
-   * Create status text for matchmaking feedback
+   * Creates the status text for matchmaking feedback
+   * 
+   * @private
    */
   private createStatusText(): void {
     this.statusText = this.add.text(0, BASE_HEIGHT * 0.42, '', {
@@ -281,7 +375,9 @@ export class MenuScene extends Phaser.Scene {
   }
 
   /**
-   * Create cancel button (hidden by default)
+   * Creates the cancel button (hidden by default)
+   * 
+   * @private
    */
   private createCancelButton(): void {
     this.cancelButton = this.createImageButton(
@@ -298,6 +394,15 @@ export class MenuScene extends Phaser.Scene {
 
   /**
    * Helper to create an image-based button
+   * 
+   * @param x - X position
+   * @param y - Y position
+   * @param text - Button label
+   * @param normalTexture - Normal state texture
+   * @param pressedTexture - Pressed state texture
+   * @param onClick - Click handler
+   * @returns Button container
+   * @private
    */
   private createImageButton(
     x: number,
@@ -354,10 +459,21 @@ export class MenuScene extends Phaser.Scene {
     return container;
   }
 
+  /**
+   * Opens an external URL in a new tab
+   * 
+   * @param url - URL to open
+   * @private
+   */
   private openExternalLink(url: string): void {
     window.open(url, '_blank');
   }
 
+  /**
+   * Handles Join Queue button click
+   * 
+   * @private
+   */
   private async onJoinQueue(): Promise<void> {
     const name = this.nameInput?.value.trim() || '';
     if (name.length < 1) {
@@ -381,12 +497,23 @@ export class MenuScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Handles Cancel button click
+   * 
+   * @private
+   */
   private onCancelQueue(): void {
     this.networkManager?.leaveRoom();
     this.setWaitingState(false);
     this.statusText.setText('');
   }
 
+  /**
+   * Toggles UI between normal and waiting states
+   * 
+   * @param waiting - Whether waiting for opponent
+   * @private
+   */
   private setWaitingState(waiting: boolean): void {
     this.joinButton.setVisible(!waiting);
     this.cancelButton.setVisible(waiting);
@@ -397,6 +524,11 @@ export class MenuScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Sets up callbacks for network events
+   * 
+   * @private
+   */
   private setupNetworkCallbacks(): void {
     if (!this.networkManager) return;
     
@@ -434,6 +566,12 @@ export class MenuScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * Updates status text based on connection state
+   * 
+   * @param state - Current connection state
+   * @private
+   */
   private updateStatusFromConnectionState(state: ConnectionState): void {
     switch (state) {
       case 'connecting':
@@ -456,9 +594,17 @@ export class MenuScene extends Phaser.Scene {
     }
   }
 
+  /** Tween for waiting dots animation */
   private waitingTween: Phaser.Tweens.Tween | null = null;
+  
+  /** Counter for animated dots */
   private dotCount: number = 0;
 
+  /**
+   * Starts the animated dots in waiting text
+   * 
+   * @private
+   */
   private startWaitingAnimation(): void {
     this.stopWaitingAnimation();
     
@@ -476,6 +622,11 @@ export class MenuScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * Stops the waiting animation
+   * 
+   * @private
+   */
   private stopWaitingAnimation(): void {
     if (this.waitingTween) {
       this.waitingTween.stop();
@@ -483,6 +634,11 @@ export class MenuScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Starts the game scene with matchmaking data
+   * 
+   * @private
+   */
   private startGame(): void {
     this.cleanupNameInput();
     
@@ -494,6 +650,11 @@ export class MenuScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * Removes the HTML input element
+   * 
+   * @private
+   */
   private cleanupNameInput(): void {
     if (this.nameInput) {
       this.nameInput.remove();
@@ -502,11 +663,21 @@ export class MenuScene extends Phaser.Scene {
     this.scale.off('resize', this.handleResize, this);
   }
 
+  /**
+   * Called when scene is shut down
+   * 
+   * Used by: Phaser scene lifecycle
+   */
   shutdown(): void {
     this.cleanupNameInput();
     this.stopWaitingAnimation();
   }
 
+  /**
+   * Called when scene is destroyed
+   * 
+   * Used by: Phaser scene lifecycle
+   */
   destroy(): void {
     this.cleanupNameInput();
     this.stopWaitingAnimation();

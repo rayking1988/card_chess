@@ -71,7 +71,7 @@ const config: Phaser.Types.Core.GameConfig = {
   
   // Performance settings - cap FPS to reduce CPU/GPU load
   fps: {
-    target: 60,                         // Target 60 FPS
+    target: 30,                         // Target 30 FPS
     forceSetTimeOut: false,             // Use requestAnimationFrame
     smoothStep: true                    // Smooth frame timing
   },
