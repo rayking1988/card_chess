@@ -164,12 +164,6 @@ export class GameScene extends Phaser.Scene {
   /** Count text for opponent's deck */
   private opponentDeckCountText!: Phaser.GameObjects.Text;
   
-  /** Opponent's discard pile image */
-  private opponentDiscardSprite!: Phaser.GameObjects.Image;
-  
-  /** Stack of images for opponent discard visual depth */
-  private opponentDiscardStack: Phaser.GameObjects.Image[] = [];
-  
   /** Top card component for opponent's discard (shows last played card) */
   private opponentDiscardTopCard: CardComponent | null = null;
   
@@ -194,12 +188,6 @@ export class GameScene extends Phaser.Scene {
   
   /** Count text for player's deck */
   private playerDeckCountText!: Phaser.GameObjects.Text;
-  
-  /** Player's discard pile image */
-  private playerDiscardSprite!: Phaser.GameObjects.Image;
-  
-  /** Stack of images for player discard visual depth */
-  private playerDiscardStack: Phaser.GameObjects.Image[] = [];
   
   /** Top card component for player's discard (shows last played card) */
   private playerDiscardTopCard: CardComponent | null = null;
@@ -314,6 +302,9 @@ export class GameScene extends Phaser.Scene {
   
   /** Counter to suppress opponent discard top card updates during animation */
   private suppressOpponentDiscardTop: number = 0;
+  
+  /** Pending opponent discard count from stats sync (applied when animation ends) */
+  private pendingOpponentDiscardCount: number | null = null;
 
   /* ----------------------------------------
    * Layout Cache
@@ -751,12 +742,6 @@ export class GameScene extends Phaser.Scene {
       this.opponentDeckCountText.setFontSize(countSize);
     }
     
-    if (this.opponentDiscardSprite) {
-      this.opponentDiscardSprite.setPosition(leftX, layout.opponentDiscardY);
-      this.opponentDiscardSprite.setScale(deckScale);
-      this.opponentDiscardSprite.setVisible(this.opponentDiscardCount > 0 || !!this.opponentDiscardTopCard);
-    }
-    layoutPileStack(this.opponentDiscardStack, leftX, layout.opponentDiscardY, deckScale, this.opponentDiscardCount, 0.5);
     if (this.opponentDiscardTopCard) {
       this.opponentDiscardTopCard.setPosition(leftX, layout.opponentDiscardY);
       this.opponentDiscardTopCard.setScale(topCardScale);
@@ -770,13 +755,6 @@ export class GameScene extends Phaser.Scene {
       this.opponentDiscardCountText.setFontSize(countSize);
     }
     
-    if (this.playerDiscardSprite) {
-      this.playerDiscardSprite.setPosition(leftX, layout.playerDiscardY);
-      this.playerDiscardSprite.setScale(deckScale);
-      this.playerDiscardSprite.setVisible(this.gameStateManager ? this.gameStateManager.getPlayer(this.localColor).discard.length > 0 || !!this.playerDiscardTopCard : false);
-    }
-    const localDiscardCount = this.gameStateManager ? this.gameStateManager.getPlayer(this.localColor).discard.length : 0;
-    layoutPileStack(this.playerDiscardStack, leftX, layout.playerDiscardY, deckScale, localDiscardCount, 0.5);
     if (this.playerDiscardTopCard) {
       this.playerDiscardTopCard.setPosition(leftX, layout.playerDiscardY);
       this.playerDiscardTopCard.setScale(topCardScale);
@@ -1144,13 +1122,6 @@ export class GameScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(10);
     
     // === OPPONENT'S DISCARD (below deck) ===
-    // Use card front for discard piles (face-up cards)
-    this.opponentDiscardStack = createPileStack(this, x, layout.opponentDiscardY, deckScale, stackDepth, 0.5, 'card_front_silver');
-    this.opponentDiscardSprite = this.add.image(x, layout.opponentDiscardY, 'card_front_silver');
-    this.opponentDiscardSprite.setScale(deckScale);
-    this.opponentDiscardSprite.setDepth(10);
-    this.opponentDiscardSprite.setAlpha(0.5);
-    
     this.opponentDiscardLabelText = this.add.text(x, layout.opponentDiscardY - 60 * scale, "Opp Discard", {
       fontSize: `${10 * scale}px`, fontFamily: 'BoldPixels, Arial', color: '#888888'
     }).setOrigin(0.5).setDepth(10);
@@ -1160,13 +1131,6 @@ export class GameScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(10);
     
     // === PLAYER'S DISCARD (above player deck) ===
-    // Use card front for discard piles (face-up cards)
-    this.playerDiscardStack = createPileStack(this, x, layout.playerDiscardY, deckScale, stackDepth, 0.5, 'card_front_silver');
-    this.playerDiscardSprite = this.add.image(x, layout.playerDiscardY, 'card_front_silver');
-    this.playerDiscardSprite.setScale(deckScale);
-    this.playerDiscardSprite.setDepth(10);
-    this.playerDiscardSprite.setAlpha(0.5);
-    
     this.playerDiscardLabelText = this.add.text(x, layout.playerDiscardY - 60 * scale, "Your Discard", {
       fontSize: `${10 * scale}px`, fontFamily: 'BoldPixels, Arial', color: '#888888'
     }).setOrigin(0.5).setDepth(10);
@@ -1188,9 +1152,6 @@ export class GameScene extends Phaser.Scene {
     this.playerDeckCountText = this.add.text(x, layout.playerDeckY + 55 * scale, '60', {
       fontSize: `${12 * scale}px`, fontFamily: 'BoldPixels, Arial', color: '#ffffff'
     }).setOrigin(0.5).setDepth(10);
-
-    this.makeDiscardPileInteractive(this.playerDiscardSprite, 'local');
-    this.makeDiscardPileInteractive(this.opponentDiscardSprite, 'opponent');
 
     this.positionLeftPanel(layout);
   }
@@ -1604,8 +1565,7 @@ export class GameScene extends Phaser.Scene {
     const layout = this.currentLayout;
     if (!layout || count <= 0) return;
     
-    const discardSprite = side === 'local' ? this.playerDiscardSprite : this.opponentDiscardSprite;
-    if (!discardSprite) return;
+    const discardY = side === 'local' ? layout.playerDiscardY : layout.opponentDiscardY;
     const handPos = side === 'local'
       ? { x: layout.cardHandX, y: layout.cardHandY - 20 * layout.handScale }
       : { x: layout.opponentHandX, y: layout.opponentHandY };
@@ -1621,8 +1581,8 @@ export class GameScene extends Phaser.Scene {
       
       this.tweens.add({
         targets: card,
-        x: discardSprite.x,
-        y: discardSprite.y,
+        x: layout.leftPanelX,
+        y: discardY,
         scaleX: scale * 0.6,
         scaleY: scale * 0.6,
         alpha: 0.5,
@@ -2178,7 +2138,7 @@ export class GameScene extends Phaser.Scene {
    * @param target - Optional target square for the card effect
    * @private
    */
-  private animateCardPlay(cardData: Card | null, side: 'local' | 'opponent', target?: Square): void {
+  private animateCardPlay(cardData: Card | null, side: 'local' | 'opponent', target?: Square, onComplete?: () => void): void {
     const layout = this.currentLayout;
     if (!layout) return;
     
@@ -2195,13 +2155,18 @@ export class GameScene extends Phaser.Scene {
     }
     
     const displayScale = 0.9 * layout.panelScale;
-    const animCard = new CardComponent(this, startX, startY, cardData, !cardData, displayScale);
+    // Always show card face-up (not face-down) during animation
+    const animCard = new CardComponent(this, startX, startY, cardData, false, displayScale);
     animCard.setDepth(50);
     const cardContainer = animCard.getContainer();
     const displayPos = { x: layout.playedCardX, y: layout.playedCardY };
-    const discardSprite = side === 'local' ? this.playerDiscardSprite : this.opponentDiscardSprite;
+    const discardY = side === 'local' ? layout.playerDiscardY : layout.opponentDiscardY;
 
-    this.lockDiscardTop(side);
+    // For local cards, lockDiscardTop is called by the caller before playCard
+    // For opponent cards, lock here since there's no game state update
+    if (side === 'opponent') {
+      this.lockDiscardTop(side);
+    }
     
     this.tweens.add({
       targets: cardContainer,
@@ -2219,15 +2184,11 @@ export class GameScene extends Phaser.Scene {
         
         this.time.delayedCall(3000, () => {
           arrow?.destroy();
-          if (!discardSprite) {
-            animCard.destroy();
-            this.releaseDiscardTop(side);
-            return;
-          }
+          // Animate card flying to discard pile
           this.tweens.add({
             targets: cardContainer,
-            x: discardSprite.x,
-            y: discardSprite.y,
+            x: layout.leftPanelX,
+            y: discardY,
             scaleX: displayScale * 0.6,
             scaleY: displayScale * 0.6,
             alpha: 0.7,
@@ -2235,6 +2196,8 @@ export class GameScene extends Phaser.Scene {
             ease: 'Quad.easeIn',
             onComplete: () => {
               animCard.destroy();
+              // Call the completion callback (adds card to discard)
+              onComplete?.();
               this.releaseDiscardTop(side);
             }
           });
@@ -2420,7 +2383,15 @@ export class GameScene extends Phaser.Scene {
     this.opponentStopwatchTime = stopwatch;
     this.opponentMode = mode;
     this.opponentDeckCount = deckCount;
-    this.opponentDiscardCount = discardCount;
+    
+    // If animation is in progress, store pending count to apply later
+    // Otherwise update immediately
+    if (this.suppressOpponentDiscardTop > 0) {
+      this.pendingOpponentDiscardCount = discardCount;
+    } else {
+      this.opponentDiscardCount = discardCount;
+    }
+    
     this.opponentHandCount = Math.max(0, DECK_SIZE - deckCount - discardCount);
     // Don't add null values for unknown cards - only track cards we've seen via PLAY_CARD
     // If we have more cards than the sync says, trim the array
@@ -2467,11 +2438,17 @@ export class GameScene extends Phaser.Scene {
     if (this.networkManager) {
       this.suppressOpponentHandAnimation++;
       this.opponentHandCount = Math.max(0, this.opponentHandCount - 1);
-      this.opponentDiscardCount = Math.min(DECK_SIZE, this.opponentDiscardCount + 1);
-      this.opponentDiscardCards.push(cardData ?? null);
+      // Don't update discard count/cards yet - will be done after animation
     }
     
-    this.animateCardPlay(cardData, 'opponent', target as Square | undefined);
+    // Pass cardData to animation, which will add to discard after animation completes
+    this.animateCardPlay(cardData, 'opponent', target as Square | undefined, () => {
+      // Add card to discard after animation completes
+      if (this.networkManager && cardData) {
+        this.opponentDiscardCount = Math.min(DECK_SIZE, this.opponentDiscardCount + 1);
+        this.opponentDiscardCards.push(cardData);
+      }
+    });
     
     // Handle piece deployment/destruction on board
     if (effectAction === 'DEPLOY_PIECE' && target && pieceType) {
@@ -2810,11 +2787,15 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     
+    // Lock discard display BEFORE playing card to prevent UI update during animation
+    this.lockDiscardTop('local');
+    
     // Play the card
     const result = this.gameStateManager.playCard(card.id, this.localColor, target);
     
     if (result.success) {
       this.logEvent(this.localColor, `Played ${card.name}`);
+      // Animation will call releaseDiscardTop when complete
       this.animateCardPlay(card, 'local', target);
       
       // Handle piece deployment/destruction on board
@@ -2843,6 +2824,8 @@ export class GameScene extends Phaser.Scene {
       // Check for checkmate/stalemate after card play (Requirement 3.8)
       this.checkGameEndConditions();
     } else {
+      // Release lock if card play failed
+      this.releaseDiscardTop('local');
       this.logEvent('system', result.message);
     }
     
@@ -3298,22 +3281,6 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Makes a discard pile sprite clickable to open the discard viewer
-   * 
-   * @param sprite - Discard pile image to make interactive
-   * @param side - Which player's discard pile ('local' or 'opponent')
-   * 
-   * Used by: createLeftPanel()
-   * @private
-   */
-  private makeDiscardPileInteractive(sprite: Phaser.GameObjects.Image, side: 'local' | 'opponent'): void {
-    sprite.setInteractive({ useHandCursor: true });
-    sprite.on('pointerdown', () => {
-      this.showDiscardViewer(side);
-    });
-  }
-
-  /**
    * Sets or clears the top card display on a discard pile
    * Shows the most recently discarded card face-up (or card back for opponent)
    * 
@@ -3337,15 +3304,14 @@ export class GameScene extends Phaser.Scene {
     const isOpponent = side === 'opponent';
     const existing = isOpponent ? this.opponentDiscardTopCard : this.playerDiscardTopCard;
     const position = isOpponent ? layout.opponentDiscardY : layout.playerDiscardY;
-    const discardCount = isOpponent ? this.opponentDiscardCount : this.gameStateManager.getPlayer(this.localColor).discard.length;
     
     // Destroy existing top card
     if (existing) {
       existing.destroy();
     }
     
-    // If no card data and no cards in pile, clear the reference
-    if (!cardData && discardCount <= 0) {
+    // If no card data, clear the reference (don't show card back for unknown cards)
+    if (!cardData) {
       if (isOpponent) {
         this.opponentDiscardTopCard = null;
       } else {
@@ -3429,8 +3395,19 @@ export class GameScene extends Phaser.Scene {
       this.suppressLocalDiscardTop = Math.max(0, this.suppressLocalDiscardTop - 1);
     } else {
       this.suppressOpponentDiscardTop = Math.max(0, this.suppressOpponentDiscardTop - 1);
+      // Apply any pending discard count from stats sync when suppression is released
+      if (this.suppressOpponentDiscardTop === 0) {
+        if (this.pendingOpponentDiscardCount !== null) {
+          this.opponentDiscardCount = this.pendingOpponentDiscardCount;
+          this.pendingOpponentDiscardCount = null;
+        }
+      }
     }
     this.refreshDiscardTopCards();
+    // Reposition left panel to update pile stack visuals
+    if (this.currentLayout) {
+      this.positionLeftPanel(this.currentLayout);
+    }
   }
 
   /**
