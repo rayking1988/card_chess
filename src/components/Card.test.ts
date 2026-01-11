@@ -157,7 +157,7 @@ describe('Card Type Distribution', () => {
     
     // Based on CARD_DEFINITIONS quantities
     expect(energyCount).toBe(24);
-    expect(pieceCount).toBe(22); // 10 pawns + 4 knights + 4 bishops + 3 rooks + 1 queen
-    expect(spellCount).toBe(14); // 4 ponder + 4 growth + 4 slash + 2 treasure hunt
+    expect(pieceCount).toBe(23); // 10 pawns + 4 knights + 4 bishops + 4 rooks + 1 queen
+    expect(spellCount).toBe(13); // 4 ponder + 4 growth + 4 slash + 1 treasure hunt
   });
 });
