@@ -2,102 +2,150 @@
  * @fileoverview Layout calculation functions for GameScene
  * 
  * Handles responsive layout calculations for all UI elements.
+ * Uses a section-based approach where the screen is divided into
+ * percentage-based sections with no gaps.
  * 
  * @module scenes/game/GameLayout
  */
 
-import { LOG_WIDTH } from '../../components/EventLog';
-import { GameLayout } from './GameTypes';
-import {
-  BASE_BOARD_SIZE,
-  BASE_LEFT_PANEL_WIDTH,
-  BASE_RIGHT_PANEL_WIDTH,
-  BASE_TOP_ZONE_HEIGHT,
-  BASE_BOTTOM_ZONE_HEIGHT,
-  BASE_PADDING,
-  REF_WIDTH,
-  REF_HEIGHT
-} from './GameConstants';
+import { GameLayout, SectionBounds } from './GameTypes';
+import { BASE_BOARD_SIZE } from './GameConstants';
+
+/**
+ * Section percentages for layout division
+ * These define how the screen is divided into sections
+ */
+const SECTION_CONFIG = {
+  // Horizontal division (must sum to 100%)
+  leftPanelWidth: 8,      // Left panel: decks/discards (full height)
+  boardWidth: 50,         // Board area (includes top/bottom bars)
+  rightPanelWidth: 18,    // Right panel: clocks/energy (full height)
+  eventLogWidth: 24,      // Event log (full height)
+  
+  // Vertical division for board column only
+  topBarHeight: 8,        // Opponent hand area (within board width)
+  middleHeight: 68,       // Board area
+  bottomBarHeight: 24,    // Player hand area (within board width)
+};
+
+/**
+ * Creates a SectionBounds object from position and size
+ */
+function createBounds(x: number, y: number, width: number, height: number): SectionBounds {
+  return {
+    x,
+    y,
+    width,
+    height,
+    centerX: x + width / 2,
+    centerY: y + height / 2,
+  };
+}
 
 /**
  * Calculates responsive layout positions for all UI elements
  * 
  * Algorithm:
- * 1. Calculate base scale from reference resolution (1920x1080)
- * 2. Determine panel widths and zone heights
- * 3. Calculate board size to fit available space
- * 4. Position all elements relative to board center
+ * 1. Divide screen into sections by percentage
+ * 2. Left panel, right panel, event log span full height
+ * 3. Top bar, board, bottom bar share the board column width
+ * 4. Compute element positions within their sections
  * 
  * @param width - Screen width
  * @param height - Screen height
- * @returns Layout object with all calculated positions
+ * @returns Layout object with section bounds and element positions
  */
 export function calculateLayout(width: number, height: number): GameLayout {
-  // Base UI scale from reference resolution
-  const baseScale = Math.min(width / REF_WIDTH, height / REF_HEIGHT);
-  const panelScale = Math.max(0.7, Math.min(1.1, baseScale));
+  // Calculate horizontal section widths from percentages
+  const leftPanelW = width * (SECTION_CONFIG.leftPanelWidth / 100);
+  const boardW = width * (SECTION_CONFIG.boardWidth / 100);
+  const rightPanelW = width * (SECTION_CONFIG.rightPanelWidth / 100);
+  const eventLogW = width * (SECTION_CONFIG.eventLogWidth / 100);
   
-  const padding = BASE_PADDING * panelScale;
-  const leftPanelWidth = BASE_LEFT_PANEL_WIDTH * panelScale;
-  const rightPanelWidth = BASE_RIGHT_PANEL_WIDTH * panelScale;
-  const eventLogWidth = LOG_WIDTH * panelScale;
+  // Calculate vertical section heights for board column
+  const topBarH = height * (SECTION_CONFIG.topBarHeight / 100);
+  const middleH = height * (SECTION_CONFIG.middleHeight / 100);
+  const bottomBarH = height * (SECTION_CONFIG.bottomBarHeight / 100);
   
-  const topZoneHeight = Math.max(40, Math.min(height * 0.08, BASE_TOP_ZONE_HEIGHT * panelScale * 0.5));
-  const bottomZoneHeight = Math.max(150, Math.min(height * 0.26, BASE_BOTTOM_ZONE_HEIGHT * panelScale));
-  const centerHeight = Math.max(160, height - topZoneHeight - bottomZoneHeight);
-  const boardSpaceHeight = Math.max(0, centerHeight - padding * 2);
+  // Left panel, right panel, event log: full height
+  const leftPanel = createBounds(0, 0, leftPanelW, height);
+  const rightPanel = createBounds(leftPanelW + boardW, 0, rightPanelW, height);
+  const eventLog = createBounds(leftPanelW + boardW + rightPanelW, 0, eventLogW, height);
   
-  const availableWidth = Math.max(0, width - leftPanelWidth - rightPanelWidth - eventLogWidth - padding * 4);
-  const boardScale = Math.min(
-    1.5,
-    Math.min(
-      availableWidth / BASE_BOARD_SIZE,
-      boardSpaceHeight / BASE_BOARD_SIZE
-    )
-  );
-  const boardSize = BASE_BOARD_SIZE * boardScale;
-  const handScale = Math.max(0.6, Math.min(1.1, boardScale));
+  // Board column sections (top bar, board, bottom bar) - share board width
+  const boardColumnX = leftPanelW;
+  const topBar = createBounds(boardColumnX, 0, boardW, topBarH);
+  const board = createBounds(boardColumnX, topBarH, boardW, middleH);
+  const bottomBar = createBounds(boardColumnX, topBarH + middleH, boardW, bottomBarH);
   
-  const boardLeft = padding + leftPanelWidth + padding;
-  const rightPanelLeft = width - eventLogWidth - rightPanelWidth - padding;
-  const boardX = boardLeft + (rightPanelLeft - boardLeft) / 2;
-  const boardTop = topZoneHeight + padding + Math.max(0, (boardSpaceHeight - boardSize) / 2);
-  const boardY = boardTop + boardSize / 2;
+  const sections = { leftPanel, board, rightPanel, eventLog, topBar, bottomBar };
   
-  const rightPanelX = rightPanelLeft + rightPanelWidth / 2;
-  const rightPanelTop = boardTop + 6 * panelScale;
+  // Calculate scales based on section sizes
+  const baseScale = Math.min(width / 1920, height / 1080);
+  const panelScale = Math.max(0.5, Math.min(1.2, baseScale));
   
-  const eventLogX = width - eventLogWidth / 2 - padding;
-  const eventLogY = height / 2;
+  // Board size: fit within board section with some padding
+  const boardPadding = Math.min(board.width, board.height) * 0.05;
+  const maxBoardSize = Math.min(board.width, board.height) - boardPadding * 2;
+  const boardSize = Math.min(maxBoardSize, BASE_BOARD_SIZE * 1.5);
+  const boardScale = boardSize / BASE_BOARD_SIZE;
   
-  const cardHandY = height - bottomZoneHeight * 0.22;
-  // Position opponent hand higher so only ~1/3 of cards are visible
-  const opponentHandY = padding - 60 * panelScale;
-  const opponentHandLabelY = opponentHandY + 80 * panelScale;
-  const opponentHandCountY = opponentHandLabelY + 18 * panelScale;
+  // Hand scale based on bottom bar height
+  const handScale = Math.max(0.5, Math.min(1.2, bottomBar.height / 250));
   
-  const leftPanelX = padding + leftPanelWidth / 2;
-  const pileSpacing = 120 * panelScale;
-  const opponentDeckY = topZoneHeight + padding + 18 * panelScale;
-  const opponentDiscardY = opponentDeckY + pileSpacing;
-  const playerDeckY = height - bottomZoneHeight - padding - 18 * panelScale;
-  const playerDiscardY = playerDeckY - pileSpacing;
+  // Element positions within sections
+  // Board: centered in board section
+  const boardX = board.centerX;
+  const boardY = board.centerY;
   
-  const opponentNameX = boardX;
-  const opponentNameY = boardTop - 24 * panelScale;
-  const playerNameX = boardX;
-  const playerNameY = height - bottomZoneHeight + 26 * panelScale;
-
-  const previewX = boardLeft + 80 * panelScale;
-  const previewY = height - bottomZoneHeight + 70 * panelScale;
+  // Left panel elements: vertically distributed
+  const leftPanelX = leftPanel.centerX;
+  const leftPanelPadding = leftPanel.height * 0.08;
+  const pileSpacing = (leftPanel.height - leftPanelPadding * 2) / 4;
+  const opponentDeckY = leftPanel.y + leftPanelPadding + pileSpacing * 0.5;
+  const opponentDiscardY = leftPanel.y + leftPanelPadding + pileSpacing * 1.5;
+  const playerDiscardY = leftPanel.y + leftPanel.height - leftPanelPadding - pileSpacing * 1.5;
+  const playerDeckY = leftPanel.y + leftPanel.height - leftPanelPadding - pileSpacing * 0.5;
   
-  const turnBannerX = boardX;
-  const turnBannerY = boardTop - 40 * panelScale;
-
-  const playedCardX = boardLeft - 90 * panelScale;
-  const playedCardY = boardY - boardSize * 0.05;
+  // Right panel elements: vertically distributed from top
+  const rightPanelX = rightPanel.centerX;
+  const rightPanelTop = rightPanel.y + rightPanel.height * 0.05;
+  
+  // Event log: centered in section
+  const eventLogX = eventLog.centerX;
+  const eventLogY = eventLog.centerY;
+  const eventLogWidth = eventLog.width * 0.9;
+  
+  // Card hand: centered in bottom bar
+  const cardHandX = bottomBar.centerX;
+  const cardHandY = bottomBar.centerY + bottomBar.height * 0.15;
+  
+  // Opponent hand: centered in top bar
+  const opponentHandX = topBar.centerX;
+  const opponentHandY = topBar.centerY - topBar.height * 0.2;
+  const opponentHandLabelY = topBar.y + topBar.height * 0.7;
+  const opponentHandCountY = opponentHandLabelY + 16 * panelScale;
+  
+  // Nameplates: above/below board
+  const opponentNameX = board.centerX;
+  const opponentNameY = board.y + boardPadding;
+  const playerNameX = board.centerX;
+  const playerNameY = board.y + board.height - boardPadding;
+  
+  // Preview card: left side of board section
+  const previewX = board.x + board.width * 0.1;
+  const previewY = board.y + board.height * 0.7;
+  
+  // Turn banner: above board
+  const turnBannerX = board.centerX;
+  const turnBannerY = board.y + boardPadding * 2;
+  
+  // Played card display: left side of board section
+  const playedCardX = board.x + board.width * 0.12;
+  const playedCardY = board.centerY;
   
   return {
+    sections,
     boardX,
     boardY,
     boardSize,
@@ -109,9 +157,9 @@ export function calculateLayout(width: number, height: number): GameLayout {
     eventLogWidth,
     rightPanelX,
     rightPanelTop,
-    cardHandX: boardX,
+    cardHandX,
     cardHandY,
-    opponentHandX: boardX,
+    opponentHandX,
     opponentHandY,
     opponentHandLabelY,
     opponentHandCountY,
@@ -132,6 +180,6 @@ export function calculateLayout(width: number, height: number): GameLayout {
     playedCardY,
     width,
     height,
-    padding
+    padding: boardPadding,
   };
 }

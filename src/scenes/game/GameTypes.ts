@@ -44,9 +44,32 @@ export interface UISnapshot {
 }
 
 /**
+ * Bounds for a layout section
+ */
+export interface SectionBounds {
+  x: number;      // Left edge
+  y: number;      // Top edge
+  width: number;
+  height: number;
+  centerX: number;
+  centerY: number;
+}
+
+/**
  * Layout calculation result containing all UI positions
  */
 export interface GameLayout {
+  // Section bounds (percentage-based, adjacent, no gaps)
+  sections: {
+    leftPanel: SectionBounds;      // Decks and discards
+    board: SectionBounds;          // Chess board
+    rightPanel: SectionBounds;     // Clocks, stopwatch, energy
+    eventLog: SectionBounds;       // Event log
+    topBar: SectionBounds;         // Opponent hand area
+    bottomBar: SectionBounds;      // Player hand area
+  };
+  
+  // Legacy positions (computed from sections)
   boardX: number;
   boardY: number;
   boardSize: number;

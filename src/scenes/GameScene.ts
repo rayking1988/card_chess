@@ -20,29 +20,17 @@
  * - 4.5: Card targeting with control power validation
  * 
  * UI Layout (from requirements document):
- * ┌──────────────────────────────────────────────────────────────────────────────┐
- * │  ┌─────────────┐                 Opponent's Deck (top-center)                │
- * │  │  Opponent's │                                                             │
- * │  │  Card       │                                                             │
- * │  │  (face down)│                                                             │
- * │  ├─────────────┤                                                             │
- * │  │ DECK    DISC│                                                             │
- * │  └─────────────┘                                                             │
- * │                                                                              │
- * │  ┌─────────────┐    ┌─────────────────────────┐    ┌─────────────────────┐  │
- * │  │  EVENT LOG  │    │      CHESS BOARD        │    │  Opp Clock          │  │
- * │  │             │    │         8x8             │    │  [FOCUS/DISTURB]    │  │
- * │  │             │    │                         │    │  Your Clock         │  │
- * │  │             │    │                         │    │  Stopwatch          │  │
- * │  │             │    │                         │    │  Energy Bar         │  │
- * │  │             │    │                         │    │  [FOCUS/DISTURB]    │  │
- * │  └─────────────┘    └─────────────────────────┘    └─────────────────────┘  │
- * │                              Card Count                                      │
- * │  ┌─────────────┐    ┌───┐ ┌───┐ ┌───┐ ┌───┐ ┌───┐ ┌───┐                     │
- * │  │  Your Card  │    │ C │ │ C │ │ C │ │ C │ │ C │ │ C │  (Fan-shaped hand)  │
- * │  │  (preview)  │    │ A │ │ A │ │ A │ │ A │ │ A │ │ A │                     │
- * │  └─────────────┘    └───┘ └───┘ └───┘ └───┘ └───┘ └───┘                     │
- * └──────────────────────────────────────────────────────────────────────────────┘
+ * ┌────────┬─────────────────────────────────┬──────────────┬────────────────┐
+ * │        │           Top Bar (cyan)        │              │                │
+ * │        │         (opponent hand)         │              │                │
+ * │ Left   ├─────────────────────────────────┤    Right     │   Event Log    │
+ * │ Panel  │                                 │    Panel     │   (yellow)     │
+ * │(green) │         Board (red)             │   (blue)     │                │
+ * │        │                                 │              │                │
+ * │        ├─────────────────────────────────┤              │                │
+ * │        │        Bottom Bar (magenta)     │              │                │
+ * │        │          (player hand)          │              │                │
+ * └────────┴─────────────────────────────────┴──────────────┴────────────────┘
  * 
  * @module scenes/GameScene
  * @requires phaser
@@ -84,6 +72,14 @@ import {
   makeCardComponentClickable,
   drawTargetArrow
 } from './game/GameUIHelpers';
+
+/* ============================================
+ * DEBUG CONFIGURATION
+ * ============================================
+ */
+
+/** Enable debug overlay to visualize layout sections with colored rectangles */
+const DEBUG_SHOW_LAYOUT_SECTIONS = true;
 
 /* ============================================
  * GAME SCENE CLASS
@@ -307,6 +303,13 @@ export class GameScene extends Phaser.Scene {
   private pendingOpponentDiscardCount: number | null = null;
 
   /* ----------------------------------------
+   * Debug Overlay
+   * ---------------------------------------- */
+  
+  /** Debug rectangles for visualizing layout sections */
+  private debugOverlays: Map<string, Phaser.GameObjects.Rectangle> = new Map();
+
+  /* ----------------------------------------
    * Layout Cache
    * ---------------------------------------- */
   
@@ -501,6 +504,11 @@ export class GameScene extends Phaser.Scene {
     this.createCardCountIndicator(layout);
     this.createTurnBanner(layout);
     
+    // Create debug overlays if enabled
+    if (DEBUG_SHOW_LAYOUT_SECTIONS) {
+      this.createDebugOverlays(layout);
+    }
+    
     // Wire up game state manager callbacks
     this.setupGameStateCallbacks();
     
@@ -556,6 +564,11 @@ export class GameScene extends Phaser.Scene {
     this.positionCardCount(layout);
     this.positionTurnBanner(layout);
     this.positionOverlays(layout);
+    
+    // Update debug overlays if enabled
+    if (DEBUG_SHOW_LAYOUT_SECTIONS) {
+      this.updateDebugOverlays(layout);
+    }
   }
 
   /* ============================================
@@ -610,6 +623,61 @@ export class GameScene extends Phaser.Scene {
     
     this.background.setScale(scale);
     this.background.setPosition(width / 2, height / 2);
+  }
+
+  /* ============================================
+   * DEBUG OVERLAY METHODS
+   * ============================================ */
+
+  /**
+   * Creates debug overlay rectangles for visualizing layout sections
+   * Each section has a different semi-transparent color
+   * Sections are defined by percentage and are adjacent with no gaps
+   * 
+   * @param layout - Current layout calculations
+   * @private
+   */
+  private createDebugOverlays(layout: GameLayout): void {
+    const alpha = 0.3;
+    
+    // Define sections with their colors (matching the section names in layout.sections)
+    const sectionColors: Array<{ name: string; color: number }> = [
+      { name: 'leftPanel', color: 0x00ff00 },    // Green - Left panel (decks/discards)
+      { name: 'board', color: 0xff0000 },        // Red - Board area
+      { name: 'rightPanel', color: 0x0000ff },   // Blue - Right panel (clocks/energy)
+      { name: 'eventLog', color: 0xffff00 },     // Yellow - Event log
+      { name: 'topBar', color: 0x00ffff },       // Cyan - Opponent's hand area
+      { name: 'bottomBar', color: 0xff00ff },    // Magenta - Player's hand area
+    ];
+    
+    for (const section of sectionColors) {
+      const rect = this.add.rectangle(0, 0, 100, 100, section.color, alpha);
+      rect.setDepth(1000); // Above everything
+      rect.setOrigin(0, 0); // Origin at top-left for easier positioning
+      this.debugOverlays.set(section.name, rect);
+    }
+    
+    this.updateDebugOverlays(layout);
+  }
+
+  /**
+   * Updates debug overlay positions and sizes based on section bounds
+   * Sections are percentage-based and adjacent with no gaps
+   * 
+   * @param layout - Current layout calculations
+   * @private
+   */
+  private updateDebugOverlays(layout: GameLayout): void {
+    const sectionNames = ['leftPanel', 'board', 'rightPanel', 'eventLog', 'topBar', 'bottomBar'] as const;
+    
+    for (const name of sectionNames) {
+      const rect = this.debugOverlays.get(name);
+      const bounds = layout.sections[name];
+      if (rect && bounds) {
+        rect.setPosition(bounds.x, bounds.y);
+        rect.setSize(bounds.width, bounds.height);
+      }
+    }
   }
 
   /* ============================================
