@@ -87,7 +87,7 @@ export function createImageButton(
 }
 
 /**
- * Creates a stack of card back images for deck/discard pile visual depth
+ * Creates a stack of card images for deck/discard pile visual depth
  * 
  * @param scene - Phaser scene
  * @param x - X position for pile center
@@ -95,7 +95,8 @@ export function createImageButton(
  * @param scale - Scale factor for card images
  * @param maxLayers - Maximum number of visual layers
  * @param alpha - Opacity for card images
- * @returns Array of card back images for the pile
+ * @param texture - Texture key for cards (default: 'card_back')
+ * @returns Array of card images for the pile
  */
 export function createPileStack(
   scene: Phaser.Scene,
@@ -103,11 +104,12 @@ export function createPileStack(
   y: number,
   scale: number,
   maxLayers: number,
-  alpha: number
+  alpha: number,
+  texture: string = 'card_back'
 ): Phaser.GameObjects.Image[] {
   const stack: Phaser.GameObjects.Image[] = [];
   for (let i = 0; i < maxLayers; i++) {
-    const card = scene.add.image(x, y, 'card_back');
+    const card = scene.add.image(x, y, texture);
     card.setScale(scale);
     card.setAlpha(alpha);
     card.setDepth(7 + i);
