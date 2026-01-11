@@ -71,6 +71,7 @@ import { DeckManager, DECK_SIZE, INITIAL_DRAW_COUNT } from '../managers/DeckMana
 import { calculateControlPower, playerControlsSquare } from '../utils/controlPower';
 import { CARD_DEFINITIONS } from '../data/cards';
 import { createGameAnimationManager, GameAnimationManager } from '../managers/AnimationManager';
+import { hex } from '../utils/colors';
 
 // Import from extracted modules
 import { GameSceneData, UISnapshot, GameLayout } from './game/GameTypes';
@@ -594,7 +595,7 @@ export class GameScene extends Phaser.Scene {
       );
       tiledBg.setDepth(-1);
     } else {
-      this.cameras.main.setBackgroundColor(0x2a1a0a);
+      this.cameras.main.setBackgroundColor(hex('#2a1a0a'));
     }
   }
   
@@ -1291,7 +1292,7 @@ export class GameScene extends Phaser.Scene {
     this.turnBanner.setVisible(false);
     
     const bg = this.add.graphics();
-    bg.fillStyle(0x000000, 0.7);
+    bg.fillStyle(hex('#000000'), 0.7);
     bg.fillRoundedRect(-180, -28, 360, 56, 12);
     
     this.turnBannerText = this.add.text(0, 0, '', {
@@ -1739,7 +1740,7 @@ export class GameScene extends Phaser.Scene {
       this.connectionOverlayBackground = this.add.rectangle(
         layout.width / 2, layout.height / 2, 
         layout.width, layout.height, 
-        0x000000, 0.6
+        hex('#000000'), 0.6
       );
       this.connectionOverlay.add(this.connectionOverlayBackground);
       
@@ -1811,7 +1812,7 @@ export class GameScene extends Phaser.Scene {
     this.discardViewerBackground = this.add.rectangle(
       layout.width / 2, layout.height / 2,
       layout.width, layout.height,
-      0x000000, 0.6
+      hex('#000000'), 0.6
     );
     this.discardViewerBackground.setInteractive();
     this.discardViewerBackground.on('pointerdown', () => this.hideDiscardViewer());
@@ -1900,7 +1901,7 @@ export class GameScene extends Phaser.Scene {
     const titleHeight = 56 * layout.panelScale;
 
     this.discardViewerPanel.clear();
-    this.discardViewerPanel.fillStyle(0x1a1a2e, 0.96);
+    this.discardViewerPanel.fillStyle(hex('#1a1a2e'), 0.96);
     this.discardViewerPanel.fillRoundedRect(
       panelX - panelWidth / 2,
       panelY - panelHeight / 2,
@@ -1908,7 +1909,7 @@ export class GameScene extends Phaser.Scene {
       panelHeight,
       12
     );
-    this.discardViewerPanel.lineStyle(2, 0x4a4a6e, 1);
+    this.discardViewerPanel.lineStyle(2, hex('#4a4a6e'), 1);
     this.discardViewerPanel.strokeRoundedRect(
       panelX - panelWidth / 2,
       panelY - panelHeight / 2,
@@ -1933,7 +1934,7 @@ export class GameScene extends Phaser.Scene {
     this.discardViewerContentBaseY = contentY;
 
     this.discardViewerMask.clear();
-    this.discardViewerMask.fillStyle(0xffffff);
+    this.discardViewerMask.fillStyle(hex('#ffffff'));
     this.discardViewerMask.fillRect(contentX, contentY, contentWidth, contentHeight);
 
     const mask = this.discardViewerMask.createGeometryMask();
@@ -2215,7 +2216,7 @@ export class GameScene extends Phaser.Scene {
       onComplete: () => {
         const targetPos = target ? this.getSquarePixel(target) : null;
         const arrow = targetPos
-          ? drawTargetArrow(this, displayPos, targetPos, 0xffcc00, 18 * layout.panelScale, 4 * layout.panelScale)
+          ? drawTargetArrow(this, displayPos, targetPos, hex('#ffcc00'), 18 * layout.panelScale, 4 * layout.panelScale)
           : null;
         
         this.time.delayedCall(3000, () => {
@@ -2946,7 +2947,7 @@ export class GameScene extends Phaser.Scene {
     const scale = layout.panelScale;
     
     // Semi-transparent overlay (using Rectangle for better performance)
-    this.mulliganOverlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.5);
+    this.mulliganOverlay = this.add.rectangle(width / 2, height / 2, width, height, hex('#000000'), 0.5);
     this.mulliganOverlay.setDepth(50);
     
     // Instructions - title
@@ -3121,7 +3122,7 @@ export class GameScene extends Phaser.Scene {
     const scale = layout.panelScale;
     
     // Semi-transparent overlay (using Rectangle for better performance)
-    this.discardOverlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.3);
+    this.discardOverlay = this.add.rectangle(width / 2, height / 2, width, height, hex('#000000'), 0.3);
     this.discardOverlay.setDepth(45);
     
     // Prompt text

@@ -26,6 +26,7 @@ import {
   BOARD_SIZE,
 } from '../utils/chessWrapper';
 import type { MoveResult, ControlPowerMap } from '../utils/chessWrapper';
+import { hex } from '../utils/colors';
 
 /* ============================================
  * RE-EXPORTS
@@ -53,19 +54,19 @@ const BOARD_PIXEL_SIZE = BOARD_SIZE * SQUARE_SIZE;
  */
 
 /** Light square color (cream/beige) */
-const LIGHT_SQUARE_COLOR = 0xf0d9b5;
+const LIGHT_SQUARE_COLOR = hex('#f0d9b5');
 
 /** Dark square color (brown) */
-const DARK_SQUARE_COLOR = 0xb58863;
+const DARK_SQUARE_COLOR = hex('#b58863');
 
 /** Valid move highlight color (green) */
-const HIGHLIGHT_COLOR = 0x7fff00;
+const HIGHLIGHT_COLOR = hex('#7fff00');
 
 /** Selected square highlight color (yellow) */
-const SELECTED_COLOR = 0xffff00;
+const SELECTED_COLOR = hex('#ffff00');
 
 /** Attack/capture highlight color (red) */
-const ATTACK_HIGHLIGHT_COLOR = 0xff6b6b;
+const ATTACK_HIGHLIGHT_COLOR = hex('#ff6b6b');
 
 /* ============================================
  * PIECE ASSET MAPPING
@@ -433,7 +434,7 @@ export class ChessBoardComponent {
         this.boardGraphics.fillRect(col * size, row * size, size, size);
         
         // Highlight on top-left (L-shape)
-        const highlightColor = isLight ? 0xfff8e7 : 0xc9a06a;
+        const highlightColor = isLight ? hex('#fff8e7') : hex('#c9a06a');
         this.boardGraphics.fillStyle(highlightColor, 1);
         // Top-left corner
         this.boardGraphics.fillRect(col * size, row * size, size * 0.15, size * 0.15);
@@ -443,7 +444,7 @@ export class ChessBoardComponent {
         this.boardGraphics.fillRect(col * size, row * size + size * 0.15, size * 0.15, size * 0.15);
         
         // Shadow on bottom-right (L-shape)
-        const shadowColor = isLight ? 0xd4c4a8 : 0x9a7653;
+        const shadowColor = isLight ? hex('#d4c4a8') : hex('#9a7653');
         this.boardGraphics.fillStyle(shadowColor, 1);
         this.boardGraphics.fillRect(col * size + size * 0.85, row * size + size * 0.85, size * 0.15, size * 0.15);
         this.boardGraphics.fillRect(col * size + size * 0.7, row * size + size * 0.85, size * 0.15, size * 0.15);
@@ -453,7 +454,7 @@ export class ChessBoardComponent {
     
     // Draw grid lines between squares
     const thinLineWidth = Math.max(1, Math.round(1 * this.scale));
-    this.boardGraphics.fillStyle(0x5C4033, 1);
+    this.boardGraphics.fillStyle(hex('#5C4033'), 1);
     
     // Vertical lines
     for (let col = 1; col < BOARD_SIZE; col++) {
@@ -467,7 +468,7 @@ export class ChessBoardComponent {
     
     // Draw board shadow (right and bottom edges)
     const shadowWidth = Math.max(6, Math.round(8 * this.scale));
-    this.boardGraphics.fillStyle(0x000000, 0.4);
+    this.boardGraphics.fillStyle(hex('#000000'), 0.4);
     this.boardGraphics.fillRect(BOARD_SIZE * size, shadowWidth, shadowWidth, BOARD_SIZE * size);
     this.boardGraphics.fillRect(shadowWidth, BOARD_SIZE * size, BOARD_SIZE * size, shadowWidth);
     
@@ -816,7 +817,7 @@ export class ChessBoardComponent {
       const { col, row } = this.squareToCoords(square);
       
       // White control = blue, Black control = red
-      const color = power > 0 ? 0x4444ff : 0xff4444;
+      const color = power > 0 ? hex('#4444ff') : hex('#ff4444');
       const alpha = Math.min(Math.abs(power) * 0.15, 0.6);
       
       this.overlayGraphics.fillStyle(color, alpha);

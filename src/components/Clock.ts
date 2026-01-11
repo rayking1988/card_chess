@@ -15,6 +15,7 @@
  */
 
 import Phaser from 'phaser';
+import { hex } from '../utils/colors';
 
 /* ============================================
  * CLOCK CONFIGURATION CONSTANTS
@@ -222,7 +223,7 @@ export class ClockComponent {
   setActive(active: boolean): void {
     this.isActive = active;
     if (active) {
-      this.clockSprite.setTint(0xaaffaa); // Light green tint
+      this.clockSprite.setTint(hex('#aaffaa')); // Light green tint
     } else {
       this.clockSprite.clearTint();
     }

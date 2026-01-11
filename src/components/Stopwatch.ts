@@ -15,6 +15,7 @@
  */
 
 import Phaser from 'phaser';
+import { hex } from '../utils/colors';
 
 /* ============================================
  * STOPWATCH CONFIGURATION CONSTANTS
@@ -218,14 +219,14 @@ export class StopwatchComponent {
     
     // Generate high warning texture (red circle)
     const highGraphics = this.scene.add.graphics();
-    highGraphics.fillStyle(0xff0000, 0.25);
+    highGraphics.fillStyle(hex('#ff0000'), 0.25);
     highGraphics.fillCircle(center, center, STOPWATCH_WIDTH / 2 + 8);
     highGraphics.generateTexture(`${this.textureId}_warning_high`, textureSize, textureSize);
     highGraphics.destroy();
     
     // Generate medium warning texture (orange circle)
     const mediumGraphics = this.scene.add.graphics();
-    mediumGraphics.fillStyle(0xffaa00, 0.2);
+    mediumGraphics.fillStyle(hex('#ffaa00'), 0.2);
     mediumGraphics.fillCircle(center, center, STOPWATCH_WIDTH / 2 + 6);
     mediumGraphics.generateTexture(`${this.textureId}_warning_medium`, textureSize, textureSize);
     mediumGraphics.destroy();
@@ -446,10 +447,10 @@ export class StopwatchComponent {
    */
   private getProgressColor(): number {
     const progress = (this.currentTime % THRESHOLD_SECONDS) / THRESHOLD_SECONDS;
-    if (progress >= WARNING_THRESHOLDS.high) return 0xff4444;
-    if (progress >= WARNING_THRESHOLDS.medium) return 0xffaa44;
-    if (progress >= WARNING_THRESHOLDS.low) return 0xffff44;
-    return 0x44ff44;
+    if (progress >= WARNING_THRESHOLDS.high) return hex('#ff4444');
+    if (progress >= WARNING_THRESHOLDS.medium) return hex('#ffaa44');
+    if (progress >= WARNING_THRESHOLDS.low) return hex('#ffff44');
+    return hex('#44ff44');
   }
 
   /**

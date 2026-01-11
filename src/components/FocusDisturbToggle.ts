@@ -14,6 +14,7 @@
  */
 
 import Phaser from 'phaser';
+import { hex } from '../utils/colors';
 
 /* ============================================
  * TOGGLE CONFIGURATION CONSTANTS
@@ -29,13 +30,13 @@ const TOGGLE_HEIGHT = 40;
 /** Fallback colors when sprites are not available */
 const FALLBACK_COLORS = {
   focus: {
-    background: 0x225522,
-    border: 0x44ff44,
+    background: hex('#225522'),
+    border: hex('#44ff44'),
     text: '#44ff44'
   },
   disturb: {
-    background: 0x552222,
-    border: 0xff4444,
+    background: hex('#552222'),
+    border: hex('#ff4444'),
     text: '#ff4444'
   }
 };

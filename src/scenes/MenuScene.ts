@@ -265,7 +265,7 @@ export class MenuScene extends Phaser.Scene {
       border: 4px solid #000000ff;
       border-radius: 8px;
       background-color: #23211fff;
-      color: rgba(227, 205, 105, 1);
+      color: rgba(219, 166, 22, 1);
       text-align: center;
       width: 320px;
       outline: none;

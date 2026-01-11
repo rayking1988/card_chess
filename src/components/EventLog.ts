@@ -15,6 +15,7 @@
  */
 
 import Phaser from 'phaser';
+import { hex } from '../utils/colors';
 
 /* ============================================
  * EVENT LOG CONFIGURATION CONSTANTS
@@ -38,9 +39,9 @@ const MASK_VERTICAL_MARGIN = 35;
 
 /** Background colors for different player entries */
 const ENTRY_BACKGROUNDS = {
-  white: 0x2a2f45,   // Blue-gray for white player
-  black: 0x3a2a2a,   // Red-gray for black player
-  system: 0x3a3a1a   // Yellow-gray for system messages
+  white: hex('#2a2f45'),   // Blue-gray for white player
+  black: hex('#3a2a2a'),   // Red-gray for black player
+  system: hex('#3a3a1a')   // Yellow-gray for system messages
 };
 
 /** Text colors for different player entries */
@@ -281,11 +282,11 @@ export class EventLogComponent {
     this.backgroundGraphics.clear();
     
     // Draw at (0,0) for texture capture
-    this.backgroundGraphics.fillStyle(0x1a1a2e, 0.9);
+    this.backgroundGraphics.fillStyle(hex('#1a1a2e'), 0.9);
     this.backgroundGraphics.fillRoundedRect(0, 0, LOG_WIDTH, LOG_HEIGHT, 8);
-    this.backgroundGraphics.lineStyle(2, 0x4a4a6e, 1);
+    this.backgroundGraphics.lineStyle(2, hex('#4a4a6e'), 1);
     this.backgroundGraphics.strokeRoundedRect(0, 0, LOG_WIDTH, LOG_HEIGHT, 8);
-    this.backgroundGraphics.lineStyle(1, 0x4a4a6e, 0.5);
+    this.backgroundGraphics.lineStyle(1, hex('#4a4a6e'), 0.5);
     this.backgroundGraphics.lineBetween(PADDING, 30, LOG_WIDTH - PADDING, 30);
     
     // Generate texture from graphics
@@ -319,7 +320,7 @@ export class EventLogComponent {
     this.backgroundGraphics.clear();
     
     // Semi-transparent dark background
-    this.backgroundGraphics.fillStyle(0x1a1a2e, 0.9);
+    this.backgroundGraphics.fillStyle(hex('#1a1a2e'), 0.9);
     this.backgroundGraphics.fillRoundedRect(
       -LOG_WIDTH / 2,
       -LOG_HEIGHT / 2,
@@ -329,7 +330,7 @@ export class EventLogComponent {
     );
     
     // Border
-    this.backgroundGraphics.lineStyle(2, 0x4a4a6e, 1);
+    this.backgroundGraphics.lineStyle(2, hex('#4a4a6e'), 1);
     this.backgroundGraphics.strokeRoundedRect(
       -LOG_WIDTH / 2,
       -LOG_HEIGHT / 2,
@@ -339,7 +340,7 @@ export class EventLogComponent {
     );
     
     // Title separator line
-    this.backgroundGraphics.lineStyle(1, 0x4a4a6e, 0.5);
+    this.backgroundGraphics.lineStyle(1, hex('#4a4a6e'), 0.5);
     this.backgroundGraphics.lineBetween(
       -LOG_WIDTH / 2 + PADDING,
       -LOG_HEIGHT / 2 + 30,
@@ -451,7 +452,7 @@ export class EventLogComponent {
     const padding = PADDING * scale;
     
     this.maskGraphics.clear();
-    this.maskGraphics.fillStyle(0xffffff);
+    this.maskGraphics.fillStyle(hex('#ffffff'));
     this.maskGraphics.fillRect(
       this.currentX - width / 2 + padding,
       this.currentY - height / 2 + MASK_VERTICAL_MARGIN * scale,

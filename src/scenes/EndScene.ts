@@ -25,6 +25,7 @@ import Phaser from 'phaser';
 import type { PlayerColor } from '../managers/GameStateManager';
 import { formatTime } from '../components/Clock';
 import { NetworkManager, GameAction } from '../managers/NetworkManager';
+import { hex } from '../utils/colors';
 
 /* ============================================
  * TYPE DEFINITIONS
@@ -204,7 +205,7 @@ export class EndScene extends Phaser.Scene {
       this.add.image(width / 2, height / 2, 'background')
         .setDisplaySize(width, height);
     } else {
-      this.cameras.main.setBackgroundColor(0x1a472a);
+      this.cameras.main.setBackgroundColor(hex('#1a472a'));
     }
 
     // Determine result text and color
@@ -271,7 +272,7 @@ export class EndScene extends Phaser.Scene {
       width / 2,
       height * 0.76,
       'REMATCH',
-      0x4a7c59,
+      hex('#4a7c59'),
       () => this.handleRematchRequest()
     );
     
@@ -280,7 +281,7 @@ export class EndScene extends Phaser.Scene {
       width / 2,
       height * 0.88,
       'MAIN MENU',
-      0x5a5a8a,
+      hex('#5a5a8a'),
       () => this.handleReturnToMenu()
     );
     
@@ -305,9 +306,9 @@ export class EndScene extends Phaser.Scene {
     
     // Panel background
     const panel = this.add.graphics();
-    panel.fillStyle(0x0f0f1f, 0.7);
+    panel.fillStyle(hex('#0f0f1f'), 0.7);
     panel.fillRoundedRect(width / 2 - panelWidth / 2, panelY - panelHeight / 2, panelWidth, panelHeight, 12);
-    panel.lineStyle(2, 0xffffff, 0.2);
+    panel.lineStyle(2, hex('#ffffff'), 0.2);
     panel.strokeRoundedRect(width / 2 - panelWidth / 2, panelY - panelHeight / 2, panelWidth, panelHeight, 12);
     
     // Determine player names and clock times
@@ -379,7 +380,7 @@ export class EndScene extends Phaser.Scene {
     this.acceptButton = this.createButtonForContainer(
       -80, 10,
       'ACCEPT',
-      0x4a7c59,
+      hex('#4a7c59'),
       () => this.handleAcceptRematch(),
       140
     );
@@ -388,7 +389,7 @@ export class EndScene extends Phaser.Scene {
     this.declineButton = this.createButtonForContainer(
       80, 10,
       'DECLINE',
-      0x8b4513,
+      hex('#8b4513'),
       () => this.handleDeclineRematch(),
       140
     );
@@ -672,7 +673,7 @@ export class EndScene extends Phaser.Scene {
     const bg = this.add.graphics();
     bg.fillStyle(color, 1);
     bg.fillRoundedRect(-buttonWidth / 2, -30, buttonWidth, 60, 10);
-    bg.lineStyle(3, 0xffffff, 0.3);
+    bg.lineStyle(3, hex('#ffffff'), 0.3);
     bg.strokeRoundedRect(-buttonWidth / 2, -30, buttonWidth, 60, 10);
     
     // Button text
@@ -726,7 +727,7 @@ export class EndScene extends Phaser.Scene {
     const bg = this.add.graphics();
     bg.fillStyle(color, 1);
     bg.fillRoundedRect(-buttonWidth / 2, -25, buttonWidth, 50, 8);
-    bg.lineStyle(2, 0xffffff, 0.3);
+    bg.lineStyle(2, hex('#ffffff'), 0.3);
     bg.strokeRoundedRect(-buttonWidth / 2, -25, buttonWidth, 50, 8);
     
     // Button text

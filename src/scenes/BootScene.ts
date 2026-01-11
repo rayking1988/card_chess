@@ -16,6 +16,7 @@
  */
 
 import Phaser from 'phaser';
+import { hex } from '../utils/colors';
 
 /* ============================================
  * ASSET PATH CONSTANTS
@@ -109,9 +110,9 @@ const LOADING_BAR = {
   width: 320,
   height: 50,
   fillHeight: 30,
-  backgroundColor: 0x222222,
-  fillColor: 0x00ff00,
-  backgroundAlpha: 0.8
+  backgroundColor: hex('#f4a508'),
+  fillColor: hex('#e7f20d'),
+  backgroundAlpha: 0.5
 };
 
 /**
@@ -200,9 +201,12 @@ export class BootScene extends Phaser.Scene {
     );
     
     // Add loading text above the progress bar
-    const loadingText = this.add.text(width / 2, height / 2 - 50, 'Loading...', {
-      fontSize: '24px',
-      color: '#ffffff'
+    const loadingText = this.add.text(width / 2, height / 2 - 100, 'LOADING...', {
+      fontFamily: 'BoldPixels, Arial',
+      fontSize: '70px',
+      color: '#ffffff',
+      stroke: '#000000',
+      strokeThickness: 20
     }).setOrigin(0.5);
 
     // Update progress bar fill as assets load

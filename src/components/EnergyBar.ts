@@ -14,6 +14,7 @@
  */
 
 import Phaser from 'phaser';
+import { hex } from '../utils/colors';
 
 /* ============================================
  * ENERGY BAR CONFIGURATION CONSTANTS
@@ -31,10 +32,10 @@ const FILL_PADDING = 4;
 
 /** Fill colors based on energy level (as ratio of current/cap) */
 const FILL_COLORS = {
-  high: 0x44ff44,      // Green - 75%+ energy
-  medium: 0xffff44,    // Yellow - 50-74% energy
-  low: 0xffaa44,       // Orange - 25-49% energy
-  critical: 0xff4444   // Red - below 25% energy
+  high: hex('#44ff44'),      // Green - 75%+ energy
+  medium: hex('#ffff44'),    // Yellow - 50-74% energy
+  low: hex('#ffaa44'),       // Orange - 25-49% energy
+  critical: hex('#ff4444')   // Red - below 25% energy
 };
 
 /** Text colors for different energy states */
@@ -185,9 +186,9 @@ export class EnergyBarComponent {
     this.backgroundGraphics.clear();
     
     // Gold border
-    this.backgroundGraphics.lineStyle(2, 0xffd700, 1);
+    this.backgroundGraphics.lineStyle(2, hex('#ffd700'), 1);
     // Dark gray fill
-    this.backgroundGraphics.fillStyle(0x333333, 1);
+    this.backgroundGraphics.fillStyle(hex('#333333'), 1);
     
     this.backgroundGraphics.fillRoundedRect(
       -BAR_WIDTH / 2,
@@ -316,7 +317,7 @@ export class EnergyBarComponent {
       );
       
       // Add shine effect (white highlight on top third)
-      this.fillGraphics.fillStyle(0xffffff, 0.3);
+      this.fillGraphics.fillStyle(hex('#ffffff'), 0.3);
       this.fillGraphics.fillRoundedRect(
         -BAR_WIDTH / 2 + FILL_PADDING,
         -BAR_HEIGHT / 2 + FILL_PADDING,
