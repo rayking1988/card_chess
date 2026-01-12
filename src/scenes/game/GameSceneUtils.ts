@@ -20,10 +20,10 @@ export function refreshNameDisplays(this: GameScene): void {
     this.playerClock.setLabel(this.playerName);
   }
   if (this.opponentStopwatch) {
-    this.opponentStopwatch.setLabel(`${this.opponentName} Timer`);
+    this.opponentStopwatch.setLabel('');
   }
   if (this.playerStopwatch) {
-    this.playerStopwatch.setLabel(`${this.playerName} Timer`);
+    this.playerStopwatch.setLabel('');
   }
   if (this.opponentNameText) {
     this.opponentNameText.setText(this.opponentName);

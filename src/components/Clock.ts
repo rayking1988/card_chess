@@ -156,11 +156,12 @@ export class ClockComponent {
     this.container.add(this.timeText);
     
     // Add optional label text above the clock
-    this.labelText = scene.add.text(0, -35, label, {
+    this.labelText = scene.add.text(0, -85, label, {
       fontSize: '32px',
       fontFamily: 'BoldPixels, Arial',
       color: '#cccccc'
     }).setOrigin(0.5);
+    this.labelText.setVisible(label.trim().length > 0);
     this.container.add(this.labelText);
   }
 
@@ -247,6 +248,7 @@ export class ClockComponent {
    */
   setLabel(label: string): void {
     this.labelText.setText(label);
+    this.labelText.setVisible(label.trim().length > 0);
   }
 
   /**
@@ -338,7 +340,12 @@ export class ClockComponent {
    * Used by: GameScene.positionRightPanel() for layout calculations
    */
   getDimensions(): { width: number; height: number } {
-    return { width: CLOCK_WIDTH, height: CLOCK_HEIGHT };
+    const clockHalf = CLOCK_HEIGHT / 2;
+    const labelExtent = this.labelText.visible
+      ? Math.abs(this.labelText.y) + this.labelText.height / 2
+      : 0;
+    const topExtent = Math.max(clockHalf, labelExtent);
+    return { width: CLOCK_WIDTH, height: topExtent + clockHalf };
   }
 
   /**

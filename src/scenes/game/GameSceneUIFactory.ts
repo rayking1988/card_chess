@@ -7,13 +7,14 @@
 import { CardHandComponent } from '../../components/CardHand';
 import { ChessBoardComponent } from '../../components/ChessBoard';
 import { ClockComponent } from '../../components/Clock';
+import { DisturbCounterComponent } from '../../components/DisturbCounter';
 import { EnergyBarComponent } from '../../components/EnergyBar';
 import { EventLogComponent } from '../../components/EventLog';
 import { FocusDisturbToggleComponent } from '../../components/FocusDisturbToggle';
 import { StopwatchComponent } from '../../components/Stopwatch';
 import { MAX_PILE_LAYERS } from './GameConstants';
 import type { GameLayout } from './GameTypes';
-import { createPileStack } from './GameUIHelpers';
+import { createImageButton, createPileStack } from './GameUIHelpers';
 import { hex } from '../../utils/colors';
 import type { GameScene } from '../GameScene';
 import {
@@ -37,6 +38,8 @@ export function createEventLog(this: GameScene, layout: GameLayout): void {
   this.eventLog = new EventLogComponent(this, layout.eventLogX, layout.eventLogY);
   this.eventLog.setDepth(10);
   this.eventLog.setScale(layout.panelScale);
+
+  // Preview area removed per user request
 }
 
 /**
@@ -78,6 +81,60 @@ export function createRightPanel(this: GameScene, layout: GameLayout): void {
   const scale = layout.panelScale;
   const y = layout.rightPanelTop;
 
+  const topSection = layout.sections.rightPanelTop;
+  const middleSection = layout.sections.rightPanelMiddle;
+  const bottomSection = layout.sections.rightPanelBottom;
+
+  this.rightPanelTopBackdrop = this.add.rectangle(
+    topSection.centerX,
+    topSection.centerY,
+    topSection.width,
+    topSection.height,
+    hex('#000000'),
+    0.3
+  ).setDepth(6);
+  this.rightPanelMiddleBackdrop = this.add.rectangle(
+    middleSection.centerX,
+    middleSection.centerY,
+    middleSection.width,
+    middleSection.height,
+    hex('#000000'),
+    0.3
+  ).setDepth(6);
+  this.rightPanelBottomBackdrop = this.add.rectangle(
+    bottomSection.centerX,
+    bottomSection.centerY,
+    bottomSection.width,
+    bottomSection.height,
+    hex('#000000'),
+    0.3
+  ).setDepth(6);
+
+  this.rightPanelTopTint = this.add.rectangle(
+    topSection.centerX,
+    topSection.centerY,
+    topSection.width,
+    topSection.height,
+    hex('#772525'),
+    0.28
+  ).setDepth(7);
+  this.rightPanelMiddleTint = this.add.rectangle(
+    middleSection.centerX,
+    middleSection.centerY,
+    middleSection.width,
+    middleSection.height,
+    hex('#2e4f8f'),
+    0.28
+  ).setDepth(7);
+  this.rightPanelBottomTint = this.add.rectangle(
+    bottomSection.centerX,
+    bottomSection.centerY,
+    bottomSection.width,
+    bottomSection.height,
+    hex('#1e335e'),
+    0.28
+  ).setDepth(7);
+
   // 1. Opponent Clock (top)
   this.opponentClock = new ClockComponent(this, x, y, 600, this.opponentName);
   this.opponentClock.setDepth(10);
@@ -85,13 +142,25 @@ export function createRightPanel(this: GameScene, layout: GameLayout): void {
 
   // 2. Opponent Stopwatch
   this.opponentStopwatch = new StopwatchComponent(this, x, y);
-  this.opponentStopwatch.setLabel(`${this.opponentName} Timer`);
+  this.opponentStopwatch.setLabel('');
+  this.opponentStopwatch.setThresholdVisible(false);
+  this.opponentStopwatch.setBaseTimeColor(this.localColor === 'black' ? '#ffffff' : '#000000');
   this.opponentStopwatch.setDepth(10);
   this.opponentStopwatch.setScale(scale);
 
-  // 3. Opponent Focus/Disturb toggle
+  // 3. Opponent Energy Bar
+  this.opponentEnergyBar = new EnergyBarComponent(this, x, y, '');
+  this.opponentEnergyBar.setDepth(10);
+  this.opponentEnergyBar.setScale(scale);
+
+  // 4. Opponent Disturb Counter
+  this.opponentDisturbCounter = new DisturbCounterComponent(this, x, y, '');
+  this.opponentDisturbCounter.setDepth(10);
+  this.opponentDisturbCounter.setScale(scale);
+
+  // 5. Opponent Focus/Disturb toggle
   this.opponentFocusDisturb = new FocusDisturbToggleComponent(this, x, y, 'focus');
-  this.opponentFocusDisturb.setLabel('Opp Mode');
+  this.opponentFocusDisturb.setLabel('');
   this.opponentFocusDisturb.setEnabled(false); // Opponent's toggle is read-only
   this.opponentFocusDisturb.setDepth(10);
   this.opponentFocusDisturb.setScale(scale);
@@ -104,18 +173,25 @@ export function createRightPanel(this: GameScene, layout: GameLayout): void {
 
   // 5. Your Stopwatch
   this.playerStopwatch = new StopwatchComponent(this, x, y);
-  this.playerStopwatch.setLabel('Your Timer');
+  this.playerStopwatch.setLabel('');
+  this.playerStopwatch.setThresholdVisible(false);
+  this.playerStopwatch.setBaseTimeColor(this.localColor === 'black' ? '#000000' : '#ffffff');
   this.playerStopwatch.setDepth(10);
   this.playerStopwatch.setScale(scale);
 
   // 6. Energy Bar
-  this.energyBar = new EnergyBarComponent(this, x, y, 'Energy');
+  this.energyBar = new EnergyBarComponent(this, x, y, '');
   this.energyBar.setDepth(10);
   this.energyBar.setScale(scale);
 
-  // 7. Your Focus/Disturb toggle (bottom)
+  // 7. Your Disturb Counter
+  this.playerDisturbCounter = new DisturbCounterComponent(this, x, y, '');
+  this.playerDisturbCounter.setDepth(10);
+  this.playerDisturbCounter.setScale(scale);
+
+  // 8. Your Focus/Disturb toggle (bottom)
   this.playerFocusDisturb = new FocusDisturbToggleComponent(this, x, y, 'focus');
-  this.playerFocusDisturb.setLabel('Your Mode');
+  this.playerFocusDisturb.setLabel('');
   this.playerFocusDisturb.setDepth(10);
   this.playerFocusDisturb.setScale(scale);
   this.playerFocusDisturb.onModeChange = (mode) => {
@@ -123,6 +199,22 @@ export function createRightPanel(this: GameScene, layout: GameLayout): void {
     this.logEvent('system', `Mode changed to ${mode}`);
     this.sendLocalPlayerStats();
   };
+
+  this.controlledSquaresButton = createImageButton(
+    this,
+    bottomSection.centerX,
+    bottomSection.centerY,
+    'Controlled Squares',
+    'blue_button',
+    'blue_button_pressed',
+    () => {
+      // No-op click handler; hold events handle visibility.
+    }
+  );
+  this.controlledSquaresButton.setDepth(10);
+  this.controlledSquaresButton.on('pointerdown', () => this.showControlledSquaresOverlay());
+  this.controlledSquaresButton.on('pointerup', () => this.hideControlledSquaresOverlay());
+  this.controlledSquaresButton.on('pointerout', () => this.hideControlledSquaresOverlay());
 
   positionRightPanel.call(this, layout);
 }
@@ -136,13 +228,11 @@ export function createLeftPanel(this: GameScene, layout: GameLayout): void {
   const scale = layout.panelScale;
   const x = layout.leftPanelX;
   const deckScale = 0.14 * scale;
+  const topCardScale = 0.55 * scale;
   const stackDepth = MAX_PILE_LAYERS;
 
   // === OPPONENT'S DECK (top) ===
   this.opponentDeckStack = createPileStack(this, x, layout.opponentDeckY, deckScale, stackDepth, 1);
-  this.opponentDeckSprite = this.add.image(x, layout.opponentDeckY, 'card_back');
-  this.opponentDeckSprite.setScale(deckScale);
-  this.opponentDeckSprite.setDepth(10);
 
   this.opponentDeckLabelText = this.add.text(x, layout.opponentDeckY - 60 * scale, 'Opp Deck', {
     fontSize: `${10 * scale}px`, fontFamily: 'BoldPixels, Arial', color: '#cccccc'
@@ -153,6 +243,8 @@ export function createLeftPanel(this: GameScene, layout: GameLayout): void {
   }).setOrigin(0.5).setDepth(10);
 
   // === OPPONENT'S DISCARD (below deck) ===
+  // No stack for discard - only show top card
+
   this.opponentDiscardLabelText = this.add.text(x, layout.opponentDiscardY - 60 * scale, 'Opp Discard', {
     fontSize: `${10 * scale}px`, fontFamily: 'BoldPixels, Arial', color: '#888888'
   }).setOrigin(0.5).setDepth(10);
@@ -162,6 +254,8 @@ export function createLeftPanel(this: GameScene, layout: GameLayout): void {
   }).setOrigin(0.5).setDepth(10);
 
   // === PLAYER'S DISCARD (above player deck) ===
+  // No stack for discard - only show top card
+
   this.playerDiscardLabelText = this.add.text(x, layout.playerDiscardY - 60 * scale, 'Your Discard', {
     fontSize: `${10 * scale}px`, fontFamily: 'BoldPixels, Arial', color: '#888888'
   }).setOrigin(0.5).setDepth(10);
@@ -172,9 +266,6 @@ export function createLeftPanel(this: GameScene, layout: GameLayout): void {
 
   // === PLAYER'S DECK (bottom) ===
   this.playerDeckStack = createPileStack(this, x, layout.playerDeckY, deckScale, stackDepth, 1);
-  this.playerDeckSprite = this.add.image(x, layout.playerDeckY, 'card_back');
-  this.playerDeckSprite.setScale(deckScale);
-  this.playerDeckSprite.setDepth(10);
 
   this.playerDeckLabelText = this.add.text(x, layout.playerDeckY - 60 * scale, 'Your Deck', {
     fontSize: `${10 * scale}px`, fontFamily: 'BoldPixels, Arial', color: '#cccccc'
@@ -235,6 +326,9 @@ export function createNameplates(this: GameScene, layout: GameLayout): void {
     { fontSize: `${20 * layout.panelScale}px`, fontFamily: 'BoldPixels, Arial', color: '#ffffff' }
   ).setOrigin(0.5).setDepth(15);
 
+  this.opponentNameText.setVisible(false);
+  this.playerNameText.setVisible(false);
+
   positionNameplates.call(this, layout);
 }
 
@@ -291,4 +385,151 @@ export function createTurnBanner(this: GameScene, layout: GameLayout): void {
   }).setOrigin(0.5);
 
   this.turnBanner.add([bg, this.turnBannerText]);
+}
+
+/**
+ * Creates the turn overlay banner across the board
+ */
+export function createTurnOverlay(this: GameScene, _layout: GameLayout): void {
+  this.turnOverlayRect = this.add.rectangle(0, 0, 1, 1, hex('#3366ff'), 0.5);
+  this.turnOverlayRect.setOrigin(0, 0);
+  this.turnOverlayRect.setDepth(30);
+  this.turnOverlayRect.setVisible(false);
+
+  this.turnOverlayText = this.add.text(0, 0, '', {
+    fontSize: '28px',
+    fontFamily: 'BoldPixels, Arial',
+    color: '#ffffff'
+  }).setOrigin(0.5);
+  this.turnOverlayText.setDepth(31);
+  this.turnOverlayText.setVisible(false);
+}
+
+/**
+ * Creates mobile info bars for compact UI mode
+ */
+export function createMobileBars(this: GameScene, layout: GameLayout): void {
+  const topBounds = layout.sections.mobileTopBar;
+  const bottomBounds = layout.sections.mobileBottomBar;
+
+  this.mobileTopBar = this.add.container(topBounds.centerX, topBounds.centerY).setDepth(60);
+  this.mobileTopBarBackground = this.add.rectangle(0, 0, topBounds.width, topBounds.height, hex('#9a9a9a'), 0.6);
+  this.mobileTopBarBackground.setOrigin(0.5);
+  this.mobileTopBar.add(this.mobileTopBarBackground);
+
+  this.mobileTopNameText = this.add.text(0, 0, this.opponentName, {
+    fontSize: `${12 * layout.panelScale}px`,
+    fontFamily: 'BoldPixels, Arial',
+    color: '#1a1a1a'
+  }).setOrigin(0, 0.5);
+  this.mobileTopBar.add(this.mobileTopNameText);
+
+  this.mobileTopClockIcon = this.add.image(0, 0, 'clock');
+  this.mobileTopStopwatchIcon = this.add.image(0, 0, 'stopwatch');
+  this.mobileTopEnergyIcon = this.add.image(0, 0, 'energy_circle');
+  this.mobileTopDisturbIcon = this.add.image(0, 0, 'switch_disturb');
+  this.mobileTopClockText = this.add.text(0, 0, '0:00', {
+    fontSize: `${12 * layout.panelScale}px`,
+    fontFamily: 'BoldPixels, Arial',
+    color: '#1a1a1a'
+  }).setOrigin(0, 0.5);
+  this.mobileTopStopwatchText = this.add.text(0, 0, '00', {
+    fontSize: `${12 * layout.panelScale}px`,
+    fontFamily: 'BoldPixels, Arial',
+    color: '#1a1a1a'
+  }).setOrigin(0, 0.5);
+  this.mobileTopEnergyText = this.add.text(0, 0, '0/0', {
+    fontSize: `${12 * layout.panelScale}px`,
+    fontFamily: 'BoldPixels, Arial',
+    color: '#1a1a1a'
+  }).setOrigin(0, 0.5);
+  this.mobileTopDisturbText = this.add.text(0, 0, '0', {
+    fontSize: `${12 * layout.panelScale}px`,
+    fontFamily: 'BoldPixels, Arial',
+    color: '#1a1a1a'
+  }).setOrigin(0, 0.5);
+  this.mobileTopBar.add([
+    this.mobileTopClockIcon,
+    this.mobileTopClockText,
+    this.mobileTopStopwatchIcon,
+    this.mobileTopStopwatchText,
+    this.mobileTopEnergyIcon,
+    this.mobileTopEnergyText,
+    this.mobileTopDisturbIcon,
+    this.mobileTopDisturbText
+  ]);
+
+  this.mobileBottomBar = this.add.container(bottomBounds.centerX, bottomBounds.centerY).setDepth(60);
+  this.mobileBottomBarBackground = this.add.rectangle(0, 0, bottomBounds.width, bottomBounds.height, hex('#9a9a9a'), 0.6);
+  this.mobileBottomBarBackground.setOrigin(0.5);
+  this.mobileBottomBar.add(this.mobileBottomBarBackground);
+
+  this.mobileBottomNameText = this.add.text(0, 0, this.playerName, {
+    fontSize: `${12 * layout.panelScale}px`,
+    fontFamily: 'BoldPixels, Arial',
+    color: '#1a1a1a'
+  }).setOrigin(0, 0.5);
+  this.mobileBottomBar.add(this.mobileBottomNameText);
+
+  this.mobileBottomClockIcon = this.add.image(0, 0, 'clock');
+  this.mobileBottomStopwatchIcon = this.add.image(0, 0, 'stopwatch');
+  this.mobileBottomEnergyIcon = this.add.image(0, 0, 'energy_circle');
+  this.mobileBottomDisturbIcon = this.add.image(0, 0, 'switch_disturb');
+  this.mobileBottomClockText = this.add.text(0, 0, '0:00', {
+    fontSize: `${12 * layout.panelScale}px`,
+    fontFamily: 'BoldPixels, Arial',
+    color: '#1a1a1a'
+  }).setOrigin(0, 0.5);
+  this.mobileBottomStopwatchText = this.add.text(0, 0, '00', {
+    fontSize: `${12 * layout.panelScale}px`,
+    fontFamily: 'BoldPixels, Arial',
+    color: '#1a1a1a'
+  }).setOrigin(0, 0.5);
+  this.mobileBottomEnergyText = this.add.text(0, 0, '0/0', {
+    fontSize: `${12 * layout.panelScale}px`,
+    fontFamily: 'BoldPixels, Arial',
+    color: '#1a1a1a'
+  }).setOrigin(0, 0.5);
+  this.mobileBottomDisturbText = this.add.text(0, 0, '0', {
+    fontSize: `${12 * layout.panelScale}px`,
+    fontFamily: 'BoldPixels, Arial',
+    color: '#1a1a1a'
+  }).setOrigin(0, 0.5);
+  this.mobileBottomBar.add([
+    this.mobileBottomClockIcon,
+    this.mobileBottomClockText,
+    this.mobileBottomStopwatchIcon,
+    this.mobileBottomStopwatchText,
+    this.mobileBottomEnergyIcon,
+    this.mobileBottomEnergyText,
+    this.mobileBottomDisturbIcon,
+    this.mobileBottomDisturbText
+  ]);
+
+  this.mobileControlledSquaresButton = createImageButton(
+    this,
+    0,
+    0,
+    'Controlled Squares',
+    'blue_button',
+    'blue_button_pressed',
+    () => {
+      // Hold events handle overlay visibility.
+    }
+  );
+  this.mobileControlledSquaresButton.on('pointerdown', () => this.showControlledSquaresOverlay());
+  this.mobileControlledSquaresButton.on('pointerup', () => this.hideControlledSquaresOverlay());
+  this.mobileControlledSquaresButton.on('pointerout', () => this.hideControlledSquaresOverlay());
+
+  this.mobileEventLogButton = createImageButton(
+    this,
+    0,
+    0,
+    'Event Log',
+    'yellow_button',
+    'yellow_button_pressed',
+    () => this.toggleMobileEventLog()
+  );
+
+  this.mobileBottomBar.add([this.mobileControlledSquaresButton, this.mobileEventLogButton]);
 }

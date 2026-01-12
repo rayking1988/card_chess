@@ -147,6 +147,12 @@ export class StopwatchComponent {
   /** Unique ID for texture naming */
   private textureId: string;
 
+  /** Base text color for the time display */
+  private baseTimeColor: string = '#ffffff05';
+
+  /** Whether threshold text should be visible */
+  private thresholdVisible: boolean = true;
+
   /**
    * Creates a new StopwatchComponent
    * 
@@ -241,6 +247,17 @@ export class StopwatchComponent {
    */
   setTime(seconds: number): void {
     this.currentTime = seconds;
+    this.updateDisplay();
+  }
+
+  /**
+   * Sets the base color for the time display
+   *
+   * @param color - Base text color when not in warning state
+   */
+  setBaseTimeColor(color: string): void {
+    this.baseTimeColor = color;
+    this.lastDisplayedTime = -1;
     this.updateDisplay();
   }
 
@@ -356,28 +373,26 @@ export class StopwatchComponent {
       
       // Apply warning colors based on progress
       if (currentWarningLevel === 'high') {
-        this.timeText.setColor(WARNING_COLORS.high);
         this.warningSprite = this.scene.add.image(0, 0, `${this.textureId}_warning_high`);
         this.container.addAt(this.warningSprite, 0);
       } else if (currentWarningLevel === 'medium') {
-        this.timeText.setColor(WARNING_COLORS.medium);
         this.warningSprite = this.scene.add.image(0, 0, `${this.textureId}_warning_medium`);
         this.container.addAt(this.warningSprite, 0);
       } else if (currentWarningLevel === 'low') {
-        this.timeText.setColor(WARNING_COLORS.low);
       } else {
-        this.timeText.setColor(WARNING_COLORS.normal);
       }
       
       // Update threshold indicator
-      const crossings = this.getThresholdCrossings();
-      if (crossings > 0) {
-        const plural = crossings > 1 ? 's' : '';
-        this.thresholdText.setText(`+${crossings} card${plural}`);
-        this.thresholdText.setColor('#66ff66');
-      } else {
-        this.thresholdText.setText(`Draw @ ${THRESHOLD_SECONDS}s`);
-        this.thresholdText.setColor('#888888');
+      if (this.thresholdVisible) {
+        const crossings = this.getThresholdCrossings();
+        if (crossings > 0) {
+          const plural = crossings > 1 ? 's' : '';
+          this.thresholdText.setText(`+${crossings} card${plural}`);
+          this.thresholdText.setColor('#66ff66');
+        } else {
+          this.thresholdText.setText(`Draw @ ${THRESHOLD_SECONDS}s`);
+          this.thresholdText.setColor('#888888');
+        }
       }
     }
     
@@ -385,6 +400,11 @@ export class StopwatchComponent {
     if (progressChanged || warningChanged) {
       this.lastProgressSegment = progressSegment;
       this.updateProgressArc();
+    }
+
+    if (timeChanged || warningChanged) {
+      const timeColor = this.currentTime >= 40 ? '#ff4444' : this.baseTimeColor;
+      this.timeText.setColor(timeColor);
     }
   }
   
@@ -537,6 +557,17 @@ export class StopwatchComponent {
    */
   setLabel(label: string): void {
     this.labelText.setText(label);
+    this.labelText.setVisible(label.trim().length > 0);
+  }
+
+  /**
+   * Sets visibility of the threshold text
+   *
+   * @param visible - Whether threshold text should be shown
+   */
+  setThresholdVisible(visible: boolean): void {
+    this.thresholdVisible = visible;
+    this.thresholdText.setVisible(visible);
   }
 
   /**

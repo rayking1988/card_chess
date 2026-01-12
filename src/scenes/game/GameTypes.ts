@@ -64,9 +64,16 @@ export interface GameLayout {
     leftPanel: SectionBounds;      // Decks and discards
     board: SectionBounds;          // Chess board
     rightPanel: SectionBounds;     // Clocks, stopwatch, energy
+    rightPanelTop: SectionBounds;  // Opponent UI
+    rightPanelMiddle: SectionBounds; // Player UI
+    rightPanelBottom: SectionBounds; // Controlled squares button
     eventLog: SectionBounds;       // Event log
+    eventLogTop: SectionBounds;    // Event log (top 2/3)
+    eventLogPreview: SectionBounds; // Preview area (bottom 1/3)
     topBar: SectionBounds;         // Opponent hand area
     bottomBar: SectionBounds;      // Player hand area
+    mobileTopBar: SectionBounds;   // Mobile info bar (top)
+    mobileBottomBar: SectionBounds; // Mobile info bar (bottom)
   };
   
   // Legacy positions (computed from sections)
@@ -105,4 +112,6 @@ export interface GameLayout {
   width: number;
   height: number;
   padding: number;
+  isMobile: boolean;
+  mobileBarHeight: number;
 }

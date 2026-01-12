@@ -59,6 +59,7 @@ export interface MoveResult {
   san?: string;
   from: string;
   to: string;
+  needsPromotion?: boolean;
 }
 
 /**
@@ -240,7 +241,9 @@ export class ChessBoardWrapper {
    */
   getValidMoves(square: Square): Square[] {
     const moves = this.chess.moves({ square, verbose: true });
-    return moves.map(m => m.to as Square);
+    return moves
+      .filter(move => !(move.flags?.includes('k') || move.flags?.includes('q')))
+      .map(m => m.to as Square);
   }
 
   /**
@@ -254,7 +257,49 @@ export class ChessBoardWrapper {
    */
   isValidMove(from: Square, to: Square): boolean {
     const moves = this.chess.moves({ square: from, verbose: true });
-    return moves.some(m => m.to === to);
+    return moves.some(m => m.to === to && !(m.flags?.includes('k') || m.flags?.includes('q')));
+  }
+
+  /**
+   * Checks if a move is a promotion move
+   *
+   * @param from - Source square
+   * @param to - Destination square
+   * @returns True if move is a promotion
+   */
+  isPromotionMove(from: Square, to: Square): boolean {
+    const moves = this.chess.moves({ square: from, verbose: true });
+    const match = moves.find(m => m.to === to);
+    return !!match?.promotion;
+  }
+
+  /**
+   * Gets available promotion options for a move
+   *
+   * @param from - Source square
+   * @param to - Destination square
+   * @returns Array of promotion piece symbols
+   */
+  getPromotionOptions(from: Square, to: Square): PieceSymbol[] {
+    const moves = this.chess.moves({ square: from, verbose: true });
+    return moves
+      .filter(m => m.to === to && m.promotion)
+      .map(m => m.promotion as PieceSymbol);
+  }
+
+  /**
+   * Checks if promoting to a piece would give check
+   *
+   * @param from - Source square
+   * @param to - Destination square
+   * @param promotion - Promotion piece symbol
+   * @returns True if the promotion gives check
+   */
+  wouldPromotionGiveCheck(from: Square, to: Square, promotion: PieceSymbol): boolean {
+    const clone = new Chess(this.chess.fen());
+    const move = clone.move({ from, to, promotion });
+    if (!move) return false;
+    return clone.isCheck();
   }
 
   /**
@@ -273,14 +318,27 @@ export class ChessBoardWrapper {
    * 
    * Used by: GameScene.handleLocalMove(), handleOpponentMovePiece()
    */
-  makeMove(from: Square, to: Square): MoveResult {
+  makeMove(from: Square, to: Square, promotion?: PieceSymbol): MoveResult {
     // Check for king capture before move (Requirement 2.3)
     const targetPiece = this.chess.get(to);
     const isKingCapture = targetPiece?.type === 'k';
+
+    const moves = this.chess.moves({ square: from, verbose: true });
+    const match = moves.find(m => m.to === to);
+    if (!match) {
+      return { success: false, from, to };
+    }
+    if (match.flags?.includes('k') || match.flags?.includes('q')) {
+      return { success: false, from, to };
+    }
+    if (match.promotion && !promotion) {
+      return { success: false, from, to, needsPromotion: true };
+    }
     
     try {
-      // Auto-promote to queen for simplicity
-      const move = this.chess.move({ from, to, promotion: 'q' });
+      const move = match.promotion
+        ? this.chess.move({ from, to, promotion })
+        : this.chess.move({ from, to });
       
       if (move) {
         return {

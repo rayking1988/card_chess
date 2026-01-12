@@ -163,6 +163,7 @@ export class FocusDisturbToggleComponent {
       fontFamily: 'BoldPixels, Arial',
       color: '#cccccc'
     }).setOrigin(0.5);
+    this.labelText.setVisible(this.labelText.text.trim().length > 0);
     this.container.add(this.labelText);
     
     this.updateVisuals();
@@ -348,6 +349,7 @@ export class FocusDisturbToggleComponent {
    */
   setLabel(label: string): void {
     this.labelText.setText(label);
+    this.labelText.setVisible(label.trim().length > 0);
   }
 
   /**

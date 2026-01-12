@@ -66,7 +66,7 @@ export function handleNetworkAction(this: GameScene, action: GameAction): void {
       this.handleOpponentPlayCard(action.cardId, action.cardName, action.target, action.pieceType, action.effectAction);
       break;
     case 'MOVE_PIECE':
-      this.handleOpponentMovePiece(action.from, action.to);
+      this.handleOpponentMovePiece(action.from, action.to, action.promotion);
       break;
     case 'MULLIGAN':
       this.handleOpponentMulligan();
@@ -86,7 +86,16 @@ export function handleNetworkAction(this: GameScene, action: GameAction): void {
       this.updateUIFromState({ sendStats: false });
       break;
     case 'PLAYER_STATS_SYNC':
-      this.handleOpponentStatsSync(action.clock, action.stopwatch, action.mode, action.deckCount, action.discardCount);
+      this.handleOpponentStatsSync(
+        action.clock,
+        action.stopwatch,
+        action.mode,
+        action.deckCount,
+        action.discardCount,
+        action.energy,
+        action.energyCap,
+        action.disturb
+      );
       break;
   }
 }
@@ -100,12 +109,27 @@ export function handleOpponentStatsSync(
   stopwatch: number,
   mode: 'focus' | 'disturb',
   deckCount: number,
-  discardCount: number
+  discardCount: number,
+  energy: number,
+  energyCap: number,
+  disturb: number
 ): void {
   this.opponentClockTime = clock;
   this.opponentStopwatchTime = stopwatch;
   this.opponentMode = mode;
   this.opponentDeckCount = deckCount;
+  this.opponentEnergy = energy;
+  this.opponentEnergyCap = energyCap;
+  this.opponentDisturbTags = disturb;
+
+  const opponentColor = this.localColor === 'white' ? 'black' : 'white';
+  const opponentState = this.gameStateManager.getPlayer(opponentColor);
+  opponentState.clock = clock;
+  opponentState.stopwatch = stopwatch;
+  opponentState.mode = mode;
+  opponentState.energy = energy;
+  opponentState.energyCap = energyCap;
+  opponentState.disturbTags = disturb;
 
   // If animation is in progress, store pending count to apply later
   // Otherwise update immediately
@@ -137,7 +161,10 @@ export function sendLocalPlayerStats(this: GameScene): void {
     localPlayer.stopwatch,
     localPlayer.mode,
     localPlayer.deck.length,
-    localPlayer.discard.length
+    localPlayer.discard.length,
+    localPlayer.energy,
+    localPlayer.energyCap,
+    localPlayer.disturbTags
   );
 }
 
@@ -212,11 +239,11 @@ export function handleOpponentPlayCard(
  * @param from - Source square
  * @param to - Destination square
  */
-export function handleOpponentMovePiece(this: GameScene, from: string, to: string): void {
+export function handleOpponentMovePiece(this: GameScene, from: string, to: string, promotion?: string): void {
   const opponentColor = this.localColor === 'white' ? 'black' : 'white';
   const movingPiece = this.chessBoard.getWrapper().getPiece(from as Square);
   const capturedPiece = this.chessBoard.getWrapper().getPiece(to as Square);
-  const result = this.chessBoard.makeMove(from as Square, to as Square);
+  const result = this.chessBoard.makeMove(from as Square, to as Square, promotion as PieceSymbol | undefined);
 
   if (result.success) {
     if (movingPiece) {

@@ -38,7 +38,7 @@ export interface NetworkMessage {
  */
 export type GameAction =
   | { type: 'PLAY_CARD'; cardId: string; cardName: string; target?: string; pieceType?: string; effectAction?: string }
-  | { type: 'MOVE_PIECE'; from: string; to: string }
+  | { type: 'MOVE_PIECE'; from: string; to: string; promotion?: string }
   | { type: 'MULLIGAN' }
   | { type: 'READY' }
   | { type: 'END_TURN' }
@@ -48,7 +48,7 @@ export type GameAction =
   | { type: 'REMATCH_ACCEPT' }
   | { type: 'REMATCH_DECLINE' }
   | { type: 'STATE_SYNC'; state: GameState }
-  | { type: 'PLAYER_STATS_SYNC'; clock: number; stopwatch: number; mode: 'focus' | 'disturb'; deckCount: number; discardCount: number }
+  | { type: 'PLAYER_STATS_SYNC'; clock: number; stopwatch: number; mode: 'focus' | 'disturb'; deckCount: number; discardCount: number; energy: number; energyCap: number; disturb: number }
   | { type: 'EVENT_LOG'; entries: EventLogEntry[] }
   | { type: 'PING'; timestamp: number }
   | { type: 'PONG'; timestamp: number }

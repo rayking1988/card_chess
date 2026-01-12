@@ -4,7 +4,7 @@
  * @module scenes/game/GameSceneBoard
  */
 
-import { Square } from 'chess.js';
+import { Square, PieceSymbol } from 'chess.js';
 import type { PlayerColor } from '../../managers/GameStateManager';
 import { MAX_HAND_SIZE } from './GameConstants';
 import type { GameScene } from '../GameScene';
@@ -32,7 +32,7 @@ export function setupChessBoardCallbacks(this: GameScene): void {
  * @param from - Source square
  * @param to - Destination square
  */
-export function handleLocalMove(this: GameScene, from: Square, to: Square): void {
+export function handleLocalMove(this: GameScene, from: Square, to: Square, promotion?: PieceSymbol): void {
   // In single-player mode (no network), allow controlling both sides
   const isSinglePlayer = !this.networkManager;
 
@@ -84,12 +84,23 @@ export function handleLocalMove(this: GameScene, from: Square, to: Square): void
     return;
   }
 
+  if (this.pendingPromotion && !promotion) {
+    return;
+  }
+
   // Attempt the move
   const movingPiece = this.chessBoard.getWrapper().getPiece(from);
   const capturedPiece = this.chessBoard.getWrapper().getPiece(to);
-  const result = this.chessBoard.makeMove(from, to);
+  const needsPromotion = this.chessBoard.getWrapper().isPromotionMove(from, to);
+  if (needsPromotion && !promotion) {
+    this.showPromotionPicker(from, to, movingColor);
+    return;
+  }
+
+  const result = this.chessBoard.makeMove(from, to, promotion);
 
   if (result.success) {
+    this.pendingPromotion = null;
     if (movingPiece) {
       this.animatePieceMove(from, to, movingPiece, capturedPiece);
     }
@@ -102,7 +113,7 @@ export function handleLocalMove(this: GameScene, from: Square, to: Square): void
 
     // Send to network (only if it's our piece in multiplayer)
     if (!isSinglePlayer) {
-      this.networkManager?.sendMovePiece(from, to);
+      this.networkManager?.sendMovePiece(from, to, promotion);
     }
 
     // Check for king capture (Requirement 3.7)
@@ -121,13 +132,23 @@ export function handleLocalMove(this: GameScene, from: Square, to: Square): void
     } else {
       // End turn after move (Requirement 3.5)
       this.logEvent('system', `Ending ${movingColor}'s turn...`);
+      if (!isSinglePlayer) {
+        this.sendLocalPlayerStats();
+      }
       this.gameStateManager.endTurn();
+      if (this.networkManager) {
+        const opponentColor = this.localColor === 'white' ? 'black' : 'white';
+        this.opponentDisturbTags = this.gameStateManager.getPlayer(opponentColor).disturbTags;
+      }
       const newTurn = this.gameStateManager.getCurrentTurn();
       this.logEvent('system', `Now ${newTurn}'s turn`);
       if (!isSinglePlayer) {
         this.networkManager?.sendEndTurn();
       }
     }
+  } else if (result.needsPromotion) {
+    this.showPromotionPicker(from, to, movingColor);
+    return;
   }
 
   this.updateUIFromState();

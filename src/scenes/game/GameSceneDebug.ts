@@ -19,12 +19,15 @@ export function createDebugOverlays(this: GameScene, layout: GameLayout): void {
 
   // Define sections with their colors (matching the section names in layout.sections)
   const sectionColors: Array<{ name: string; color: number }> = [
-    { name: 'leftPanel', color: 0x00ff00 },    // Green - Left panel (decks/discards)
-    { name: 'board', color: 0xff0000 },        // Red - Board area
-    { name: 'rightPanel', color: 0x0000ff },   // Blue - Right panel (clocks/energy)
-    { name: 'eventLog', color: 0xffff00 },     // Yellow - Event log
-    { name: 'topBar', color: 0x00ffff },       // Cyan - Opponent's hand area
-    { name: 'bottomBar', color: 0xff00ff },    // Magenta - Player's hand area
+    { name: 'leftPanel', color: 0x00ff00 },         // Green - Left panel (decks/discards)
+    { name: 'board', color: 0xff0000 },             // Red - Board area
+    { name: 'rightPanelTop', color: 0x223b88 },     // Deep blue - Opponent panel
+    { name: 'rightPanelMiddle', color: 0x2b4e99 },  // Blue - Player panel
+    { name: 'rightPanelBottom', color: 0x1a2f66 },  // Dark blue - Controls
+    { name: 'eventLogTop', color: 0xffff00 },       // Yellow - Event log
+    { name: 'eventLogPreview', color: 0xffbb55 },   // Orange - Preview
+    { name: 'topBar', color: 0x00ffff },            // Cyan - Opponent's hand area
+    { name: 'bottomBar', color: 0xff00ff },         // Magenta - Player's hand area
   ];
 
   for (const section of sectionColors) {
@@ -44,7 +47,17 @@ export function createDebugOverlays(this: GameScene, layout: GameLayout): void {
  * @param layout - Current layout calculations
  */
 export function updateDebugOverlays(this: GameScene, layout: GameLayout): void {
-  const sectionNames = ['leftPanel', 'board', 'rightPanel', 'eventLog', 'topBar', 'bottomBar'] as const;
+  const sectionNames = [
+    'leftPanel',
+    'board',
+    'rightPanelTop',
+    'rightPanelMiddle',
+    'rightPanelBottom',
+    'eventLogTop',
+    'eventLogPreview',
+    'topBar',
+    'bottomBar'
+  ] as const;
 
   for (const name of sectionNames) {
     const rect = this.debugOverlays.get(name);

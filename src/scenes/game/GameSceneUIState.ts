@@ -8,6 +8,14 @@ import type { StopwatchComponent } from '../../components/Stopwatch';
 import type { GameScene } from '../GameScene';
 import type { UISnapshot } from './GameTypes';
 import type { PlayerColor } from '../../managers/GameStateManager';
+import { calculateControlPower } from '../../utils/controlPower';
+import { formatTime } from '../../components/Clock';
+import { hex } from '../../utils/colors';
+
+function formatStopwatchTime(seconds: number): string {
+  const safeSeconds = Math.max(0, Math.floor(seconds));
+  return safeSeconds.toString().padStart(2, '0');
+}
 
 /**
  * Sets up callback for game state changes
@@ -46,6 +54,9 @@ export function updateUIFromState(this: GameScene, options: { sendStats?: boolea
   const opponentDeckCount = this.networkManager ? this.opponentDeckCount : opponentPlayer.deck.length;
   const opponentDiscardCount = this.networkManager ? this.opponentDiscardCount : opponentPlayer.discard.length;
   const opponentHandCount = this.networkManager ? this.opponentHandCount : opponentPlayer.hand.length;
+  const opponentEnergy = this.networkManager ? this.opponentEnergy : opponentPlayer.energy;
+  const opponentEnergyCap = this.networkManager ? this.opponentEnergyCap : opponentPlayer.energyCap;
+  const opponentDisturb = this.networkManager ? this.opponentDisturbTags : opponentPlayer.disturbTags;
 
   // Update clocks
   this.playerClock.setTime(localPlayer.clock);
@@ -55,17 +66,23 @@ export function updateUIFromState(this: GameScene, options: { sendStats?: boolea
   const isLocalTurn = state.currentTurn === this.localColor;
   this.playerClock.setActive(isLocalTurn);
   this.opponentClock.setActive(!isLocalTurn);
+  this.updateTurnOverlay(state.currentTurn);
 
   // Update stopwatches
   this.playerStopwatch.setTime(localPlayer.stopwatch);
   this.opponentStopwatch.setTime(opponentStopwatch);
 
-  // Update energy bar
+  // Update energy bars
   this.energyBar.setEnergy(localPlayer.energy, localPlayer.energyCap);
+  this.opponentEnergyBar?.setEnergy(opponentEnergy, opponentEnergyCap);
 
   // Update Focus/Disturb toggles
   this.playerFocusDisturb.setMode(localPlayer.mode);
   this.opponentFocusDisturb.setMode(opponentMode);
+
+  // Update disturb counters
+  this.playerDisturbCounter?.setValue(localPlayer.disturbTags);
+  this.opponentDisturbCounter?.setValue(opponentDisturb);
 
   // Update opponent deck counts
   this.updateOpponentDeckCounts(opponentDeckCount, opponentDiscardCount);
@@ -99,6 +116,25 @@ export function updateUIFromState(this: GameScene, options: { sendStats?: boolea
 
   // Update card count
   this.updateCardCount();
+
+  if (this.mobileTopNameText) {
+    this.mobileTopNameText.setText(this.opponentName);
+  }
+  if (this.mobileBottomNameText) {
+    this.mobileBottomNameText.setText(this.playerName);
+  }
+  this.mobileTopClockText?.setText(formatTime(opponentClock));
+  this.mobileBottomClockText?.setText(formatTime(localPlayer.clock));
+  this.mobileTopStopwatchText?.setText(formatStopwatchTime(opponentStopwatch));
+  this.mobileBottomStopwatchText?.setText(formatStopwatchTime(localPlayer.stopwatch));
+  this.mobileTopEnergyText?.setText(`${opponentEnergy}/${opponentEnergyCap}`);
+  this.mobileBottomEnergyText?.setText(`${localPlayer.energy}/${localPlayer.energyCap}`);
+  this.mobileTopDisturbText?.setText(`${opponentDisturb}`);
+  this.mobileBottomDisturbText?.setText(`${localPlayer.disturbTags}`);
+
+  if (this.currentLayout) {
+    this.positionMobileBars(this.currentLayout);
+  }
 
   // Update chess board position
   if (state.boardFEN !== this.chessBoard.getPosition()) {
@@ -267,8 +303,10 @@ export function animateCardDraw(this: GameScene, side: 'local' | 'opponent', cou
   const layout = this.currentLayout;
   if (!layout || count <= 0) return;
 
-  const deckSprite = side === 'local' ? this.playerDeckSprite : this.opponentDeckSprite;
-  if (!deckSprite) return;
+  // Use deck position from layout instead of sprite
+  const deckPos = side === 'local' 
+    ? { x: layout.leftPanelX, y: layout.playerDeckY }
+    : { x: layout.leftPanelX, y: layout.opponentDeckY };
   const handPos = side === 'local'
     ? { x: layout.cardHandX, y: layout.cardHandY - 40 * layout.handScale }
     : { x: layout.opponentHandX, y: layout.opponentHandY + 10 * layout.panelScale };
@@ -278,12 +316,12 @@ export function animateCardDraw(this: GameScene, side: 'local' | 'opponent', cou
   const startX = handPos.x - ((Math.min(count, 3) - 1) * spacing) / 2;
 
   for (let i = 0; i < Math.min(count, 3); i++) {
-    const card = this.add.image(deckSprite.x, deckSprite.y, 'card_back');
+    const card = this.add.image(deckPos.x, deckPos.y, 'card_back');
     card.setScale(scale);
     card.setDepth(30);
 
     const toPos = { x: startX + i * spacing, y: handPos.y };
-    this.animations.arcMove(card, { x: deckSprite.x, y: deckSprite.y }, toPos, 120 * layout.panelScale, {
+    this.animations.arcMove(card, { x: deckPos.x, y: deckPos.y }, toPos, 120 * layout.panelScale, {
       duration: 350,
       onComplete: () => card.destroy()
     });
@@ -297,36 +335,11 @@ export function animateCardDraw(this: GameScene, side: 'local' | 'opponent', cou
  * @param side - Which player is discarding ('local' or 'opponent')
  * @param count - Number of cards being discarded
  */
-export function animateCardDiscard(this: GameScene, side: 'local' | 'opponent', count: number): void {
+export function animateCardDiscard(this: GameScene, _side: 'local' | 'opponent', count: number): void {
   const layout = this.currentLayout;
   if (!layout || count <= 0) return;
-
-  const discardY = side === 'local' ? layout.playerDiscardY : layout.opponentDiscardY;
-  const handPos = side === 'local'
-    ? { x: layout.cardHandX, y: layout.cardHandY - 20 * layout.handScale }
-    : { x: layout.opponentHandX, y: layout.opponentHandY };
-
-  const scale = 0.26 * layout.panelScale;
-  const spacing = 18 * layout.panelScale;
-  const startX = handPos.x - ((Math.min(count, 2) - 1) * spacing) / 2;
-
-  for (let i = 0; i < Math.min(count, 2); i++) {
-    const card = this.add.image(startX + i * spacing, handPos.y, 'card_back');
-    card.setScale(scale);
-    card.setDepth(30);
-
-    this.tweens.add({
-      targets: card,
-      x: layout.leftPanelX,
-      y: discardY,
-      scaleX: scale * 0.6,
-      scaleY: scale * 0.6,
-      alpha: 0.5,
-      duration: 250,
-      ease: 'Quad.easeOut',
-      onComplete: () => card.destroy()
-    });
-  }
+  // Discard fly-in animation removed to avoid showing card backs.
+  return;
 }
 
 /**
@@ -404,8 +417,8 @@ export function showTurnBanner(this: GameScene, turn: PlayerColor): void {
         targets: this.turnBanner,
         alpha: 0,
         y: layout.turnBannerY + 10 * layout.panelScale,
-        duration: 600,
-        delay: 900,
+        duration: 400,
+        delay: 400,
         ease: 'Quad.easeIn',
         onComplete: () => {
           if (this.turnBanner) {
@@ -416,6 +429,64 @@ export function showTurnBanner(this: GameScene, turn: PlayerColor): void {
       });
     }
   });
+}
+
+/**
+ * Updates the persistent turn overlay across the board
+ *
+ * @param turn - Which player's turn it is
+ */
+export function updateTurnOverlay(this: GameScene, turn: PlayerColor): void {
+  if (!this.turnOverlayRect || !this.turnOverlayText) return;
+  if (this.lastTurnOverlayTurn === turn) return;
+  this.lastTurnOverlayTurn = turn;
+
+  const isLocalTurn = turn === this.localColor;
+  const text = isLocalTurn ? 'YOUR TURN' : 'OPPONENT\'S TURN';
+  const color = isLocalTurn ? '#3377ff' : '#ff3333';
+
+  this.turnOverlayRect.setFillStyle(hex(color), 0.5);
+  this.turnOverlayText.setText(text);
+  this.turnOverlayRect.setVisible(true);
+  this.turnOverlayText.setVisible(true);
+
+  if (this.turnOverlayHideEvent) {
+    this.turnOverlayHideEvent.remove(false);
+  }
+  this.turnOverlayHideEvent = this.time.delayedCall(1000, () => {
+    this.turnOverlayRect?.setVisible(false);
+    this.turnOverlayText?.setVisible(false);
+  });
+}
+
+/**
+ * Shows controlled squares overlay while button is held
+ */
+export function showControlledSquaresOverlay(this: GameScene): void {
+  const controlMap = calculateControlPower(this.chessBoard.getWrapper());
+  this.chessBoard.renderControlOverlay(controlMap, {
+    whiteColor: '#ffffff',
+    blackColor: '#000000',
+    alpha: 0.5,
+    usePowerAlpha: false
+  });
+}
+
+/**
+ * Hides controlled squares overlay
+ */
+export function hideControlledSquaresOverlay(this: GameScene): void {
+  this.chessBoard.clearControlOverlay();
+}
+
+/**
+ * Toggles mobile event log overlay visibility
+ */
+export function toggleMobileEventLog(this: GameScene): void {
+  this.isMobileEventLogVisible = !this.isMobileEventLogVisible;
+  if (this.currentLayout) {
+    this.positionEventLog(this.currentLayout);
+  }
 }
 
 /**

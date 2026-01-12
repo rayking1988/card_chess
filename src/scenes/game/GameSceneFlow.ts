@@ -300,7 +300,12 @@ export function discardCard(this: GameScene, card: Card): void {
       this.exitDiscardMode();
 
       // Now end the turn
+      this.sendLocalPlayerStats();
       this.gameStateManager.endTurn();
+      if (this.networkManager) {
+        const opponentColor = this.localColor === 'white' ? 'black' : 'white';
+        this.opponentDisturbTags = this.gameStateManager.getPlayer(opponentColor).disturbTags;
+      }
       this.networkManager?.sendEndTurn();
     } else {
       // Update prompt

@@ -494,8 +494,8 @@ export class NetworkManager {
    * 
    * Used by: GameScene.handlePieceMove()
    */
-  sendMovePiece(from: string, to: string): void {
-    this.sendGameAction({ type: 'MOVE_PIECE', from, to });
+  sendMovePiece(from: string, to: string, promotion?: string): void {
+    this.sendGameAction({ type: 'MOVE_PIECE', from, to, promotion });
   }
 
   /**
@@ -547,8 +547,27 @@ export class NetworkManager {
    * 
    * Used by: GameScene.updateUI()
    */
-  sendPlayerStats(clock: number, stopwatch: number, mode: 'focus' | 'disturb', deckCount: number, discardCount: number): void {
-    this.sendGameAction({ type: 'PLAYER_STATS_SYNC', clock, stopwatch, mode, deckCount, discardCount });
+  sendPlayerStats(
+    clock: number,
+    stopwatch: number,
+    mode: 'focus' | 'disturb',
+    deckCount: number,
+    discardCount: number,
+    energy: number,
+    energyCap: number,
+    disturb: number
+  ): void {
+    this.sendGameAction({
+      type: 'PLAYER_STATS_SYNC',
+      clock,
+      stopwatch,
+      mode,
+      deckCount,
+      discardCount,
+      energy,
+      energyCap,
+      disturb
+    });
   }
 
   /**

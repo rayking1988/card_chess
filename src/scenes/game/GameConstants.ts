@@ -29,7 +29,7 @@ export const BASE_PADDING = 16;
 export const MAX_HAND_SIZE = 7;
 
 /** Maximum visual layers for deck/discard pile stacking effect */
-export const MAX_PILE_LAYERS = 6;
+export const MAX_PILE_LAYERS = 12;
 
 /** Reference width for UI scaling calculations */
 export const REF_WIDTH = 1920;

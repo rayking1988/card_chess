@@ -142,6 +142,9 @@ export class CardHandComponent {
   
   /** Currently hovered card component */
   private hoveredCard: CardComponent | null = null;
+
+  /** Whether preview card should be shown */
+  private previewEnabled: boolean = true;
   
   /** Whether card interaction is enabled */
   private isInteractive: boolean = false;
@@ -154,6 +157,12 @@ export class CardHandComponent {
   
   /** Targeting component for drag/arrow mechanics */
   private targeting: CardTargetingComponent | null = null;
+  
+  /** Section width for constraining hand */
+  private sectionWidth: number = 0;
+  
+  /** Section height for constraining hand */
+  private sectionHeight: number = 0;
   
   /* ============================================
    * EVENT CALLBACKS
@@ -458,11 +467,12 @@ export class CardHandComponent {
    * 
    * Algorithm:
    * 1. Clear existing card components
-   * 2. Calculate fan positions for all cards
-   * 3. Create CardComponent for each card
-   * 4. Store original positions for hover reset
-   * 5. Sort by depth for proper layering
-   * 6. Re-enable interaction if needed
+   * 2. Calculate card scale based on section size
+   * 3. Calculate fan positions for all cards
+   * 4. Create CardComponent for each card
+   * 5. Store original positions for hover reset
+   * 6. Sort by depth for proper layering
+   * 7. Re-enable interaction if needed
    * 
    * @private
    */
@@ -472,8 +482,11 @@ export class CardHandComponent {
     
     if (this.cardData.length === 0) return;
     
+    // Calculate effective scale based on section size
+    const effectiveScale = this.calculateEffectiveScale();
+    
     // Calculate fan positions
-    const positions = this.calculateFanPositions(this.cardData.length);
+    const positions = this.calculateFanPositions(this.cardData.length, effectiveScale);
     
     // Create card components
     for (let i = 0; i < this.cardData.length; i++) {
@@ -484,7 +497,7 @@ export class CardHandComponent {
         pos.y,
         this.cardData[i],
         false,
-        CARD_SCALE * this.handScale
+        pos.scale
       );
       
       cardComponent.setRotation(pos.rotation);
@@ -495,7 +508,7 @@ export class CardHandComponent {
       (cardComponent as CardComponentWithOriginal).originalY = pos.y;
       (cardComponent as CardComponentWithOriginal).originalRotation = pos.rotation;
       (cardComponent as CardComponentWithOriginal).originalDepth = i;
-      (cardComponent as CardComponentWithOriginal).originalScale = CARD_SCALE * this.handScale;
+      (cardComponent as CardComponentWithOriginal).originalScale = pos.scale;
       
       this.cards.push(cardComponent);
       this.container.add(cardComponent.getContainer());
@@ -511,54 +524,97 @@ export class CardHandComponent {
   }
 
   /**
-   * Calculates fan positions for cards
+   * Calculates effective scale to fit cards within section
    * 
-   * Algorithm:
-   * 1. Single card: center position, no rotation
-   * 2. Multiple cards:
-   *    a. Calculate total spread (capped at MAX_FAN_ANGLE)
-   *    b. Distribute cards evenly across spread
-   *    c. Position on arc using sin/cos
-   *    d. Apply slight rotation for fan effect
-   * 
-   * @param cardCount - Number of cards to position
-   * @returns Array of position objects with x, y, rotation
+   * @returns Scale factor for cards
    * @private
    */
-  private calculateFanPositions(cardCount: number): Array<{ x: number; y: number; rotation: number }> {
-    const positions: Array<{ x: number; y: number; rotation: number }> = [];
+  private calculateEffectiveScale(): number {
+    if (this.sectionWidth <= 0 || this.sectionHeight <= 0) {
+      return CARD_SCALE * this.handScale;
+    }
+    
+    const cardCount = Math.max(1, this.cardData.length);
+    const baseCardWidth = CARD_WIDTH * CARD_SCALE;
+    const baseCardHeight = CARD_HEIGHT * CARD_SCALE;
+    
+    // Calculate how much horizontal space we need for the fan
+    const overlapFactor = 0.35;
+    const totalWidthNeeded = baseCardWidth + (cardCount - 1) * baseCardWidth * overlapFactor;
+    
+    // Calculate scale to fit within section width
+    const widthPadding = this.sectionWidth * 0.05;
+    const availableWidth = this.sectionWidth - widthPadding * 2;
+    const scaleForWidth = availableWidth / totalWidthNeeded;
+    
+    // Calculate scale to fit within section height (use more padding for smaller cards)
+    const heightPadding = this.sectionHeight * 0.15;
+    const availableHeight = this.sectionHeight - heightPadding * 2;
+    const scaleForHeight = availableHeight / baseCardHeight;
+    
+    // Use the smaller scale to ensure cards fit both dimensions
+    const constrainedScale = Math.min(scaleForWidth, scaleForHeight);
+    
+    // Apply a reduction factor to make cards smaller overall
+    const reductionFactor = 0.7;
+    return Math.max(0.8, Math.min(0.5, constrainedScale * this.handScale * reductionFactor));
+  }
+
+  /**
+   * Calculates fan positions for cards, constrained to section size
+   * 
+   * @param cardCount - Number of cards to position
+   * @param effectiveScale - Scale factor for cards
+   * @returns Array of position objects with x, y, rotation, scale
+   * @private
+   */
+  private calculateFanPositions(cardCount: number, effectiveScale: number): Array<{ x: number; y: number; rotation: number; scale: number }> {
+    const positions: Array<{ x: number; y: number; rotation: number; scale: number }> = [];
     
     if (cardCount === 0) return positions;
     
     if (cardCount === 1) {
-      // Single card centered
       positions.push({
         x: this.centerX,
         y: this.centerY,
-        rotation: 0
+        rotation: 0,
+        scale: effectiveScale
       });
       return positions;
     }
     
-    // Calculate total spread angle (capped at MAX_FAN_ANGLE)
+    // Calculate spread based on section width or default
+    let maxSpread: number;
+    if (this.sectionWidth > 0) {
+      const cardWidth = CARD_WIDTH * effectiveScale;
+      // Use smaller spread to bring cards closer together (40% of available space)
+      maxSpread = (this.sectionWidth - cardWidth) * 0.7;
+    } else {
+      maxSpread = FAN_RADIUS * 0.3;
+    }
+    
+    // Calculate total spread angle
     const totalAngle = Math.min((cardCount - 1) * FAN_SPREAD_ANGLE, MAX_FAN_ANGLE);
     const startAngle = -totalAngle / 2;
     const angleStep = cardCount > 1 ? totalAngle / (cardCount - 1) : 0;
+    
+    // Calculate horizontal spacing
+    const spacing = maxSpread / (cardCount - 1);
+    const startX = this.centerX - maxSpread / 2;
     
     for (let i = 0; i < cardCount; i++) {
       const angle = startAngle + (i * angleStep);
       const radians = (angle * Math.PI) / 180;
       
-      // Calculate position on arc
-      // X: horizontal spread using sine
-      // Y: vertical arc using cosine (cards at edges are slightly higher)
-      const x = this.centerX + Math.sin(radians) * FAN_RADIUS * 0.3;
-      const y = this.centerY - Math.cos(radians) * FAN_RADIUS * 0.1 + Math.abs(angle) * 0.5;
+      const x = startX + i * spacing;
+      const arcHeight = this.sectionHeight > 0 ? this.sectionHeight * 0.05 : 20;
+      const y = this.centerY + Math.abs(angle / MAX_FAN_ANGLE) * arcHeight;
       
       positions.push({
         x,
         y,
-        rotation: radians * 0.5 // Slight rotation for fan effect
+        rotation: radians * 0.3,
+        scale: effectiveScale
       });
     }
     
@@ -825,6 +881,9 @@ export class CardHandComponent {
    * @private
    */
   private showPreview(cardData: CardData): void {
+    if (!this.previewEnabled) {
+      return;
+    }
     this.hidePreview();
     
     this.previewCard = new CardComponent(
@@ -901,6 +960,25 @@ export class CardHandComponent {
    */
 
   /**
+   * Sets the section size for constraining the hand
+   * Cards will be scaled and positioned to fit within this size
+   * 
+   * @param centerX - Center X position
+   * @param centerY - Center Y position  
+   * @param width - Section width
+   * @param height - Section height
+   * 
+   * Used by: GameScene.positionCardHand()
+   */
+  setSectionSize(centerX: number, centerY: number, width: number, height: number): void {
+    this.centerX = centerX;
+    this.centerY = centerY;
+    this.sectionWidth = width;
+    this.sectionHeight = height;
+    this.rebuildHand();
+  }
+
+  /**
    * Sets the hand center position
    * 
    * @param x - New X coordinate
@@ -925,6 +1003,18 @@ export class CardHandComponent {
     this.previewY = y;
     if (this.previewCard) {
       this.previewCard.setPosition(x, y);
+    }
+  }
+
+  /**
+   * Enables or disables preview display
+   *
+   * @param enabled - Whether preview should be shown on hover
+   */
+  setPreviewEnabled(enabled: boolean): void {
+    this.previewEnabled = enabled;
+    if (!enabled) {
+      this.hidePreview();
     }
   }
 

@@ -50,6 +50,7 @@ import type { CardHandComponent } from '../components/CardHand';
 import type { ClockComponent } from '../components/Clock';
 import type { StopwatchComponent } from '../components/Stopwatch';
 import type { EnergyBarComponent } from '../components/EnergyBar';
+import type { DisturbCounterComponent } from '../components/DisturbCounter';
 import type { EventLogComponent } from '../components/EventLog';
 import type { FocusDisturbToggleComponent } from '../components/FocusDisturbToggle';
 import type { CardComponent } from '../components/Card';
@@ -69,6 +70,7 @@ import {
   positionBoard,
   positionEventLog,
   positionRightPanel,
+  positionMobileBars,
   positionLeftPanel,
   positionOpponentHand,
   updateOpponentHandDisplay,
@@ -76,6 +78,7 @@ import {
   positionCardHand,
   positionCardCount,
   positionTurnBanner,
+  positionTurnOverlay,
   positionOverlays
 } from './game/GameSceneLayout';
 import {
@@ -87,7 +90,9 @@ import {
   createNameplates,
   createCardHand,
   createCardCountIndicator,
-  createTurnBanner
+  createTurnBanner,
+  createTurnOverlay,
+  createMobileBars
 } from './game/GameSceneUIFactory';
 import {
   setupGameStateCallbacks,
@@ -98,6 +103,10 @@ import {
   animateCardDiscard,
   createFloatingDelta,
   showTurnBanner,
+  updateTurnOverlay,
+  showControlledSquaresOverlay,
+  hideControlledSquaresOverlay,
+  toggleMobileEventLog,
   updateOpponentDeckCounts,
   updatePlayerDeckCounts
 } from './game/GameSceneUIState';
@@ -155,6 +164,7 @@ import {
   checkGameEndConditions,
   handleGameEnd
 } from './game/GameSceneFlow';
+import { showPromotionPicker, hidePromotionPicker } from './game/GameScenePromotion';
 
 /* ============================================
  * DEBUG CONFIGURATION
@@ -162,7 +172,7 @@ import {
  */
 
 /** Enable debug overlay to visualize layout sections with colored rectangles */
-const DEBUG_SHOW_LAYOUT_SECTIONS = true;
+const DEBUG_SHOW_LAYOUT_SECTIONS = false;
 
 /* ============================================
  * GAME SCENE CLASS
@@ -217,6 +227,15 @@ export class GameScene extends Phaser.Scene {
   
   /** Player's energy bar display */
   public energyBar!: EnergyBarComponent;
+
+  /** Opponent's energy bar display */
+  public opponentEnergyBar!: EnergyBarComponent;
+
+  /** Player's disturb counter display */
+  public playerDisturbCounter!: DisturbCounterComponent;
+
+  /** Opponent's disturb counter display */
+  public opponentDisturbCounter!: DisturbCounterComponent;
   
   /** Event log for game history */
   public eventLog!: EventLogComponent;
@@ -226,6 +245,23 @@ export class GameScene extends Phaser.Scene {
   
   /** Player's focus/disturb mode toggle */
   public playerFocusDisturb!: FocusDisturbToggleComponent;
+
+  /** Controlled squares button */
+  public controlledSquaresButton!: Phaser.GameObjects.Container;
+
+  /** Right panel backdrop rectangles */
+  public rightPanelTopBackdrop!: Phaser.GameObjects.Rectangle;
+  public rightPanelMiddleBackdrop!: Phaser.GameObjects.Rectangle;
+  public rightPanelBottomBackdrop!: Phaser.GameObjects.Rectangle;
+
+  /** Right panel tint rectangles */
+  public rightPanelTopTint!: Phaser.GameObjects.Rectangle;
+  public rightPanelMiddleTint!: Phaser.GameObjects.Rectangle;
+  public rightPanelBottomTint!: Phaser.GameObjects.Rectangle;
+
+  /** Preview panel background for card preview */
+  public previewPanelBackground!: Phaser.GameObjects.Rectangle;
+  public previewPanelLabel!: Phaser.GameObjects.Text;
   
   /* ----------------------------------------
    * Opponent Deck/Discard Display
@@ -236,6 +272,9 @@ export class GameScene extends Phaser.Scene {
   
   /** Stack of images for opponent deck visual depth */
   public opponentDeckStack: Phaser.GameObjects.Image[] = [];
+
+  /** Stack of images for opponent discard visual depth */
+  public opponentDiscardStack: Phaser.GameObjects.Image[] = [];
   
   /** Label text for opponent's deck */
   public opponentDeckLabelText!: Phaser.GameObjects.Text;
@@ -258,9 +297,12 @@ export class GameScene extends Phaser.Scene {
   
   /** Player's deck card back image */
   public playerDeckSprite!: Phaser.GameObjects.Image;
-  
+
   /** Stack of images for player deck visual depth */
   public playerDeckStack: Phaser.GameObjects.Image[] = [];
+
+  /** Stack of images for player discard visual depth */
+  public playerDiscardStack: Phaser.GameObjects.Image[] = [];
   
   /** Label text for player's deck */
   public playerDeckLabelText!: Phaser.GameObjects.Text;
@@ -292,6 +334,12 @@ export class GameScene extends Phaser.Scene {
   
   /** Count text for opponent's hand */
   public opponentHandCountText!: Phaser.GameObjects.Text;
+
+  /** Mask graphics for opponent hand */
+  public opponentHandMask?: Phaser.GameObjects.Graphics;
+
+  /** Mask graphics for player hand */
+  public playerHandMask?: Phaser.GameObjects.Graphics;
   
   /* ----------------------------------------
    * UI Text Elements
@@ -315,6 +363,60 @@ export class GameScene extends Phaser.Scene {
   
   /** Text element within turn banner */
   public turnBannerText: Phaser.GameObjects.Text | null = null;
+
+  /** Turn overlay rectangle across the board */
+  public turnOverlayRect?: Phaser.GameObjects.Rectangle;
+
+  /** Turn overlay text */
+  public turnOverlayText?: Phaser.GameObjects.Text;
+
+  /** Track last turn shown in overlay */
+  public lastTurnOverlayTurn?: PlayerColor;
+
+  /** Timer event for hiding turn overlay */
+  public turnOverlayHideEvent?: Phaser.Time.TimerEvent;
+
+  /* ----------------------------------------
+   * Promotion Overlay
+   * ---------------------------------------- */
+
+  public promotionOverlay: Phaser.GameObjects.Container | null = null;
+  public pendingPromotion: { from: Square; to: Square; color: PlayerColor } | null = null;
+
+  /* ----------------------------------------
+   * Mobile UI Bars
+   * ---------------------------------------- */
+
+  public mobileTopBar?: Phaser.GameObjects.Container;
+  public mobileBottomBar?: Phaser.GameObjects.Container;
+  public mobileTopBarBackground?: Phaser.GameObjects.Rectangle;
+  public mobileBottomBarBackground?: Phaser.GameObjects.Rectangle;
+
+  public mobileTopNameText?: Phaser.GameObjects.Text;
+  public mobileBottomNameText?: Phaser.GameObjects.Text;
+
+  public mobileTopClockIcon?: Phaser.GameObjects.Image;
+  public mobileTopClockText?: Phaser.GameObjects.Text;
+  public mobileTopStopwatchIcon?: Phaser.GameObjects.Image;
+  public mobileTopStopwatchText?: Phaser.GameObjects.Text;
+  public mobileTopEnergyIcon?: Phaser.GameObjects.Image;
+  public mobileTopEnergyText?: Phaser.GameObjects.Text;
+  public mobileTopDisturbIcon?: Phaser.GameObjects.Image;
+  public mobileTopDisturbText?: Phaser.GameObjects.Text;
+
+  public mobileBottomClockIcon?: Phaser.GameObjects.Image;
+  public mobileBottomClockText?: Phaser.GameObjects.Text;
+  public mobileBottomStopwatchIcon?: Phaser.GameObjects.Image;
+  public mobileBottomStopwatchText?: Phaser.GameObjects.Text;
+  public mobileBottomEnergyIcon?: Phaser.GameObjects.Image;
+  public mobileBottomEnergyText?: Phaser.GameObjects.Text;
+  public mobileBottomDisturbIcon?: Phaser.GameObjects.Image;
+  public mobileBottomDisturbText?: Phaser.GameObjects.Text;
+
+  public mobileEventLogButton?: Phaser.GameObjects.Container;
+  public mobileControlledSquaresButton?: Phaser.GameObjects.Container;
+
+  public isMobileEventLogVisible: boolean = false;
   
   /* ----------------------------------------
    * Connection Overlay
@@ -360,6 +462,15 @@ export class GameScene extends Phaser.Scene {
   
   /** Opponent's current mode (focus/disturb) */
   public opponentMode: 'focus' | 'disturb' = 'focus';
+
+  /** Opponent's current energy */
+  public opponentEnergy: number = 0;
+
+  /** Opponent's energy cap */
+  public opponentEnergyCap: number = 0;
+
+  /** Opponent's disturb tag count */
+  public opponentDisturbTags: number = 0;
   
   /** Opponent's deck card count */
   public opponentDeckCount: number = DECK_SIZE;
@@ -586,6 +697,11 @@ export class GameScene extends Phaser.Scene {
     this.createCardHand(layout);
     this.createCardCountIndicator(layout);
     this.createTurnBanner(layout);
+    this.createTurnOverlay(layout);
+    this.createMobileBars(layout);
+    this.positionEventLog(layout);
+    this.positionMobileBars(layout);
+    this.positionTurnOverlay(layout);
     
     // Create debug overlays if enabled
     if (DEBUG_SHOW_LAYOUT_SECTIONS) {
@@ -648,6 +764,10 @@ export class GameScene extends Phaser.Scene {
     positionRightPanel.call(this, layout);
   }
 
+  public positionMobileBars(layout: GameLayout): void {
+    positionMobileBars.call(this, layout);
+  }
+
   public positionLeftPanel(layout: GameLayout): void {
     positionLeftPanel.call(this, layout);
   }
@@ -674,6 +794,10 @@ export class GameScene extends Phaser.Scene {
 
   public positionTurnBanner(layout: GameLayout): void {
     positionTurnBanner.call(this, layout);
+  }
+
+  public positionTurnOverlay(layout: GameLayout): void {
+    positionTurnOverlay.call(this, layout);
   }
 
   public positionOverlays(layout: GameLayout): void {
@@ -716,6 +840,14 @@ export class GameScene extends Phaser.Scene {
     createTurnBanner.call(this, layout);
   }
 
+  public createTurnOverlay(layout: GameLayout): void {
+    createTurnOverlay.call(this, layout);
+  }
+
+  public createMobileBars(layout: GameLayout): void {
+    createMobileBars.call(this, layout);
+  }
+
   public setupGameStateCallbacks(): void {
     setupGameStateCallbacks.call(this);
   }
@@ -752,6 +884,30 @@ export class GameScene extends Phaser.Scene {
 
   public showTurnBanner(turn: PlayerColor): void {
     showTurnBanner.call(this, turn);
+  }
+
+  public updateTurnOverlay(turn: PlayerColor): void {
+    updateTurnOverlay.call(this, turn);
+  }
+
+  public showControlledSquaresOverlay(): void {
+    showControlledSquaresOverlay.call(this);
+  }
+
+  public hideControlledSquaresOverlay(): void {
+    hideControlledSquaresOverlay.call(this);
+  }
+
+  public toggleMobileEventLog(): void {
+    toggleMobileEventLog.call(this);
+  }
+
+  public showPromotionPicker(from: Square, to: Square, movingColor: PlayerColor): void {
+    showPromotionPicker.call(this, from, to, movingColor);
+  }
+
+  public hidePromotionPicker(): void {
+    hidePromotionPicker.call(this);
   }
 
   public showConnectionOverlay(message: string): void {
@@ -854,9 +1010,12 @@ export class GameScene extends Phaser.Scene {
     stopwatch: number,
     mode: 'focus' | 'disturb',
     deckCount: number,
-    discardCount: number
+    discardCount: number,
+    energy: number,
+    energyCap: number,
+    disturb: number
   ): void {
-    handleOpponentStatsSync.call(this, clock, stopwatch, mode, deckCount, discardCount);
+    handleOpponentStatsSync.call(this, clock, stopwatch, mode, deckCount, discardCount, energy, energyCap, disturb);
   }
 
   public sendLocalPlayerStats(): void {
@@ -873,8 +1032,8 @@ export class GameScene extends Phaser.Scene {
     handleOpponentPlayCard.call(this, _cardId, cardName, target, pieceType, effectAction);
   }
 
-  public handleOpponentMovePiece(from: string, to: string): void {
-    handleOpponentMovePiece.call(this, from, to);
+  public handleOpponentMovePiece(from: string, to: string, promotion?: string): void {
+    handleOpponentMovePiece.call(this, from, to, promotion);
   }
 
   public handleOpponentMulligan(): void {
@@ -889,8 +1048,8 @@ export class GameScene extends Phaser.Scene {
     setupChessBoardCallbacks.call(this);
   }
 
-  public handleLocalMove(from: Square, to: Square): void {
-    handleLocalMove.call(this, from, to);
+  public handleLocalMove(from: Square, to: Square, promotion?: PieceSymbol): void {
+    handleLocalMove.call(this, from, to, promotion);
   }
 
   public setupCardHandCallbacks(): void {

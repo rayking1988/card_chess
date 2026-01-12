@@ -709,10 +709,24 @@ export class GameStateManager {
   drawCards(player: PlayerColor, count: number, respectCap: boolean): number {
     const playerState = this.state.players[player];
     let drawn = 0;
+    let appliedEmptyPenalty = false;
+
+    const applyEmptyDeckPenalty = (): void => {
+      if (playerState.hand.length > 0) {
+        playerState.discard.push(...playerState.hand);
+        playerState.hand = [];
+      }
+      playerState.energy = 0;
+      playerState.energyCap = 0;
+    };
     
     for (let i = 0; i < count; i++) {
-      if (playerState.deck.length === 0) break;
       if (respectCap && playerState.hand.length >= MAX_HAND_SIZE) break;
+      if (playerState.deck.length === 0) {
+        applyEmptyDeckPenalty();
+        appliedEmptyPenalty = true;
+        break;
+      }
       
       const card = playerState.deck.pop();
       if (card) {
@@ -721,7 +735,9 @@ export class GameStateManager {
       }
     }
     
-    this.notifyStateChange();
+    if (drawn > 0 || appliedEmptyPenalty || count > 0) {
+      this.notifyStateChange();
+    }
     return drawn;
   }
 

@@ -21,14 +21,23 @@ import { hex } from '../utils/colors';
  * ============================================
  */
 
-/** Energy bar width in pixels */
-const BAR_WIDTH = 120;
+/** Energy bar width in pixels (bar body only) */
+const BAR_WIDTH = 140;
 
 /** Energy bar height in pixels */
-const BAR_HEIGHT = 30;
+const BAR_HEIGHT = 18;
 
-/** Padding inside the bar for the fill */
-const FILL_PADDING = 4;
+/** Icon size in pixels */
+const ICON_SIZE = 22;
+
+/** Gap between icon and bar */
+const ICON_GAP = 8;
+
+/** Gap between segments */
+const SEGMENT_GAP = 2;
+
+/** Maximum segments to display */
+const MAX_SEGMENTS = 10;
 
 /** Fill colors based on energy level (as ratio of current/cap) */
 const FILL_COLORS = {
@@ -37,6 +46,8 @@ const FILL_COLORS = {
   low: hex('#ffaa44'),       // Orange - 25-49% energy
   critical: hex('#ff4444')   // Red - below 25% energy
 };
+
+const EMPTY_SEGMENT_COLOR = hex('#2a2a2a');
 
 /** Text colors for different energy states */
 const TEXT_COLORS = {
@@ -83,7 +94,10 @@ export class EnergyBarComponent {
   
   /** Graphics for the fill bar */
   private fillGraphics: Phaser.GameObjects.Graphics;
-  
+
+  /** Energy icon sprite */
+  private energyIcon: Phaser.GameObjects.Image | null = null;
+
   /** Text displaying current/cap energy */
   private energyText: Phaser.GameObjects.Text;
   
@@ -108,6 +122,12 @@ export class EnergyBarComponent {
   /** Background sprite (replaces backgroundGraphics for performance) */
   private backgroundSprite: Phaser.GameObjects.Image | null = null;
 
+  /** Cached bar center offset */
+  private barCenterX: number;
+
+  /** Cached total width for layout */
+  private totalWidth: number;
+
   /**
    * Creates a new EnergyBarComponent
    * 
@@ -126,18 +146,29 @@ export class EnergyBarComponent {
   ) {
     this.scene = scene;
     this.container = scene.add.container(x, y);
+
+    this.totalWidth = BAR_WIDTH + ICON_SIZE + ICON_GAP;
+    const leftEdge = -this.totalWidth / 2;
+    const iconCenterX = leftEdge + ICON_SIZE / 2;
+    this.barCenterX = leftEdge + ICON_SIZE + ICON_GAP + BAR_WIDTH / 2;
     
     // Background graphics - draw then convert to texture for performance
     this.backgroundGraphics = scene.add.graphics();
     this.drawBackground();
     this.convertBackgroundToTexture();
+
+    if (scene.textures.exists('energy_circle')) {
+      this.energyIcon = scene.add.image(iconCenterX, 0, 'energy_circle');
+      this.energyIcon.setDisplaySize(ICON_SIZE, ICON_SIZE);
+      this.container.add(this.energyIcon);
+    }
     
     // Fill graphics (drawn on top of background) - this one stays dynamic
     this.fillGraphics = scene.add.graphics();
     this.container.add(this.fillGraphics);
     
     // Energy text (current/cap format)
-    this.energyText = scene.add.text(0, 0, '0/0', {
+    this.energyText = scene.add.text(this.barCenterX, 0, '0/0', {
       fontSize: '16px',
       fontFamily: 'BoldPixels, Arial',
       color: '#ffffff',
@@ -146,11 +177,12 @@ export class EnergyBarComponent {
     this.container.add(this.energyText);
     
     // Label text above the bar
-    this.labelText = scene.add.text(0, -25, label, {
+    this.labelText = scene.add.text(this.barCenterX, -24, label, {
       fontSize: '12px',
       fontFamily: 'BoldPixels, Arial',
       color: '#cccccc'
     }).setOrigin(0.5);
+    this.labelText.setVisible(label.trim().length > 0);
     this.container.add(this.labelText);
     
     this.updateDisplay();
@@ -168,7 +200,7 @@ export class EnergyBarComponent {
     this.backgroundGraphics.generateTexture(textureKey, BAR_WIDTH, BAR_HEIGHT);
     
     // Create sprite from texture
-    this.backgroundSprite = this.scene.add.image(0, 0, textureKey);
+    this.backgroundSprite = this.scene.add.image(this.barCenterX, 0, textureKey);
     this.container.addAt(this.backgroundSprite, 0);
     
     // Hide the original graphics
@@ -189,17 +221,16 @@ export class EnergyBarComponent {
     this.backgroundGraphics.lineStyle(2, hex('#ffd700'), 1);
     // Dark gray fill
     this.backgroundGraphics.fillStyle(hex('#333333'), 1);
-    
     this.backgroundGraphics.fillRoundedRect(
-      -BAR_WIDTH / 2,
-      -BAR_HEIGHT / 2,
+      0,
+      0,
       BAR_WIDTH,
       BAR_HEIGHT,
       5
     );
     this.backgroundGraphics.strokeRoundedRect(
-      -BAR_WIDTH / 2,
-      -BAR_HEIGHT / 2,
+      0,
+      0,
       BAR_WIDTH,
       BAR_HEIGHT,
       5
@@ -288,42 +319,54 @@ export class EnergyBarComponent {
     
     // Clear previous fill
     this.fillGraphics.clear();
-    
-    // Draw fill bar if cap > 0
-    if (this.energyCap > 0) {
-      const fillRatio = this.currentEnergy / this.energyCap;
-      const fillWidth = (BAR_WIDTH - FILL_PADDING * 2) * fillRatio;
-      
-      // Choose color based on energy level
-      let fillColor: number;
-      if (fillRatio >= 0.75) {
-        fillColor = FILL_COLORS.high;
-      } else if (fillRatio >= 0.5) {
-        fillColor = FILL_COLORS.medium;
-      } else if (fillRatio >= 0.25) {
-        fillColor = FILL_COLORS.low;
-      } else {
-        fillColor = FILL_COLORS.critical;
-      }
-      
-      // Draw the fill bar
-      this.fillGraphics.fillStyle(fillColor, 0.8);
+
+    const cap = Math.max(0, this.energyCap);
+    const ratio = cap > 0 ? this.currentEnergy / cap : 0;
+    const segmentCount = cap > 0 ? Math.min(MAX_SEGMENTS, cap) : MAX_SEGMENTS;
+    const filledSegments = cap > 0 ? Math.round(ratio * segmentCount) : 0;
+    const segmentWidth = (BAR_WIDTH - SEGMENT_GAP * (segmentCount - 1)) / segmentCount;
+    const barLeft = this.barCenterX - BAR_WIDTH / 2;
+
+    let fillColor: number;
+    if (ratio >= 0.75) {
+      fillColor = FILL_COLORS.high;
+    } else if (ratio >= 0.5) {
+      fillColor = FILL_COLORS.medium;
+    } else if (ratio >= 0.25) {
+      fillColor = FILL_COLORS.low;
+    } else {
+      fillColor = FILL_COLORS.critical;
+    }
+
+    for (let i = 0; i < segmentCount; i++) {
+      const x = barLeft + i * (segmentWidth + SEGMENT_GAP);
+      this.fillGraphics.fillStyle(EMPTY_SEGMENT_COLOR, 0.9);
       this.fillGraphics.fillRoundedRect(
-        -BAR_WIDTH / 2 + FILL_PADDING,
-        -BAR_HEIGHT / 2 + FILL_PADDING,
-        fillWidth,
-        BAR_HEIGHT - FILL_PADDING * 2,
-        3
+        x,
+        -BAR_HEIGHT / 2 + 2,
+        segmentWidth,
+        BAR_HEIGHT - 4,
+        2
       );
-      
-      // Add shine effect (white highlight on top third)
-      this.fillGraphics.fillStyle(hex('#ffffff'), 0.3);
+    }
+
+    for (let i = 0; i < filledSegments; i++) {
+      const x = barLeft + i * (segmentWidth + SEGMENT_GAP);
+      this.fillGraphics.fillStyle(fillColor, 0.95);
       this.fillGraphics.fillRoundedRect(
-        -BAR_WIDTH / 2 + FILL_PADDING,
-        -BAR_HEIGHT / 2 + FILL_PADDING,
-        fillWidth,
-        (BAR_HEIGHT - FILL_PADDING * 2) / 3,
-        3
+        x,
+        -BAR_HEIGHT / 2 + 2,
+        segmentWidth,
+        BAR_HEIGHT - 4,
+        2
+      );
+      this.fillGraphics.fillStyle(hex('#ffffff'), 0.2);
+      this.fillGraphics.fillRoundedRect(
+        x,
+        -BAR_HEIGHT / 2 + 2,
+        segmentWidth,
+        (BAR_HEIGHT - 4) * 0.35,
+        2
       );
     }
     
@@ -350,6 +393,7 @@ export class EnergyBarComponent {
    */
   setLabel(label: string): void {
     this.labelText.setText(label);
+    this.labelText.setVisible(label.trim().length > 0);
   }
 
   /**
@@ -435,7 +479,7 @@ export class EnergyBarComponent {
    * @returns Object with width and height
    */
   getDimensions(): { width: number; height: number } {
-    return { width: BAR_WIDTH, height: BAR_HEIGHT };
+    return { width: this.totalWidth, height: Math.max(BAR_HEIGHT, ICON_SIZE) };
   }
 
   /**

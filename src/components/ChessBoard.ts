@@ -337,8 +337,8 @@ export class ChessBoardComponent {
    * 
    * Used by: GameScene.handleMove()
    */
-  makeMove(from: Square, to: Square): MoveResult {
-    const result = this.wrapper.makeMove(from, to);
+  makeMove(from: Square, to: Square, promotion?: PieceSymbol): MoveResult {
+    const result = this.wrapper.makeMove(from, to, promotion);
     if (result.success) {
       this.renderPieces();
       this.clearSelection();
@@ -806,9 +806,21 @@ export class ChessBoardComponent {
    * 
    * Used by: GameScene (when showing control visualization)
    */
-  renderControlOverlay(controlMap: ControlPowerMap): void {
+  renderControlOverlay(
+    controlMap: ControlPowerMap,
+    options?: {
+      whiteColor?: string;
+      blackColor?: string;
+      alpha?: number;
+      usePowerAlpha?: boolean;
+    }
+  ): void {
     this.overlayGraphics.clear();
     const size = SQUARE_SIZE * this.scale;
+    const whiteColor = options?.whiteColor ?? '#4444ff';
+    const blackColor = options?.blackColor ?? '#ff4444';
+    const baseAlpha = options?.alpha ?? 0.6;
+    const usePowerAlpha = options?.usePowerAlpha ?? true;
     
     for (const square of getAllSquares()) {
       const power = controlMap[square] || 0;
@@ -817,8 +829,8 @@ export class ChessBoardComponent {
       const { col, row } = this.squareToCoords(square);
       
       // White control = blue, Black control = red
-      const color = power > 0 ? hex('#4444ff') : hex('#ff4444');
-      const alpha = Math.min(Math.abs(power) * 0.15, 0.6);
+      const color = power > 0 ? hex(whiteColor) : hex(blackColor);
+      const alpha = usePowerAlpha ? Math.min(Math.abs(power) * 0.15, baseAlpha) : baseAlpha;
       
       this.overlayGraphics.fillStyle(color, alpha);
       this.overlayGraphics.fillRect(col * size, row * size, size, size);
