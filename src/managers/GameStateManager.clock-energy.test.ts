@@ -250,6 +250,25 @@ describe('Property 2: Energy Balance', () => {
  * **Validates: New Rule - Energy refill at turn start**
  */
 describe('Property 12: Energy Refill at Turn Start', () => {
+  // Helper to create a dummy card for deck setup (to avoid empty deck penalty)
+  const createDummyCard = (id: string) => ({
+    id,
+    name: 'Dummy',
+    type: 'spell' as const,
+    energyCost: 0,
+    timeCost: 0,
+    effect: { action: 'SHUFFLE_DECK' as const },
+    artAsset: 'dummy',
+    frameColor: 'blue'
+  });
+
+  // Helper to set up decks to avoid empty deck penalty during endTurn
+  const setupDecks = (manager: GameStateManager) => {
+    const dummyDeck = Array.from({ length: 10 }, (_, i) => createDummyCard(`dummy-${i}`));
+    manager.setDeck('white', [...dummyDeck]);
+    manager.setDeck('black', [...dummyDeck]);
+  };
+
   it('energy is refilled to cap at turn start', () => {
     fc.assert(
       fc.property(
@@ -259,6 +278,9 @@ describe('Property 12: Energy Refill at Turn Start', () => {
         (whiteCap, blackCap, spent) => {
           const manager = new GameStateManager('white', 'Test White', 'Test Black');
           manager.startGame();
+          
+          // Set up decks to avoid empty deck penalty
+          setupDecks(manager);
           
           // Set up energy caps for both players BEFORE any turn ends
           manager.modifyEnergyCap('white', whiteCap);
@@ -302,6 +324,9 @@ describe('Property 12: Energy Refill at Turn Start', () => {
           const manager = new GameStateManager('white', 'Test White', 'Test Black');
           manager.startGame();
           
+          // Set up decks to avoid empty deck penalty
+          setupDecks(manager);
+          
           // Set up initial energy cap
           manager.modifyEnergyCap('white', initialCap);
           
@@ -327,6 +352,9 @@ describe('Property 12: Energy Refill at Turn Start', () => {
   it('energy refill happens for both players on their turn start', () => {
     const manager = new GameStateManager('white', 'Test White', 'Test Black');
     manager.startGame();
+    
+    // Set up decks to avoid empty deck penalty
+    setupDecks(manager);
     
     // Set up energy caps
     manager.modifyEnergyCap('white', 8);
@@ -357,6 +385,9 @@ describe('Property 12: Energy Refill at Turn Start', () => {
   it('zero energy cap means zero energy at turn start', () => {
     const manager = new GameStateManager('white', 'Test White', 'Test Black');
     manager.startGame();
+    
+    // Set up decks to avoid empty deck penalty
+    setupDecks(manager);
     
     // Don't set any energy cap (stays at 0)
     expect(manager.getEnergyCap('white')).toBe(0);
