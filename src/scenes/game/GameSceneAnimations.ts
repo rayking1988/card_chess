@@ -88,7 +88,12 @@ export function animateCardPlay(
   animCard.setDepth(50);
   const cardContainer = animCard.getContainer();
   const displayPos = { x: layout.playedCardX, y: layout.playedCardY };
-  const discardY = side === 'local' ? layout.playerDiscardY : layout.opponentDiscardY;
+  
+  // Calculate discard pile position - match the actual top card position from positionLeftPanel
+  const discardX = layout.leftPanelX;
+  const discardY = side === 'local' 
+    ? layout.playerDiscardY 
+    : layout.opponentDiscardY;
 
   // For local cards, lockDiscardTop is called by the caller before playCard
   // For opponent cards, lock here since there's no game state update
@@ -115,7 +120,7 @@ export function animateCardPlay(
         // Animate card flying to discard pile
         this.tweens.add({
           targets: cardContainer,
-          x: layout.leftPanelX,
+          x: discardX,
           y: discardY,
           scaleX: displayScale * 0.6,
           scaleY: displayScale * 0.6,

@@ -210,9 +210,8 @@ export function handleOpponentPlayCard(
   this.logEvent(opponentColor, `Played ${cardName}`);
 
   if (this.networkManager) {
-    this.suppressOpponentHandAnimation++;
+    // Decrement hand count but don't trigger UI update yet - animation will handle it
     this.opponentHandCount = Math.max(0, this.opponentHandCount - 1);
-    // Don't update discard count/cards yet - will be done after animation
   }
 
   // Pass cardData to animation, which will add to discard after animation completes
@@ -222,6 +221,8 @@ export function handleOpponentPlayCard(
       this.opponentDiscardCount = Math.min(DECK_SIZE, this.opponentDiscardCount + 1);
       this.opponentDiscardCards.push(cardData);
     }
+    // Update UI after animation completes to show correct hand count
+    this.updateUIFromState();
   });
 
   // Handle piece deployment/destruction on board
@@ -247,7 +248,7 @@ export function handleOpponentPlayCard(
   }
 
   this.checkGameEndConditions();
-  this.updateUIFromState();
+  // Don't call updateUIFromState here - let the animation callback handle it
 }
 
 /**

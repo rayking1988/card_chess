@@ -15,7 +15,6 @@
  */
 
 import Phaser from 'phaser';
-import { hex } from '../utils/colors';
 
 /* ============================================
  * STOPWATCH CONFIGURATION CONSTANTS
@@ -28,9 +27,6 @@ const STOPWATCH_WIDTH = 66;
 /** Stopwatch display height in pixels */
 const STOPWATCH_HEIGHT = 80;
 
-/** Radius for warning circle textures - smaller to fit stopwatch */
-const WARNING_CIRCLE_RADIUS = STOPWATCH_WIDTH*3;
-
 /** 
  * Threshold in seconds that triggers opponent card draw
  * When stopwatch reaches this value, 60 is subtracted and opponent draws
@@ -39,9 +35,9 @@ const THRESHOLD_SECONDS = 60;
 
 /** Progress thresholds for visual warnings (as percentage of threshold) */
 const WARNING_THRESHOLDS = {
-  low: 0.5,      // 25% - Yellow tint starts
-  medium: 0.75,    // 50% - Orange tint
-  high: 0.9      // 75% - Red tint
+  low: 0.5,      // 50% - Yellow text starts
+  medium: 0.75,  // 75% - Orange text
+  high: 0.9      // 90% - Red text
 };
 
 /* ============================================
@@ -54,10 +50,6 @@ const WARNING_THRESHOLDS = {
  * 
  * @param seconds - Time in seconds to format
  * @returns Two-digit string representation
- * 
- * @example
- * formatStopwatchTime(5)  // Returns "05"
- * formatStopwatchTime(45) // Returns "45"
  */
 function formatStopwatchTime(seconds: number): string {
   const safeSeconds = Math.max(0, Math.floor(seconds));
@@ -75,96 +67,23 @@ function formatStopwatchTime(seconds: number): string {
  * Displays accumulated time cost for the current turn.
  * Provides visual warnings as the player approaches the 60-second threshold.
  * When threshold is crossed, opponent draws a card.
- * 
- * Visual structure:
- * - Warning background (colored circle based on progress)
- * - Progress arc (shows progress toward threshold)
- * - Stopwatch sprite (background image)
- * - Label text ("Turn Timer")
- * - Time display (two-digit seconds)
- * - Threshold indicator (shows card draw status)
- * 
- * @example
- * // Create a stopwatch
- * const stopwatch = new StopwatchComponent(scene, 100, 300);
- * 
- * // Add time when cards are played
- * stopwatch.addTime(10);
- * 
- * // Reset at end of turn
- * stopwatch.reset();
- * 
- * Used by: GameScene (creates two stopwatches - player and opponent)
  */
 export class StopwatchComponent {
-  /** Container holding all stopwatch visual elements */
   private container: Phaser.GameObjects.Container;
-  
-  /** Background sprite showing the stopwatch face */
   private stopwatchSprite: Phaser.GameObjects.Image;
-  
-  /** Text displaying the current time */
   private timeText: Phaser.GameObjects.Text;
-  
-  /** Graphics for warning background and progress arc */
-  private warningGraphics: Phaser.GameObjects.Graphics;
-  
-  /** Sprite for warning background circle (converted from Graphics for performance) */
-  private warningSprite: Phaser.GameObjects.Image | null = null;
-  
-  /** Sprite for progress arc (converted from Graphics for performance) */
-  private progressSprite: Phaser.GameObjects.Image | null = null;
-  
-  /** Reference to the scene for texture generation */
-  private scene: Phaser.Scene;
-  
-  /** Current accumulated time in seconds */
   private currentTime: number = 0;
-  
-  /** Cached display time (floored seconds) for change detection */
   private lastDisplayedTime: number = -1;
-  
-  /** Cached warning level for change detection */
   private lastWarningLevel: 'none' | 'low' | 'medium' | 'high' = 'none';
-  
-  /** Cached progress segment (0-59) for arc updates */
-  private lastProgressSegment: number = -1;
-  
-  /** Unique ID for texture naming */
-  private textureId: string;
+  private baseTimeColor: string = '#ffffff';
 
-  /** Base text color for the time display */
-  private baseTimeColor: string = '#ffffff05';
-
-  /**
-   * Creates a new StopwatchComponent
-   * 
-   * @param scene - The Phaser scene to add this component to
-   * @param x - X position for the stopwatch center
-   * @param y - Y position for the stopwatch center
-   * 
-   * Used by: GameScene.createRightPanel()
-   */
-  constructor(
-    scene: Phaser.Scene,
-    x: number,
-    y: number
-  ) {
-    this.scene = scene;
-    this.textureId = `stopwatch_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  constructor(scene: Phaser.Scene, x: number, y: number) {
     this.container = scene.add.container(x, y);
     
-    // Warning background graphics (drawn behind everything, converted to texture)
-    this.warningGraphics = scene.add.graphics();
-    this.warningGraphics.setVisible(false); // Hidden after texture conversion
-    this.container.add(this.warningGraphics);
-    
-    // Stopwatch background sprite
     this.stopwatchSprite = scene.add.image(0, 0, 'stopwatch');
     this.stopwatchSprite.setDisplaySize(STOPWATCH_WIDTH, STOPWATCH_HEIGHT);
     this.container.add(this.stopwatchSprite);
     
-    // Time display (digital style)
     this.timeText = scene.add.text(0, 5, '00', {
       fontSize: '28px',
       fontFamily: 'Digital7, "Courier New"',
@@ -173,137 +92,45 @@ export class StopwatchComponent {
     }).setOrigin(0.5);
     this.container.add(this.timeText);
     
-    // Pre-generate warning circle textures for each level
-    this.generateWarningTextures();
-    
     this.updateDisplay();
   }
-  
-  /**
-   * Pre-generates warning circle textures for each warning level
-   * This avoids re-triangulating Graphics every frame
-   * 
-   * @private
-   */
-  private generateWarningTextures(): void {
-    const textureSize = WARNING_CIRCLE_RADIUS * 2;
-    const center = textureSize / 2;
-    const circleRadius = WARNING_CIRCLE_RADIUS;
-    
-    // Generate high warning texture (red circle)
-    const highGraphics = this.scene.add.graphics();
-    highGraphics.fillStyle(hex('#ff0000'), 0.35);
-    highGraphics.fillCircle(center, center, circleRadius);
-    highGraphics.generateTexture(`${this.textureId}_warning_high`, textureSize, textureSize);
-    highGraphics.destroy();
-    
-    // Generate medium warning texture (orange circle)
-    const mediumGraphics = this.scene.add.graphics();
-    mediumGraphics.fillStyle(hex('#ffaa00'), 0.3);
-    mediumGraphics.fillCircle(center, center, circleRadius);
-    mediumGraphics.generateTexture(`${this.textureId}_warning_medium`, textureSize, textureSize);
-    mediumGraphics.destroy();
-  }
 
-  /**
-   * Sets the accumulated time directly
-   * 
-   * @param seconds - New time value in seconds
-   * 
-   * Used by: GameScene.updateUI() for syncing with game state
-   */
   setTime(seconds: number): void {
     this.currentTime = seconds;
     this.updateDisplay();
   }
 
-  /**
-   * Sets the base color for the time display
-   *
-   * @param color - Base text color when not in warning state
-   */
   setBaseTimeColor(color: string): void {
     this.baseTimeColor = color;
     this.lastDisplayedTime = -1;
     this.updateDisplay();
   }
 
-  /**
-   * Adds time to the stopwatch
-   * 
-   * Called when a card is played or action is taken that costs time.
-   * 
-   * @param seconds - Seconds to add
-   * 
-   * Used by: GameScene when cards are played
-   */
   addTime(seconds: number): void {
     this.currentTime += seconds;
     this.updateDisplay();
   }
 
-  /**
-   * Resets the stopwatch to 0
-   * 
-   * Called at the end of each turn.
-   * 
-   * Used by: GameScene.endTurn()
-   */
   reset(): void {
     this.currentTime = 0;
     this.updateDisplay();
   }
 
-  /**
-   * Gets the current accumulated time
-   * 
-   * @returns Current time in seconds
-   */
   getTime(): number {
     return this.currentTime;
   }
 
-  /**
-   * Checks if the threshold has been reached
-   * 
-   * @returns True if time >= 60 seconds
-   */
   isThresholdReached(): boolean {
     return this.currentTime >= THRESHOLD_SECONDS;
   }
 
-  /**
-   * Gets how many times the threshold has been crossed
-   * 
-   * Each crossing means the opponent draws a card.
-   * 
-   * @returns Number of threshold crossings (floor of time/60)
-   * 
-   * Used by: GameStateManager.processStopwatchThreshold()
-   */
   getThresholdCrossings(): number {
     return Math.floor(this.currentTime / THRESHOLD_SECONDS);
   }
 
-  /**
-   * Updates all visual elements based on current time
-   * 
-   * Algorithm:
-   * 1. Check if visual state has changed (skip if not)
-   * 2. Update time text display
-   * 3. Calculate progress toward threshold (0-1)
-   * 4. Clear and redraw warning graphics only if warning level changed
-   * 5. Apply color based on progress level
-   * 6. Draw progress arc around stopwatch
-   * 7. Update threshold indicator text
-   * 
-   * @private
-   */
   private updateDisplay(): void {
     const displayTime = Math.floor(this.currentTime);
-    const progressSegment = Math.floor(this.currentTime) % THRESHOLD_SECONDS;
     
-    // Determine current warning level
     let currentWarningLevel: 'none' | 'low' | 'medium' | 'high' = 'none';
     if (this.currentTime >= THRESHOLD_SECONDS * WARNING_THRESHOLDS.high) {
       currentWarningLevel = 'high';
@@ -313,245 +140,76 @@ export class StopwatchComponent {
       currentWarningLevel = 'low';
     }
     
-    // Skip update if nothing changed (performance optimization)
     const warningChanged = currentWarningLevel !== this.lastWarningLevel;
-    const progressChanged = progressSegment !== this.lastProgressSegment;
     const timeChanged = displayTime !== this.lastDisplayedTime;
     
-    if (!timeChanged && !warningChanged && !progressChanged) {
+    if (!timeChanged && !warningChanged) {
       return;
     }
     
-    // Update time text only if it changed
     if (timeChanged) {
       this.timeText.setText(formatStopwatchTime(this.currentTime));
       this.lastDisplayedTime = displayTime;
     }
     
-    // Update warning circle sprite if warning level changed
     if (warningChanged) {
       this.lastWarningLevel = currentWarningLevel;
-      
-      // Remove old warning sprite
-      if (this.warningSprite) {
-        this.warningSprite.destroy();
-        this.warningSprite = null;
-      }
-      
-      // Apply warning colors based on progress - add on top of stopwatch
-      if (currentWarningLevel === 'high') {
-        this.warningSprite = this.scene.add.image(0, 0, `${this.textureId}_warning_high`);
-        this.container.add(this.warningSprite);
-        this.container.bringToTop(this.timeText); // Keep text on top
-      } else if (currentWarningLevel === 'medium') {
-        this.warningSprite = this.scene.add.image(0, 0, `${this.textureId}_warning_medium`);
-        this.container.add(this.warningSprite);
-        this.container.bringToTop(this.timeText); // Keep text on top
-      }
-    }
-    
-    // Update progress arc if progress changed (only when time > 0)
-    if (progressChanged || warningChanged) {
-      this.lastProgressSegment = progressSegment;
-      this.updateProgressArc();
     }
 
     if (timeChanged || warningChanged) {
-      const timeColor = this.currentTime >= 40 ? '#ff4444' : this.baseTimeColor;
+      let timeColor = this.baseTimeColor;
+      if (currentWarningLevel === 'high') {
+        timeColor = '#ff4444';
+      } else if (currentWarningLevel === 'medium') {
+        timeColor = '#ffaa44';
+      } else if (currentWarningLevel === 'low') {
+        timeColor = '#ffff44';
+      }
       this.timeText.setColor(timeColor);
     }
   }
-  
-  /**
-   * Updates the progress arc sprite
-   * Generates a new texture for the current progress and displays it
-   * 
-   * @private
-   */
-  private updateProgressArc(): void {
-    // Remove old progress sprite
-    if (this.progressSprite) {
-      const oldKey = this.progressSprite.texture.key;
-      this.progressSprite.destroy();
-      this.progressSprite = null;
-      // Clean up old texture
-      if (oldKey.startsWith(`${this.textureId}_progress_`)) {
-        this.scene.textures.remove(oldKey);
-      }
-    }
-    
-    if (this.currentTime <= 0) {
-      return;
-    }
-    
-    // Calculate progress toward threshold (wraps at 60)
-    const progress = (this.currentTime % THRESHOLD_SECONDS) / THRESHOLD_SECONDS;
-    const textureSize = WARNING_CIRCLE_RADIUS;
-    const center = textureSize / 2;
-    
-    // Generate progress arc texture
-    const arcGraphics = this.scene.add.graphics();
-    arcGraphics.lineStyle(4, this.getProgressColor(), 0.9);
-    arcGraphics.beginPath();
-    arcGraphics.arc(
-      center, center,
-      STOPWATCH_WIDTH / 2 + 10,
-      -Math.PI / 2,
-      -Math.PI / 2 + (progress * Math.PI * 2),
-      false
-    );
-    arcGraphics.strokePath();
-    
-    const progressKey = `${this.textureId}_progress_${this.lastProgressSegment}`;
-    arcGraphics.generateTexture(progressKey, textureSize, textureSize);
-    arcGraphics.destroy();
-    
-    // Create sprite from texture
-    this.progressSprite = this.scene.add.image(0, 0, progressKey);
-    // Add after warning sprite but before stopwatch sprite
-    const insertIndex = this.warningSprite ? 1 : 0;
-    this.container.addAt(this.progressSprite, insertIndex);
-  }
 
-  /**
-   * Gets the color for the progress arc based on current progress
-   * 
-   * @returns Hex color value
-   * @private
-   */
-  private getProgressColor(): number {
-    const progress = (this.currentTime % THRESHOLD_SECONDS) / THRESHOLD_SECONDS;
-    if (progress >= WARNING_THRESHOLDS.high) return hex('#ff4444');
-    if (progress >= WARNING_THRESHOLDS.medium) return hex('#ffaa44');
-    if (progress >= WARNING_THRESHOLDS.low) return hex('#ffff44');
-    return hex('#44ff44');
-  }
-
-  /**
-   * Sets the position of the stopwatch
-   * 
-   * @param x - New X position
-   * @param y - New Y position
-   * 
-   * Used by: GameScene.positionRightPanel()
-   */
   setPosition(x: number, y: number): void {
     this.container.setPosition(x, y);
   }
 
-  /**
-   * Gets the current position
-   * 
-   * @returns Object with x and y coordinates
-   */
   getPosition(): { x: number; y: number } {
     return { x: this.container.x, y: this.container.y };
   }
 
-  /**
-   * Sets the scale of the stopwatch
-   * 
-   * @param scale - Scale factor (1 = normal size)
-   * 
-   * Used by: GameScene.positionRightPanel()
-   */
   setScale(scale: number): void {
     this.container.setScale(scale);
   }
 
-  /**
-   * Sets the depth (z-index) for layering
-   * 
-   * @param depth - Depth value (higher = on top)
-   */
   setDepth(depth: number): void {
     this.container.setDepth(depth);
   }
 
-  /**
-   * Sets visibility of the stopwatch
-   * 
-   * @param visible - Whether the stopwatch should be visible
-   */
   setVisible(visible: boolean): void {
     this.container.setVisible(visible);
   }
 
-  /**
-   * Sets the alpha (transparency) of the stopwatch
-   * 
-   * @param alpha - Alpha value (0 = transparent, 1 = opaque)
-   */
   setAlpha(alpha: number): void {
     this.container.setAlpha(alpha);
   }
 
-  /**
-   * Gets the container for direct manipulation
-   * 
-   * @returns The Phaser container
-   */
   getContainer(): Phaser.GameObjects.Container {
     return this.container;
   }
 
-  /**
-   * Gets the time text object for animations
-   * 
-   * @returns The Phaser text object
-   */
   getTimeText(): Phaser.GameObjects.Text {
     return this.timeText;
   }
 
-  /**
-   * Gets the stopwatch dimensions
-   * 
-   * @returns Object with width and height
-   */
   getDimensions(): { width: number; height: number } {
     return { width: STOPWATCH_WIDTH, height: STOPWATCH_HEIGHT };
   }
 
-  /**
-   * Destroys the component and cleans up resources
-   */
   destroy(): void {
-    // Clean up warning textures
-    this.scene.textures.remove(`${this.textureId}_warning_high`);
-    this.scene.textures.remove(`${this.textureId}_warning_medium`);
-    
-    // Clean up progress texture
-    if (this.progressSprite) {
-      const progressKey = this.progressSprite.texture.key;
-      this.progressSprite.destroy();
-      if (progressKey.startsWith(`${this.textureId}_progress_`)) {
-        this.scene.textures.remove(progressKey);
-      }
-    }
-    
-    // Clean up warning sprite
-    if (this.warningSprite) {
-      this.warningSprite.destroy();
-    }
-    
     this.container.destroy();
   }
 }
 
-/* ============================================
- * FACTORY FUNCTION
- * ============================================
- */
-
-/**
- * Factory function to create a StopwatchComponent
- * 
- * @param scene - The Phaser scene
- * @param x - X position
- * @param y - Y position
- * @returns A new StopwatchComponent instance
- */
 export function createStopwatch(
   scene: Phaser.Scene,
   x: number,
@@ -560,5 +218,4 @@ export function createStopwatch(
   return new StopwatchComponent(scene, x, y);
 }
 
-// Export threshold constant for external use
 export { THRESHOLD_SECONDS };

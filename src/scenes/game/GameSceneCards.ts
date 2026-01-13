@@ -257,7 +257,11 @@ export function setDiscardTopCard(this: GameScene, side: 'local' | 'opponent', c
   const scale = 0.75 * layout.panelScale;
   const isOpponent = side === 'opponent';
   const existing = isOpponent ? this.opponentDiscardTopCard : this.playerDiscardTopCard;
-  const position = isOpponent ? layout.opponentDiscardY : layout.playerDiscardY;
+  
+  // Calculate position - use the layout values directly (no offset needed)
+  const positionY = isOpponent 
+    ? layout.opponentDiscardY 
+    : layout.playerDiscardY;
 
   // Destroy existing top card
   if (existing) {
@@ -278,7 +282,7 @@ export function setDiscardTopCard(this: GameScene, side: 'local' | 'opponent', c
   // Only create if we have actual card data (no card back for empty/unknown)
   const topCard = new CardComponent(this, 0, 0, cardData, false, scale);
   topCard.setDepth(11);
-  topCard.getContainer().setPosition(layout.leftPanelX, position);
+  topCard.getContainer().setPosition(layout.leftPanelX, positionY);
   makeCardComponentClickable(topCard, () => this.showDiscardViewer(side));
 
   if (isOpponent) {

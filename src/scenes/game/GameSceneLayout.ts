@@ -374,11 +374,11 @@ export function positionLeftPanel(this: GameScene, layout: GameLayout): void {
 
   layoutPileStack(this.opponentDiscardStack, leftX, layout.opponentDiscardY, deckScale, this.opponentDiscardCount, 1);
   if (this.opponentDiscardTopCard) {
-    this.opponentDiscardTopCard.setPosition(leftX, layout.opponentDiscardY - 60 * scale);
+    this.opponentDiscardTopCard.setPosition(leftX, layout.opponentDiscardY);
     this.opponentDiscardTopCard.setScale(topCardScale);
   }
   if (this.opponentDiscardLabelText) {
-    this.opponentDiscardLabelText.setPosition(leftX, layout.opponentDiscardY - 60 * scale);
+    this.opponentDiscardLabelText.setPosition(leftX, layout.opponentDiscardY);
     this.opponentDiscardLabelText.setFontSize(labelSize);
   }
   if (this.opponentDiscardCountText) {

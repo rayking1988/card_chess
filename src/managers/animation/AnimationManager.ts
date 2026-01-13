@@ -229,16 +229,27 @@ export class AnimationManager {
     config: TweenConfig = {}
   ): Phaser.Tweens.Tween {
     const container = target as Phaser.GameObjects.Container;
-    const baseScaleX = container.scaleX || 1;
-    const baseScaleY = container.scaleY || 1;
+    // Store the original scale before any animation
+    const originalScaleX = (container as { _originalScaleX?: number })._originalScaleX ?? container.scaleX ?? 1;
+    const originalScaleY = (container as { _originalScaleY?: number })._originalScaleY ?? container.scaleY ?? 1;
+    
+    // Store original scale for future reference
+    (container as { _originalScaleX?: number })._originalScaleX = originalScaleX;
+    (container as { _originalScaleY?: number })._originalScaleY = originalScaleY;
+    
+    // Reset to original scale before starting new animation
+    container.setScale(originalScaleX, originalScaleY);
+    
     const tween = this.scene.tweens.add({
       targets: target,
-      scaleX: baseScaleX * 1.15,
-      scaleY: baseScaleY * 1.15,
+      scaleX: originalScaleX * 1.15,
+      scaleY: originalScaleY * 1.15,
       duration: config.duration ?? ANIM_DURATION.BOUNCE,
       ease: EASING.BOUNCE_OUT,
       yoyo: true,
       onComplete: () => {
+        // Ensure scale is reset to original after animation
+        container.setScale(originalScaleX, originalScaleY);
         this.activeTweens.delete(tween);
         config.onComplete?.();
       },

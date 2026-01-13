@@ -24,7 +24,14 @@ export function wouldDeploymentGiveCheck(
   playerColor: PlayerColor,
   boardFEN: string
 ): boolean {
-  const tempChess = new Chess(boardFEN);
+  // Modify FEN to ensure it's the deploying player's turn
+  // This is necessary because chess.js only returns moves for the current turn
+  const fenParts = boardFEN.split(' ');
+  const deployingTurn = playerColor === 'white' ? 'w' : 'b';
+  fenParts[1] = deployingTurn;
+  const modifiedFEN = fenParts.join(' ');
+  
+  const tempChess = new Chess(modifiedFEN);
 
   // Find opponent's king
   const opponentColor = playerColor === 'white' ? 'b' : 'w';
