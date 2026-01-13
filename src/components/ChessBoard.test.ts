@@ -78,7 +78,12 @@ describe('Property: Valid moves only', () => {
           for (const targetSquare of validMoves) {
             // Create a fresh copy to test the move
             const testWrapper = new ChessBoardWrapper(fen);
-            const result = testWrapper.makeMove(square, targetSquare);
+            
+            // Check if this is a promotion move and provide promotion piece if needed
+            const isPromotion = testWrapper.isPromotionMove(square, targetSquare);
+            const result = isPromotion 
+              ? testWrapper.makeMove(square, targetSquare, 'q') // Default to queen promotion
+              : testWrapper.makeMove(square, targetSquare);
             
             // Every move returned by getValidMoves should succeed
             expect(result.success).toBe(true);
