@@ -179,17 +179,19 @@ export class CardComponent {
   private isDragging: boolean = false;
   private dragStartX: number = 0;
   private dragStartY: number = 0;
+  private dragOffsetX: number = 0;
+  private dragOffsetY: number = 0;
   private useExternalDragHandler: boolean = false;
   private boundPointerMove?: (pointer: Phaser.Input.Pointer) => void;
   private boundPointerUp?: (pointer: Phaser.Input.Pointer) => void;
   private boundPointerOver?: () => void;
   private boundPointerOut?: () => void;
-  private boundPointerDown?: () => void;
+  private boundPointerDown?: (pointer: Phaser.Input.Pointer) => void;
 
   /* Event callbacks - set by parent components */
   
   /** Called when drag starts */
-  public onDragStart?: (card: CardComponent) => void;
+  public onDragStart?: (card: CardComponent, pointer: Phaser.Input.Pointer) => void;
   
   /** Called when drag ends */
   public onDragEnd?: (card: CardComponent, pointer: Phaser.Input.Pointer) => void;
@@ -526,13 +528,19 @@ export class CardComponent {
     
     // Click/drag events
     if (!this.boundPointerDown) {
-      this.boundPointerDown = () => {
+      this.boundPointerDown = (pointer: Phaser.Input.Pointer) => {
         if (this.onClick) this.onClick(this);
         
         this.isDragging = true;
         this.dragStartX = this.container.x;
         this.dragStartY = this.container.y;
-        if (this.onDragStart) this.onDragStart(this);
+        
+        // Store the offset between pointer and card center
+        // This prevents the card from "jumping" to the pointer position
+        this.dragOffsetX = this.container.x - pointer.x;
+        this.dragOffsetY = this.container.y - pointer.y;
+        
+        if (this.onDragStart) this.onDragStart(this, pointer);
       };
     }
     
@@ -542,8 +550,9 @@ export class CardComponent {
     this.boundPointerMove = (pointer: Phaser.Input.Pointer) => {
       if (this.isDragging) {
         if (!this.useExternalDragHandler) {
-          this.container.x = pointer.x;
-          this.container.y = pointer.y;
+          // Apply offset to keep card relative to where it was grabbed
+          this.container.x = pointer.x + this.dragOffsetX;
+          this.container.y = pointer.y + this.dragOffsetY;
         }
         if (this.onDragMove) this.onDragMove(this, pointer);
       }

@@ -160,6 +160,15 @@ export class ChessBoardComponent {
   /** Valid move squares for selected piece */
   private validMoveSquares: Square[];
   
+  /** Currently dragged piece sprite */
+  private draggedPiece: Phaser.GameObjects.Image | null;
+  
+  /** Original square of dragged piece */
+  private draggedFromSquare: Square | null;
+  
+  /** Whether piece dragging is enabled */
+  private dragEnabled: boolean;
+  
   /* ============================================
    * EVENT CALLBACKS
    * ============================================
@@ -168,8 +177,11 @@ export class ChessBoardComponent {
   /** Called when any square is clicked */
   public onSquareClick?: (square: Square) => void;
   
-  /** Called when a move is attempted (from selected to clicked) */
+  /** Called when a move is attempted via click (should be animated) */
   public onMoveAttempt?: (from: Square, to: Square) => void;
+  
+  /** Called when a move is attempted via drag (should not be animated) */
+  public onDragMove?: (from: Square, to: Square) => void;
   
   /** Called when a piece is selected */
   public onPieceSelect?: (square: Square) => void;
@@ -206,6 +218,9 @@ export class ChessBoardComponent {
     this.flipped = flipped;
     this.selectedSquare = null;
     this.validMoveSquares = [];
+    this.draggedPiece = null;
+    this.draggedFromSquare = null;
+    this.dragEnabled = true;
     this.pieceSprites = new Map();
     
     // Initialize chess logic
@@ -313,6 +328,25 @@ export class ChessBoardComponent {
     this.renderPieces();
   }
 
+  /**
+   * Enables or disables piece dragging
+   * 
+   * @param enabled - Whether to enable drag-and-drop
+   */
+  setDragEnabled(enabled: boolean): void {
+    this.dragEnabled = enabled;
+    this.renderPieces(); // Re-render to apply drag settings
+  }
+
+  /**
+   * Checks if piece dragging is enabled
+   * 
+   * @returns True if drag-and-drop is enabled
+   */
+  isDragEnabled(): boolean {
+    return this.dragEnabled;
+  }
+
   /* ============================================
    * PUBLIC GAME LOGIC METHODS
    * ============================================
@@ -340,6 +374,12 @@ export class ChessBoardComponent {
   makeMove(from: Square, to: Square, promotion?: PieceSymbol): MoveResult {
     const result = this.wrapper.makeMove(from, to, promotion);
     if (result.success) {
+      // Clear drag state if the moved piece was being dragged
+      if (this.draggedFromSquare === from) {
+        this.draggedPiece = null;
+        this.draggedFromSquare = null;
+      }
+      
       this.renderPieces();
       this.clearSelection();
     }
@@ -595,6 +635,7 @@ export class ChessBoardComponent {
    *    a. Get texture key from PIECE_ASSETS
    *    b. Calculate position from square
    *    c. Create and position sprite
+   *    d. Setup drag interaction if enabled
    * 
    * @private
    */
@@ -620,11 +661,119 @@ export class ChessBoardComponent {
       
       const sprite = this.scene.add.image(x, y, textureKey);
       sprite.setScale(this.scale * 1.1);
-      // Note: Don't set interactive on pieces - the board zone handles all clicks
+      
+      // Setup piece dragging if enabled
+      if (this.dragEnabled) {
+        this.setupPieceDrag(sprite, square, type, color);
+      }
       
       this.container.add(sprite);
       this.pieceSprites.set(square, sprite);
     }
+  }
+
+  /* ============================================
+   * PRIVATE PIECE DRAG HANDLING
+   * ============================================
+   */
+
+  /**
+   * Sets up drag interaction for a piece sprite
+   * 
+   * @param sprite - The piece sprite
+   * @param square - The square the piece is on
+   * @param type - Piece type
+   * @param color - Piece color
+   * @private
+   */
+  private setupPieceDrag(sprite: Phaser.GameObjects.Image, square: Square, _type: PieceSymbol, color: Color): void {
+    const size = SQUARE_SIZE * this.scale;
+    
+    // Make sprite interactive
+    sprite.setInteractive({ draggable: true });
+    
+    sprite.on('dragstart', () => {
+      // Only allow dragging pieces of current turn
+      const currentTurn = this.wrapper.getTurn();
+      if (color !== currentTurn) return;
+      
+      // Get valid moves for this piece
+      const validMoves = this.wrapper.getValidMoves(square);
+      if (validMoves.length === 0) return;
+      
+      // Start drag
+      this.draggedPiece = sprite;
+      this.draggedFromSquare = square;
+      this.validMoveSquares = validMoves;
+      
+      // Bring piece to front and make it slightly transparent
+      sprite.setDepth(1000);
+      sprite.setAlpha(0.8);
+      
+      // Highlight valid moves
+      this.renderHighlights();
+      
+      // Don't remove from pieceSprites map - keep it for proper cleanup
+    });
+    
+    sprite.on('drag', (_pointer: Phaser.Input.Pointer, dragX: number, dragY: number) => {
+      if (this.draggedPiece !== sprite) return;
+      
+      // Update sprite position to follow pointer
+      sprite.setPosition(dragX, dragY);
+    });
+    
+    sprite.on('dragend', (pointer: Phaser.Input.Pointer) => {
+      if (this.draggedPiece !== sprite || !this.draggedFromSquare) return;
+      
+      // Convert drop position to square
+      const scaleX = this.container.scaleX || 1;
+      const scaleY = this.container.scaleY || 1;
+      const localX = (pointer.x - this.x) / scaleX;
+      const localY = (pointer.y - this.y) / scaleY;
+      
+      const col = Math.floor(localX / size);
+      const row = Math.floor(localY / size);
+      
+      let targetSquare: Square | null = null;
+      if (col >= 0 && col < 8 && row >= 0 && row < 8) {
+        targetSquare = this.coordsToSquare(col, row);
+      }
+      
+      // Check if dropped on a valid move square
+      if (targetSquare && this.validMoveSquares.includes(targetSquare)) {
+        // Valid drop - position piece at target square immediately
+        const { col: targetCol, row: targetRow } = this.squareToCoords(targetSquare);
+        const targetX = targetCol * size + size / 2;
+        const targetY = targetRow * size + size / 2;
+        sprite.setPosition(targetX, targetY);
+        
+        // Reset visual state
+        sprite.setDepth(0);
+        sprite.setAlpha(1);
+        
+        // Attempt the move - this will trigger renderPieces() which will clean up properly
+        if (this.onDragMove) {
+          this.onDragMove(this.draggedFromSquare, targetSquare);
+        }
+      } else {
+        // Invalid drop - reset piece position to original square
+        const { col: origCol, row: origRow } = this.squareToCoords(this.draggedFromSquare);
+        const origX = origCol * size + size / 2;
+        const origY = origRow * size + size / 2;
+        sprite.setPosition(origX, origY);
+        
+        // Reset visual state
+        sprite.setDepth(0);
+        sprite.setAlpha(1);
+      }
+      
+      // Reset drag state
+      this.draggedPiece = null;
+      this.draggedFromSquare = null;
+      this.validMoveSquares = [];
+      this.clearHighlights();
+    });
   }
 
   /* ============================================
@@ -674,14 +823,18 @@ export class ChessBoardComponent {
    * 
    * Algorithm:
    * 1. Notify onSquareClick callback
-   * 2. If piece selected and clicked valid move → attempt move
-   * 3. Else if piece on square → select it
-   * 4. Else → clear selection
+   * 2. If currently dragging, ignore click
+   * 3. If piece selected and clicked valid move → attempt move
+   * 4. Else if piece on square → select it
+   * 5. Else → clear selection
    * 
    * @param square - The clicked square
    * @private
    */
   private handleSquareClick(square: Square): void {
+    // Ignore clicks while dragging
+    if (this.draggedPiece) return;
+    
     // Notify listeners
     if (this.onSquareClick) {
       this.onSquareClick(square);
@@ -699,6 +852,13 @@ export class ChessBoardComponent {
     const piece = this.wrapper.getPiece(square);
     
     if (piece) {
+      // Only select pieces of the current turn when drag is enabled
+      const currentTurn = this.wrapper.getTurn();
+      if (this.dragEnabled && piece.color !== currentTurn) {
+        this.clearSelection();
+        return;
+      }
+      
       // Select this piece
       this.selectSquare(square);
       if (this.onPieceSelect) {
@@ -906,6 +1066,10 @@ export class ChessBoardComponent {
    * Used by: GameScene.shutdown()
    */
   destroy(): void {
+    // Clear drag state
+    this.draggedPiece = null;
+    this.draggedFromSquare = null;
+    
     for (const sprite of this.pieceSprites.values()) {
       sprite.destroy();
     }

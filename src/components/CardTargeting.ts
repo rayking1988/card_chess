@@ -23,14 +23,15 @@ import { Card as CardData } from '../managers/GameStateManager';
 import { CardComponent } from './Card';
 import { cardRequiresTarget } from '../data/cards';
 import { Square } from 'chess.js';
+import { hex } from '../utils/colors.js';
 
 /* ============================================
  * TARGETING VISUAL CONSTANTS
  * ============================================
  */
 
-/** Color for the targeting arrow (yellow) */
-const ARROW_COLOR = 0xffcc00;
+/** Color for the targeting arrow (yellow) - CHANGE THIS TO MODIFY ARROW COLOR */
+const ARROW_COLOR = hex('#f1820c');
 
 /** Width of the arrow line in pixels */
 const ARROW_WIDTH = 4;
@@ -39,13 +40,20 @@ const ARROW_WIDTH = 4;
 const ARROW_HEAD_SIZE = 15;
 
 /** Color for valid target highlights (green) */
-const VALID_TARGET_COLOR = 0x00ff00;
+const VALID_TARGET_COLOR = hex('#eff708');
 
 /** Color for invalid target highlights (red) */
-const INVALID_TARGET_COLOR = 0xff0000;
+const INVALID_TARGET_COLOR = hex('#e50b0b');
 
 /** Alpha for play zone highlight */
 const PLAY_ZONE_ALPHA = 0.3;
+
+/** 
+ * Curve factor for the targeting arrow (0 = straight, higher = more curved)
+ * CHANGE THIS TO MODIFY ARROW CURVE INTENSITY
+ * Positive values curve upward, negative values curve downward
+ */
+const ARROW_CURVE_FACTOR = 0.3;
 
 /* ============================================
  * TYPE DEFINITIONS
@@ -147,6 +155,12 @@ export class CardTargetingComponent {
   
   /** Current Y position of cursor */
   private currentY: number = 0;
+  
+  /** Offset from pointer to card center X (to prevent jump on drag start) */
+  private dragOffsetX: number = 0;
+  
+  /** Offset from pointer to card center Y (to prevent jump on drag start) */
+  private dragOffsetY: number = 0;
   
   /** Last coordinates used to render targeting (avoid duplicate redraws) */
   private lastUpdateX: number | null = null;
@@ -300,14 +314,17 @@ export class CardTargetingComponent {
    * 
    * Algorithm:
    * 1. Store card and position references
-   * 2. Check if card requires a target
-   * 3. If targeted: Enable arrow mode, notify start
-   * 4. If non-targeted: Enable drag mode, show play zone
+   * 2. Calculate offset from pointer to card center (prevents jump)
+   * 3. Check if card requires a target
+   * 4. If targeted: Enable arrow mode, notify start
+   * 5. If non-targeted: Enable drag mode, show play zone
    * 
    * @param card - The card being played
    * @param cardComponent - The card's visual component
-   * @param startX - Starting X position
-   * @param startY - Starting Y position
+   * @param startX - Starting X position (card center)
+   * @param startY - Starting Y position (card center)
+   * @param pointerX - Pointer X position (optional, defaults to startX)
+   * @param pointerY - Pointer Y position (optional, defaults to startY)
    * 
    * Used by: CardHandComponent.handleCardDragStart()
    */
@@ -315,14 +332,21 @@ export class CardTargetingComponent {
     card: CardData,
     cardComponent: CardComponent,
     startX: number,
-    startY: number
+    startY: number,
+    pointerX?: number,
+    pointerY?: number
   ): void {
     this.activeCard = card;
     this.activeCardComponent = cardComponent;
     this.startX = startX;
     this.startY = startY;
-    this.currentX = startX;
-    this.currentY = startY;
+    this.currentX = pointerX ?? startX;
+    this.currentY = pointerY ?? startY;
+    
+    // Calculate offset from pointer to card center to prevent jump on drag
+    this.dragOffsetX = startX - this.currentX;
+    this.dragOffsetY = startY - this.currentY;
+    
     this.lastUpdateX = null;
     this.lastUpdateY = null;
     this.lastPlayZoneInBounds = null;
@@ -334,15 +358,17 @@ export class CardTargetingComponent {
       // Requirement 9.4: Drag arrow from card to target
       this.isTargeting = true;
       this.isDragging = false;
-      if (this.onTargetingStart) {
-        this.onTargetingStart(card);
-      }
     } else {
       // Drag-to-play mode - card follows cursor
       // Requirement 9.3: Drag card to board area to play
       this.isTargeting = false;
       this.isDragging = true;
       this.showPlayZone();
+    }
+    
+    // Notify targeting start for both modes (for highlighting legal squares)
+    if (this.onTargetingStart) {
+      this.onTargetingStart(card);
     }
   }
 
@@ -351,7 +377,7 @@ export class CardTargetingComponent {
    * 
    * Algorithm:
    * - If arrow targeting: Draw arrow from start to cursor
-   * - If drag-to-play: Move card to cursor, update play zone highlight
+   * - If drag-to-play: Move card with cursor (using offset to prevent jump)
    * 
    * @param x - Current pointer X
    * @param y - Current pointer Y
@@ -374,8 +400,8 @@ export class CardTargetingComponent {
       // Arrow targeting - draw arrow from card to cursor
       this.drawTargetingArrow();
     } else if (this.isDragging && this.activeCardComponent) {
-      // Drag-to-play - move card with cursor
-      this.activeCardComponent.setPosition(x, y);
+      // Drag-to-play - move card with cursor, applying offset to prevent jump
+      this.activeCardComponent.setPosition(x + this.dragOffsetX, y + this.dragOffsetY);
       
       // Update play zone highlight based on position
       this.updatePlayZoneHighlight(x, y);
@@ -548,9 +574,14 @@ export class CardTargetingComponent {
    * Algorithm:
    * 1. Clear previous arrow
    * 2. Determine if target is valid (affects color)
-   * 3. Draw line from start to current position
-   * 4. Draw arrow head at current position
+   * 3. Draw curved bezier line from start to current position
+   * 4. Draw arrow head at current position (tangent to curve)
    * 5. Highlight target square if over board
+   * 
+   * Arrow color and curve can be configured at the top of this file:
+   * - ARROW_COLOR: Base color when not over valid target
+   * - VALID_TARGET_COLOR: Color when over valid target
+   * - ARROW_CURVE_FACTOR: How much the arrow curves (0 = straight)
    * 
    * @private
    */
@@ -562,15 +593,43 @@ export class CardTargetingComponent {
     const isValid = target && this.activeCard && this.isValidTarget(target, this.activeCard);
     const color = isValid ? VALID_TARGET_COLOR : ARROW_COLOR;
     
-    // Draw line from card to cursor
+    // Calculate control point for quadratic bezier curve
+    const midX = (this.startX + this.currentX) / 2;
+    const midY = (this.startY + this.currentY) / 2;
+    const dx = this.currentX - this.startX;
+    const dy = this.currentY - this.startY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // Perpendicular offset for curve (curves upward/left relative to direction)
+    const perpX = -dy * ARROW_CURVE_FACTOR;
+    const perpY = dx * ARROW_CURVE_FACTOR;
+    const controlX = midX + perpX;
+    const controlY = midY + perpY;
+    
+    // Draw curved line using quadratic bezier
     this.arrowGraphics.lineStyle(ARROW_WIDTH, color, 1);
     this.arrowGraphics.beginPath();
     this.arrowGraphics.moveTo(this.startX, this.startY);
-    this.arrowGraphics.lineTo(this.currentX, this.currentY);
+    
+    // Draw bezier curve as series of line segments for smooth appearance
+    const segments = Math.max(20, Math.floor(distance / 10));
+    for (let i = 1; i <= segments; i++) {
+      const t = i / segments;
+      const invT = 1 - t;
+      // Quadratic bezier formula: B(t) = (1-t)²P0 + 2(1-t)tP1 + t²P2
+      const x = invT * invT * this.startX + 2 * invT * t * controlX + t * t * this.currentX;
+      const y = invT * invT * this.startY + 2 * invT * t * controlY + t * t * this.currentY;
+      this.arrowGraphics.lineTo(x, y);
+    }
     this.arrowGraphics.strokePath();
     
-    // Draw arrow head
-    const angle = Math.atan2(this.currentY - this.startY, this.currentX - this.startX);
+    // Calculate tangent angle at the end of the curve for arrow head direction
+    // Derivative of quadratic bezier at t=1: 2(P2 - P1)
+    const tangentX = 2 * (this.currentX - controlX);
+    const tangentY = 2 * (this.currentY - controlY);
+    const angle = Math.atan2(tangentY, tangentX);
+    
+    // Draw arrow head aligned with curve tangent
     const headX1 = this.currentX - ARROW_HEAD_SIZE * Math.cos(angle - Math.PI / 6);
     const headY1 = this.currentY - ARROW_HEAD_SIZE * Math.sin(angle - Math.PI / 6);
     const headX2 = this.currentX - ARROW_HEAD_SIZE * Math.cos(angle + Math.PI / 6);

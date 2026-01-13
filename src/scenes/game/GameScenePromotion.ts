@@ -48,7 +48,7 @@ export function showPromotionPicker(this: GameScene, from: Square, to: Square, m
     icon.setInteractive({ useHandCursor: true });
     icon.on('pointerdown', () => {
       this.hidePromotionPicker();
-      this.handleLocalMove(from, to, piece);
+      this.handleLocalMove(from, to, piece, true); // true = animate promotion moves
     });
     overlay.add(icon);
   });

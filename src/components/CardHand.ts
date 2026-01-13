@@ -189,6 +189,9 @@ export class CardHandComponent {
   /** Called when a targeted card hits a valid target (Req 9.5) */
   public onCardTargeted?: (card: CardData, target: Square) => boolean | void;
   
+  /** Called when targeting starts (for highlighting legal squares) */
+  public onTargetingStart?: (card: CardData) => void;
+  
   /** Called when targeting is cancelled (Req 9.6) */
   public onTargetingCancel?: (card: CardData) => void;
 
@@ -247,6 +250,13 @@ export class CardHandComponent {
   private setupTargetingCallbacks(): void {
     if (!this.targeting) return;
     
+    // When targeting starts (for highlighting legal squares)
+    this.targeting.onTargetingStart = (card: CardData) => {
+      if (this.onTargetingStart) {
+        this.onTargetingStart(card);
+      }
+    };
+    
     // When a non-targeted card is played (dragged to play zone)
     // Requirement 9.3: Drag card to board area to play
     this.targeting.onCardPlayed = (card: CardData) => {
@@ -266,6 +276,11 @@ export class CardHandComponent {
         } else {
           draggedCard.setVisible(false);
         }
+      }
+      
+      // Clear highlights after card is played
+      if (this.onTargetingCancel) {
+        this.onTargetingCancel(card);
       }
     };
     
@@ -288,6 +303,11 @@ export class CardHandComponent {
         } else {
           draggedCard.setVisible(false);
         }
+      }
+      
+      // Clear highlights after card is targeted
+      if (this.onTargetingCancel) {
+        this.onTargetingCancel(card);
       }
     };
     
@@ -694,7 +714,7 @@ export class CardHandComponent {
       card.onHoverEnd = () => this.handleCardHoverEnd(card);
       
       // Drag handlers
-      card.onDragStart = () => this.handleCardDragStart(card, cardData);
+      card.onDragStart = (_, pointer) => this.handleCardDragStart(card, cardData, pointer);
       card.onDragMove = (_, pointer) => this.handleCardDrag(pointer);
       card.onDragEnd = (_, pointer) => this.handleCardDragEnd(card, cardData, pointer);
       
@@ -760,6 +780,9 @@ export class CardHandComponent {
    * @private
    */
   private handleCardHoverEnd(card: CardComponent): void {
+    // Don't reset if this card is being dragged
+    if (this.draggingCard === card) return;
+    
     if (this.hoveredCard !== card) return;
     
     this.resetCardPosition(card);
@@ -802,15 +825,20 @@ export class CardHandComponent {
    * 2. Bring card to front (depth 200)
    * 3. Scale up and straighten
    * 4. Hide preview
-   * 5. Start targeting mode
+   * 5. Start targeting mode with pointer position for offset calculation
    * 6. Notify callback
    * 
    * @param card - The dragged card component
    * @param cardData - The card's data
+   * @param pointer - The pointer that initiated the drag
    * @private
    */
-  private handleCardDragStart(card: CardComponent, cardData: CardData): void {
+  private handleCardDragStart(card: CardComponent, cardData: CardData, pointer: Phaser.Input.Pointer): void {
     this.draggingCard = card;
+    
+    // Clear hover state to prevent interference
+    this.hoveredCard = null;
+    
     card.setDepth(200); // Bring to very front while dragging
     const original = card as CardComponentWithOriginal;
     card.setScale(original.originalScale * HOVER_SCALE);
@@ -819,10 +847,10 @@ export class CardHandComponent {
     // Hide preview while dragging
     this.hidePreview();
     
-    // Start targeting mode
+    // Start targeting mode with pointer position for offset calculation
     const pos = card.getPosition();
     if (this.targeting) {
-      this.targeting.startTargeting(cardData, card, pos.x, pos.y);
+      this.targeting.startTargeting(cardData, card, pos.x, pos.y, pointer.x, pointer.y);
     }
     
     if (this.onCardDragStart) {

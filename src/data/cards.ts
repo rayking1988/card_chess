@@ -212,7 +212,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     artAsset: 'destroy.png',
     frameColor: 'purple',  // Purple frame for destruction spells
     quantity: 4,
-    description: 'Destroy target piece on a square you control.'
+    description: 'Destroy target non-King piece on a square you control.'
   },
 
   treasureHunt: {

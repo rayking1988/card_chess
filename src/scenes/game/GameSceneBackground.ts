@@ -4,6 +4,7 @@
  * @module scenes/game/GameSceneBackground
  */
 
+import Phaser from 'phaser';
 import { hex } from '../../utils/colors';
 import type { GameScene } from '../GameScene';
 
@@ -14,8 +15,20 @@ import type { GameScene } from '../GameScene';
  * @param height - Screen height
  */
 export function createBackground(this: GameScene, width: number, height: number): void {
-  if (this.textures.exists('room_background')) {
-    // Use room background with cover scaling
+  if (this.textures.exists('wood_background')) {
+    // Use wood background with tiled repeating pattern
+    const tiledBg = this.add.tileSprite(
+      width / 2,
+      height / 2,
+      width,
+      height,
+      'wood_background'
+    );
+    tiledBg.setDepth(-1);
+    // Store reference for resize handling
+    this.background = tiledBg as unknown as Phaser.GameObjects.Image;
+  } else if (this.textures.exists('room_background')) {
+    // Fallback to room background with cover scaling
     this.background = this.add.image(width / 2, height / 2, 'room_background');
     this.background.setDepth(-1);
     this.scaleBackgroundToCover();
@@ -37,19 +50,27 @@ export function createBackground(this: GameScene, width: number, height: number)
 /**
  * Scales background to cover entire viewport (may crop edges)
  * Uses CSS-like "background-size: cover" behavior
+ * For tiled backgrounds, resizes the tile sprite instead
  */
 export function scaleBackgroundToCover(this: GameScene): void {
   if (!this.background) return;
 
   const { width, height } = this.scale;
-  const bgWidth = this.background.width;
-  const bgHeight = this.background.height;
+  
+  // Check if it's a TileSprite (wood background)
+  if (this.background instanceof Phaser.GameObjects.TileSprite) {
+    this.background.setSize(width, height);
+    this.background.setPosition(width / 2, height / 2);
+  } else {
+    // Regular image - scale to cover
+    const bgWidth = this.background.width;
+    const bgHeight = this.background.height;
 
-  // Scale to cover (like CSS background-size: cover)
-  const scaleX = width / bgWidth;
-  const scaleY = height / bgHeight;
-  const scale = Math.max(scaleX, scaleY);
+    const scaleX = width / bgWidth;
+    const scaleY = height / bgHeight;
+    const scale = Math.max(scaleX, scaleY);
 
-  this.background.setScale(scale);
-  this.background.setPosition(width / 2, height / 2);
+    this.background.setScale(scale);
+    this.background.setPosition(width / 2, height / 2);
+  }
 }

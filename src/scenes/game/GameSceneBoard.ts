@@ -13,8 +13,14 @@ import type { GameScene } from '../GameScene';
  * Sets up callback for chess board move attempts
  */
 export function setupChessBoardCallbacks(this: GameScene): void {
+  // Handle click-to-move (with animation)
   this.chessBoard.onMoveAttempt = (from: Square, to: Square) => {
-    this.handleLocalMove(from, to);
+    this.handleLocalMove(from, to, undefined, true); // true = animate
+  };
+  
+  // Handle drag-and-drop (without animation)
+  this.chessBoard.onDragMove = (from: Square, to: Square) => {
+    this.handleLocalMove(from, to, undefined, false); // false = no animation
   };
 }
 
@@ -31,8 +37,10 @@ export function setupChessBoardCallbacks(this: GameScene): void {
  *
  * @param from - Source square
  * @param to - Destination square
+ * @param promotion - Promotion piece (for pawn promotion)
+ * @param animate - Whether to animate the move (true for click, false for drag)
  */
-export function handleLocalMove(this: GameScene, from: Square, to: Square, promotion?: PieceSymbol): void {
+export function handleLocalMove(this: GameScene, from: Square, to: Square, promotion?: PieceSymbol, animate: boolean = true): void {
   // In single-player mode (no network), allow controlling both sides
   const isSinglePlayer = !this.networkManager;
 
@@ -101,7 +109,7 @@ export function handleLocalMove(this: GameScene, from: Square, to: Square, promo
 
   if (result.success) {
     this.pendingPromotion = null;
-    if (movingPiece) {
+    if (movingPiece && animate) {
       this.animatePieceMove(from, to, movingPiece, capturedPiece);
     }
     // Update game state

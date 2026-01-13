@@ -358,7 +358,7 @@ export function positionLeftPanel(this: GameScene, layout: GameLayout): void {
   const scale = layout.panelScale;
   const leftX = layout.leftPanelX;
   const deckScale = 0.14 * scale;
-  const topCardScale = 0.75 * scale; // Same as deck scale
+  const topCardScale = 0.75 * scale;
   const labelSize = 11 * scale;
   const countSize = 12 * scale;
 
@@ -374,7 +374,7 @@ export function positionLeftPanel(this: GameScene, layout: GameLayout): void {
 
   layoutPileStack(this.opponentDiscardStack, leftX, layout.opponentDiscardY, deckScale, this.opponentDiscardCount, 1);
   if (this.opponentDiscardTopCard) {
-    this.opponentDiscardTopCard.setPosition(leftX, layout.opponentDiscardY);
+    this.opponentDiscardTopCard.setPosition(leftX, layout.opponentDiscardY - 60 * scale);
     this.opponentDiscardTopCard.setScale(topCardScale);
   }
   if (this.opponentDiscardLabelText) {
@@ -393,7 +393,7 @@ export function positionLeftPanel(this: GameScene, layout: GameLayout): void {
     this.playerDiscardTopCard.setScale(topCardScale);
   }
   if (this.playerDiscardLabelText) {
-    this.playerDiscardLabelText.setPosition(leftX, layout.playerDiscardY - 60 * scale);
+    this.playerDiscardLabelText.setPosition(leftX, layout.playerDiscardY - 0 * scale);
     this.playerDiscardLabelText.setFontSize(labelSize);
   }
   if (this.playerDiscardCountText) {

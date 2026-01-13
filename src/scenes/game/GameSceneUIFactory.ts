@@ -243,7 +243,8 @@ export function createLeftPanel(this: GameScene, layout: GameLayout): void {
   }).setOrigin(0.5).setDepth(10);
 
   // === OPPONENT'S DISCARD (below deck) ===
-  this.opponentDiscardStack = createPileStack(this, x, layout.opponentDiscardY, deckScale, stackDepth, 1);
+  // No pile stack needed - only the top card is displayed
+  this.opponentDiscardStack = [];
 
   this.opponentDiscardLabelText = this.add.text(x, layout.opponentDiscardY - 60 * scale, 'Opp Discard', {
     fontSize: `${10 * scale}px`, fontFamily: 'BoldPixels, Arial', color: '#888888'
@@ -254,7 +255,8 @@ export function createLeftPanel(this: GameScene, layout: GameLayout): void {
   }).setOrigin(0.5).setDepth(10);
 
   // === PLAYER'S DISCARD (above player deck) ===
-  this.playerDiscardStack = createPileStack(this, x, layout.playerDiscardY, deckScale, stackDepth, 1);
+  // No pile stack needed - only the top card is displayed
+  this.playerDiscardStack = [];
 
   this.playerDiscardLabelText = this.add.text(x, layout.playerDiscardY - 60 * scale, 'Your Discard', {
     fontSize: `${10 * scale}px`, fontFamily: 'BoldPixels, Arial', color: '#888888'

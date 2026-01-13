@@ -11,6 +11,83 @@ import { calculateControlPower, playerControlsSquare } from '../../utils/control
 import { makeCardComponentClickable } from './GameUIHelpers';
 import type { GameScene } from '../GameScene';
 
+/** Color for deployment target highlights (blue) */
+const DEPLOY_HIGHLIGHT_COLOR = 0x4488ff;
+
+/** Color for destroy target highlights (red) */
+const DESTROY_HIGHLIGHT_COLOR = 0xff4444;
+
+/**
+ * Gets all legal target squares for a card
+ * 
+ * @param card - Card to check targets for
+ * @returns Object with arrays of deploy and destroy squares
+ */
+export function getLegalTargetSquares(this: GameScene, card: Card): { deploy: Square[], destroy: Square[] } {
+  const deploy: Square[] = [];
+  const destroy: Square[] = [];
+  
+  const controlMap = calculateControlPower(this.chessBoard.getWrapper());
+  const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+  const ranks = ['1', '2', '3', '4', '5', '6', '7', '8'];
+  
+  for (const file of files) {
+    for (const rank of ranks) {
+      const square = (file + rank) as Square;
+      const playerControls = playerControlsSquare(controlMap, square, this.localColor);
+      
+      if (!playerControls) continue;
+      
+      const piece = this.chessBoard.getWrapper().getPiece(square);
+      
+      if (card.effect.action === 'DEPLOY_PIECE') {
+        // Can deploy to empty controlled squares (if it doesn't give check)
+        if (!piece) {
+          const pieceType = (card.effect as { piece: PieceType }).piece;
+          const boardFEN = this.chessBoard.getPosition();
+          if (!this.gameStateManager.wouldDeploymentGiveCheck(square, pieceType, this.localColor, boardFEN)) {
+            deploy.push(square);
+          }
+        }
+      } else if (card.effect.action === 'DESTROY_PIECE') {
+        // Can destroy non-King pieces on controlled squares
+        if (piece && piece.type !== 'k') {
+          destroy.push(square);
+        }
+      }
+    }
+  }
+  
+  return { deploy, destroy };
+}
+
+/**
+ * Highlights legal target squares for a card
+ * Blue for deployment, red for destruction
+ * 
+ * @param card - Card being targeted
+ */
+export function highlightLegalTargets(this: GameScene, card: Card): void {
+  const { deploy, destroy } = this.getLegalTargetSquares(card);
+  
+  // Highlight deployment squares in blue
+  if (deploy.length > 0) {
+    this.chessBoard.highlightSquares(deploy, DEPLOY_HIGHLIGHT_COLOR);
+  }
+  
+  // Highlight destroy squares in red
+  if (destroy.length > 0) {
+    this.chessBoard.highlightSquares(destroy, DESTROY_HIGHLIGHT_COLOR);
+  }
+}
+
+/**
+ * Clears legal target highlights
+ */
+export function clearLegalTargetHighlights(this: GameScene): void {
+  this.chessBoard.clearHighlights();
+}
+
 /**
  * Sets up callbacks for card hand interactions
  * Configures target validation and card play handlers
@@ -29,6 +106,16 @@ export function setupCardHandCallbacks(this: GameScene): void {
   // Handle targeted card play
   this.cardHand.onCardTargeted = (card: Card, target: Square) => {
     this.handleLocalCardPlay(card, target);
+  };
+  
+  // Handle targeting start - highlight legal squares
+  this.cardHand.onTargetingStart = (card: Card) => {
+    this.highlightLegalTargets(card);
+  };
+  
+  // Handle targeting cancel - clear highlights
+  this.cardHand.onTargetingCancel = () => {
+    this.clearLegalTargetHighlights();
   };
 }
 
@@ -60,9 +147,9 @@ export function validateCardTarget(this: GameScene, card: Card, square: Square):
 
     return true;
   } else if (card.effect.action === 'DESTROY_PIECE') {
-    // Can only destroy pieces on squares you control
+    // Can only destroy non-King pieces on squares you control
     const piece = this.chessBoard.getWrapper().getPiece(square);
-    return playerControls && !!piece;
+    return playerControls && !!piece && piece.type !== 'k';
   }
 
   return false;

@@ -147,7 +147,10 @@ import {
   setDiscardTopCard,
   refreshDiscardTopCards,
   lockDiscardTop,
-  releaseDiscardTop
+  releaseDiscardTop,
+  getLegalTargetSquares,
+  highlightLegalTargets,
+  clearLegalTargetHighlights
 } from './game/GameSceneCards';
 import {
   initializeGame,
@@ -1081,8 +1084,8 @@ export class GameScene extends Phaser.Scene {
     setupChessBoardCallbacks.call(this);
   }
 
-  public handleLocalMove(from: Square, to: Square, promotion?: PieceSymbol): void {
-    handleLocalMove.call(this, from, to, promotion);
+  public handleLocalMove(from: Square, to: Square, promotion?: PieceSymbol, animate: boolean = true): void {
+    handleLocalMove.call(this, from, to, promotion, animate);
   }
 
   public setupCardHandCallbacks(): void {
@@ -1091,6 +1094,18 @@ export class GameScene extends Phaser.Scene {
 
   public validateCardTarget(card: Card, square: Square): boolean {
     return validateCardTarget.call(this, card, square);
+  }
+
+  public getLegalTargetSquares(card: Card): { deploy: Square[], destroy: Square[] } {
+    return getLegalTargetSquares.call(this, card);
+  }
+
+  public highlightLegalTargets(card: Card): void {
+    highlightLegalTargets.call(this, card);
+  }
+
+  public clearLegalTargetHighlights(): void {
+    clearLegalTargetHighlights.call(this);
   }
 
   public handleLocalCardPlay(card: Card, target?: Square): boolean {

@@ -99,7 +99,8 @@ const UI_ASSETS = {
 /** Background asset paths */
 const BACKGROUND_ASSETS = {
   mat: 'background/cyan_mat.png',
-  room: 'background/room.png'
+  room: 'background/room.png',
+  wood: 'background/wood.jpg'
 };
 
 /* ============================================
@@ -365,6 +366,7 @@ export class BootScene extends Phaser.Scene {
   private loadBackground(): void {
     this.load.image('background', BACKGROUND_ASSETS.mat);
     this.load.image('room_background', BACKGROUND_ASSETS.room);
+    this.load.image('wood_background', BACKGROUND_ASSETS.wood);
   }
 
   /**

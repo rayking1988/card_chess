@@ -135,10 +135,11 @@ export function getPileLayerCount(count: number): number {
 /**
  * Positions and shows/hides pile stack images based on card count
  * Creates a 3D stacking effect with offset layers
+ * The bottom of the pile stays fixed - cards stack upward from the base position
  * 
  * @param stack - Array of card back images for the pile
  * @param x - Base X position for pile center
- * @param y - Base Y position for pile center
+ * @param y - Base Y position for pile BOTTOM (cards stack upward from here)
  * @param scale - Scale factor for card images
  * @param count - Number of cards in the pile
  * @param alpha - Opacity for card images
@@ -154,11 +155,13 @@ export function layoutPileStack(
   const layers = getPileLayerCount(count);
   const offsetX = -1.8 * scale;
   const offsetY = -3.2 * scale;
+  
   for (let i = 0; i < stack.length; i++) {
     const card = stack[i];
     if (i < layers) {
-      const layerOffset = layers - i - 1;
-      card.setPosition(x + layerOffset * offsetX, y + layerOffset * offsetY);
+      // Stack cards from bottom (i=0) upward
+      // Each layer is offset up and left from the previous
+      card.setPosition(x + i * offsetX, y + i * offsetY);
       card.setScale(scale);
       card.setAlpha(alpha);
       card.setVisible(true);
