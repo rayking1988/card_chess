@@ -41,9 +41,10 @@ export type GameAction =
   | { type: 'MOVE_PIECE'; from: string; to: string; promotion?: string }
   | { type: 'MULLIGAN' }
   | { type: 'READY' }
-  | { type: 'END_TURN' }
+  | { type: 'END_TURN'; disturbAmount?: number }
   | { type: 'PLAYER_NAME'; name: string }
   | { type: 'COLOR_REQUEST' }
+  | { type: 'CHAT_MESSAGE'; message: string; senderColor: PlayerColor; senderName: string }
   | { type: 'REMATCH_REQUEST' }
   | { type: 'REMATCH_ACCEPT' }
   | { type: 'REMATCH_DECLINE' }

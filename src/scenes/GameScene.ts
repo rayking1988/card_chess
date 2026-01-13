@@ -40,7 +40,7 @@
  * @requires utils/controlPower
  * @requires data/cards
  * 
- * Used by: MenuScene (game start), EndScene (rematch)
+ * Used by: MenuScene (game start)
  */
 
 import Phaser from 'phaser';
@@ -153,6 +153,8 @@ import {
   initializeGame,
   updateHandDisplay,
   updateCardCount,
+  refreshInteractionBlockers,
+  clearInteractionBlockers,
   showMulliganUI,
   handleMulligan,
   handleReady,
@@ -162,7 +164,12 @@ import {
   discardCard,
   exitDiscardMode,
   checkGameEndConditions,
-  handleGameEnd
+  handleGameEnd,
+  handleRematchRequest,
+  handleRematchReceived,
+  handleRematchDeclined,
+  startRematch,
+  handleReturnToMenu
 } from './game/GameSceneFlow';
 import { showPromotionPicker, hidePromotionPicker } from './game/GameScenePromotion';
 
@@ -190,7 +197,7 @@ const DEBUG_SHOW_LAYOUT_SECTIONS = false;
  * - P2P networking for multiplayer
  * - Mulligan and discard phases
  * 
- * Used by: MenuScene (game start), EndScene (rematch)
+ * Used by: MenuScene (game start)
  */
 export class GameScene extends Phaser.Scene {
   /* ----------------------------------------
@@ -549,14 +556,14 @@ export class GameScene extends Phaser.Scene {
   /** Ready/Done button container */
   public readyButton: Phaser.GameObjects.Container | null = null;
   
-  /** Semi-transparent overlay for mulligan phase (using Rectangle for performance) */
-  public mulliganOverlay: Phaser.GameObjects.Rectangle | null = null;
-  
   /** Title text for mulligan phase */
   public mulliganTitleText: Phaser.GameObjects.Text | null = null;
   
   /** Instruction text for mulligan phase */
   public mulliganInstructionText: Phaser.GameObjects.Text | null = null;
+
+  /** Mulligan banner strip */
+  public mulliganBannerRect: Phaser.GameObjects.Rectangle | null = null;
   
   /* ----------------------------------------
    * Discard Mode UI Elements
@@ -570,6 +577,32 @@ export class GameScene extends Phaser.Scene {
   
   /** Flag indicating if player is in discard mode */
   public isDiscardMode: boolean = false;
+
+  /* ----------------------------------------
+   * End Game Overlay
+   * ---------------------------------------- */
+
+  /** Screen interaction blockers (exclude event log) */
+  public interactionBlockers: Phaser.GameObjects.Rectangle[] = [];
+
+  /** Whether interaction blockers are active */
+  public interactionBlockersActive: boolean = false;
+
+  /** Game end banner strip */
+  public gameEndBannerRect: Phaser.GameObjects.Rectangle | null = null;
+
+  /** Game end banner text */
+  public gameEndBannerText: Phaser.GameObjects.Text | null = null;
+
+  /** Rematch button in game end banner */
+  public gameEndRematchButton: Phaser.GameObjects.Container | null = null;
+
+  /** Back to menu button in game end banner */
+  public gameEndMenuButton: Phaser.GameObjects.Container | null = null;
+
+  /** Rematch request state */
+  public localRematchRequested: boolean = false;
+  public opponentRematchRequested: boolean = false;
 
   /* ----------------------------------------
    * Discard Viewer Overlay
@@ -1060,8 +1093,8 @@ export class GameScene extends Phaser.Scene {
     return validateCardTarget.call(this, card, square);
   }
 
-  public handleLocalCardPlay(card: Card, target?: Square): void {
-    handleLocalCardPlay.call(this, card, target);
+  public handleLocalCardPlay(card: Card, target?: Square): boolean {
+    return handleLocalCardPlay.call(this, card, target);
   }
 
   public initializeGame(): void {
@@ -1074,6 +1107,14 @@ export class GameScene extends Phaser.Scene {
 
   public updateCardCount(): void {
     updateCardCount.call(this);
+  }
+
+  public refreshInteractionBlockers(): void {
+    refreshInteractionBlockers.call(this);
+  }
+
+  public clearInteractionBlockers(): void {
+    clearInteractionBlockers.call(this);
   }
 
   public showMulliganUI(): void {
@@ -1114,6 +1155,26 @@ export class GameScene extends Phaser.Scene {
 
   public handleGameEnd(winner: PlayerColor | null, reason: string): void {
     handleGameEnd.call(this, winner, reason);
+  }
+
+  public handleRematchRequest(): void {
+    handleRematchRequest.call(this);
+  }
+
+  public handleRematchReceived(): void {
+    handleRematchReceived.call(this);
+  }
+
+  public handleRematchDeclined(): void {
+    handleRematchDeclined.call(this);
+  }
+
+  public startRematch(): void {
+    startRematch.call(this);
+  }
+
+  public handleReturnToMenu(): void {
+    handleReturnToMenu.call(this);
   }
 
   public setDiscardTopCard(side: 'local' | 'opponent', cardData: Card | null): void {

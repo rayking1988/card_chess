@@ -132,6 +132,7 @@ export function handleLocalMove(this: GameScene, from: Square, to: Square, promo
     } else {
       // End turn after move (Requirement 3.5)
       this.logEvent('system', `Ending ${movingColor}'s turn...`);
+      const disturbToAdd = currentPlayer.mode === 'disturb' ? currentPlayer.energy : 0;
       if (!isSinglePlayer) {
         this.sendLocalPlayerStats();
       }
@@ -143,7 +144,7 @@ export function handleLocalMove(this: GameScene, from: Square, to: Square, promo
       const newTurn = this.gameStateManager.getCurrentTurn();
       this.logEvent('system', `Now ${newTurn}'s turn`);
       if (!isSinglePlayer) {
-        this.networkManager?.sendEndTurn();
+        this.networkManager?.sendEndTurn(disturbToAdd);
       }
     }
   } else if (result.needsPromotion) {

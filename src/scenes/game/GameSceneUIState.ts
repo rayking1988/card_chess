@@ -180,7 +180,8 @@ export function runUIAnimations(this: GameScene, prev: UISnapshot, next: UISnaps
   if (!layout) return;
 
   if (prev.currentTurn !== next.currentTurn) {
-    this.showTurnBanner(next.currentTurn);
+    // Turn overlay is shown via updateTurnOverlay in updateUIFromState
+    // No popup banner needed
   }
 
   if (prev.localClock !== next.localClock) {

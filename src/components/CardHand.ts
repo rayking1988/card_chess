@@ -184,10 +184,10 @@ export class CardHandComponent {
   public onCardHover?: (card: CardData | null) => void;
   
   /** Called when a non-targeted card is played (Req 9.3) */
-  public onCardPlayed?: (card: CardData) => void;
+  public onCardPlayed?: (card: CardData) => boolean | void;
   
   /** Called when a targeted card hits a valid target (Req 9.5) */
-  public onCardTargeted?: (card: CardData, target: Square) => void;
+  public onCardTargeted?: (card: CardData, target: Square) => boolean | void;
   
   /** Called when targeting is cancelled (Req 9.6) */
   public onTargetingCancel?: (card: CardData) => void;
@@ -254,13 +254,18 @@ export class CardHandComponent {
       const draggedCard = this.draggingCard;
       this.draggingCard = null;
       
-      // Disable interaction on the dragged card to prevent further events
       if (draggedCard) {
         draggedCard.disableInteraction();
       }
-      
-      if (this.onCardPlayed) {
-        this.onCardPlayed(card);
+
+      const accepted = this.onCardPlayed ? this.onCardPlayed(card) : false;
+      if (draggedCard) {
+        if (accepted === false) {
+          this.resetCardPosition(draggedCard);
+          draggedCard.enableInteraction(true);
+        } else {
+          draggedCard.setVisible(false);
+        }
       }
     };
     
@@ -271,13 +276,18 @@ export class CardHandComponent {
       const draggedCard = this.draggingCard;
       this.draggingCard = null;
       
-      // Disable interaction on the dragged card to prevent further events
       if (draggedCard) {
         draggedCard.disableInteraction();
       }
-      
-      if (this.onCardTargeted) {
-        this.onCardTargeted(card, target);
+
+      const accepted = this.onCardTargeted ? this.onCardTargeted(card, target) : false;
+      if (draggedCard) {
+        if (accepted === false) {
+          this.resetCardPosition(draggedCard);
+          draggedCard.enableInteraction(true);
+        } else {
+          draggedCard.setVisible(false);
+        }
       }
     };
     
@@ -776,6 +786,7 @@ export class CardHandComponent {
     card.setPosition(original.originalX, original.originalY);
     card.setRotation(original.originalRotation);
     card.setDepth(original.originalDepth);
+    card.setVisible(true); // Ensure card is visible when reset
   }
 
   /* ============================================

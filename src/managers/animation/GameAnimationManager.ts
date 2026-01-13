@@ -55,6 +55,8 @@ export class GameAnimationManager extends BoardAnimationManager {
   ): void {
     const scene = (this as unknown as { scene: Phaser.Scene }).scene;
     const timeDiff = newTime - oldTime;
+    const baseScaleX = clockContainer.scaleX || 1;
+    const baseScaleY = clockContainer.scaleY || 1;
 
     // Determine color based on change
     let flashColor: number;
@@ -68,8 +70,8 @@ export class GameAnimationManager extends BoardAnimationManager {
 
     scene.tweens.add({
       targets: clockContainer,
-      scaleX: 1,
-      scaleY: 1,
+      scaleX: baseScaleX,
+      scaleY: baseScaleY,
       duration: config.duration ?? ANIM_DURATION.CLOCK_CHANGE,
       ease: EASING.QUAD_OUT,
       yoyo: true,
@@ -112,14 +114,16 @@ export class GameAnimationManager extends BoardAnimationManager {
   ): void {
     const scene = (this as unknown as { scene: Phaser.Scene }).scene;
     const originalColor = text.style.color;
+    const baseScaleX = text.scaleX || 1;
+    const baseScaleY = text.scaleY || 1;
 
     const colorStr = '#' + flashColor.toString(16).padStart(6, '0');
     text.setColor(colorStr);
 
     scene.tweens.add({
       targets: text,
-      scaleX: 1.2,
-      scaleY: 1.2,
+      scaleX: baseScaleX,
+      scaleY: baseScaleY,
       duration: (config.duration ?? ANIM_DURATION.CLOCK_CHANGE) / 2,
       ease: EASING.QUAD_OUT,
       yoyo: true,
@@ -178,6 +182,8 @@ export class GameAnimationManager extends BoardAnimationManager {
   ): void {
     const scene = (this as unknown as { scene: Phaser.Scene }).scene;
     const energyDiff = newEnergy - oldEnergy;
+    const baseScaleX = energyContainer.scaleX || 1;
+    const baseScaleY = energyContainer.scaleY || 1;
 
     let flashColor: number;
     if (energyDiff > 0) {
@@ -188,8 +194,8 @@ export class GameAnimationManager extends BoardAnimationManager {
 
     scene.tweens.add({
       targets: energyContainer,
-      scaleX: energyDiff > 0 ? 1.15 : 0.9,
-      scaleY: energyDiff > 0 ? 1.15 : 0.9,
+      scaleX: baseScaleX * (energyDiff > 0 ? 1.15 : 0.9),
+      scaleY: baseScaleY * (energyDiff > 0 ? 1.15 : 0.9),
       duration: config.duration ?? ANIM_DURATION.ENERGY_CHANGE,
       ease: energyDiff > 0 ? EASING.BACK_OUT : EASING.QUAD_OUT,
       yoyo: true,

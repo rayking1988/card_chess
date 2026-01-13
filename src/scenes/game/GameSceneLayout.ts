@@ -372,6 +372,7 @@ export function positionLeftPanel(this: GameScene, layout: GameLayout): void {
     this.opponentDeckCountText.setFontSize(countSize);
   }
 
+  layoutPileStack(this.opponentDiscardStack, leftX, layout.opponentDiscardY, deckScale, this.opponentDiscardCount, 1);
   if (this.opponentDiscardTopCard) {
     this.opponentDiscardTopCard.setPosition(leftX, layout.opponentDiscardY);
     this.opponentDiscardTopCard.setScale(topCardScale);
@@ -385,6 +386,8 @@ export function positionLeftPanel(this: GameScene, layout: GameLayout): void {
     this.opponentDiscardCountText.setFontSize(countSize);
   }
 
+  const localDiscardCount = this.gameStateManager ? this.gameStateManager.getPlayer(this.localColor).discard.length : 0;
+  layoutPileStack(this.playerDiscardStack, leftX, layout.playerDiscardY, deckScale, localDiscardCount, 1);
   if (this.playerDiscardTopCard) {
     this.playerDiscardTopCard.setPosition(leftX, layout.playerDiscardY);
     this.playerDiscardTopCard.setScale(topCardScale);
@@ -597,28 +600,47 @@ export function positionTurnOverlay(this: GameScene, layout: GameLayout): void {
 export function positionOverlays(this: GameScene, layout: GameLayout): void {
   const { width, height } = layout;
 
-  if (this.mulliganOverlay) {
-    // Rectangle uses center origin, so position at center and set size
-    this.mulliganOverlay.setPosition(width / 2, height / 2);
-    this.mulliganOverlay.setSize(width, height);
+  const overlayWidth = layout.boardSize;
+  const overlayHeight = this.boardSquareSize * 2;
+  const overlayX = this.boardTopLeft.x + overlayWidth / 2;
+  const overlayY = this.boardTopLeft.y + this.boardSquareSize * 3 + overlayHeight / 2;
+
+  if (this.mulliganBannerRect) {
+    this.mulliganBannerRect.setPosition(overlayX, overlayY);
+    this.mulliganBannerRect.setSize(overlayWidth, overlayHeight);
   }
   if (this.mulliganTitleText) {
-    this.mulliganTitleText.setPosition(width / 2, height / 2 - 180 * layout.panelScale);
-    this.mulliganTitleText.setFontSize(32 * layout.panelScale);
-  }
-  if (this.mulliganInstructionText) {
-    this.mulliganInstructionText.setPosition(width / 2, height / 2 - 130 * layout.panelScale);
-    this.mulliganInstructionText.setFontSize(16 * layout.panelScale);
+    this.mulliganTitleText.setPosition(overlayX, overlayY - overlayHeight * 0.18);
+    this.mulliganTitleText.setFontSize(28 * layout.panelScale);
   }
   if (this.mulliganButton) {
-    this.mulliganButton.setPosition(width / 2 - 140 * layout.panelScale, height / 2 - 40 * layout.panelScale);
-    this.mulliganButton.setData('baseScale', layout.panelScale);
-    this.mulliganButton.setScale(layout.panelScale);
+    this.mulliganButton.setPosition(overlayX - 160 * layout.panelScale, overlayY + overlayHeight * 0.18);
+    this.mulliganButton.setData('baseScale', layout.panelScale * 0.8);
+    this.mulliganButton.setScale(layout.panelScale * 0.8);
   }
   if (this.readyButton) {
-    this.readyButton.setPosition(width / 2 + 140 * layout.panelScale, height / 2 - 40 * layout.panelScale);
-    this.readyButton.setData('baseScale', layout.panelScale);
-    this.readyButton.setScale(layout.panelScale);
+    this.readyButton.setPosition(overlayX + 160 * layout.panelScale, overlayY + overlayHeight * 0.18);
+    this.readyButton.setData('baseScale', layout.panelScale * 0.8);
+    this.readyButton.setScale(layout.panelScale * 0.8);
+  }
+
+  if (this.gameEndBannerRect) {
+    this.gameEndBannerRect.setPosition(overlayX, overlayY);
+    this.gameEndBannerRect.setSize(overlayWidth, overlayHeight);
+  }
+  if (this.gameEndBannerText) {
+    this.gameEndBannerText.setPosition(overlayX, overlayY - overlayHeight * 0.18);
+    this.gameEndBannerText.setFontSize(30 * layout.panelScale);
+  }
+  if (this.gameEndRematchButton) {
+    this.gameEndRematchButton.setPosition(overlayX - 180 * layout.panelScale, overlayY + overlayHeight * 0.18);
+    this.gameEndRematchButton.setData('baseScale', layout.panelScale * 0.8);
+    this.gameEndRematchButton.setScale(layout.panelScale * 0.8);
+  }
+  if (this.gameEndMenuButton) {
+    this.gameEndMenuButton.setPosition(overlayX + 180 * layout.panelScale, overlayY + overlayHeight * 0.18);
+    this.gameEndMenuButton.setData('baseScale', layout.panelScale * 0.8);
+    this.gameEndMenuButton.setScale(layout.panelScale * 0.8);
   }
 
   if (this.discardOverlay) {
@@ -654,5 +676,9 @@ export function positionOverlays(this: GameScene, layout: GameLayout): void {
 
   if (this.promotionOverlay && this.pendingPromotion) {
     this.showPromotionPicker(this.pendingPromotion.from, this.pendingPromotion.to, this.pendingPromotion.color);
+  }
+
+  if (this.interactionBlockersActive) {
+    this.refreshInteractionBlockers();
   }
 }

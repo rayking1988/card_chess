@@ -10,14 +10,12 @@
  * @requires ./scenes/BootScene
  * @requires ./scenes/MenuScene
  * @requires ./scenes/GameScene
- * @requires ./scenes/EndScene
  */
 
 import Phaser from 'phaser';
 import { BootScene } from './scenes/BootScene';
 import { MenuScene } from './scenes/MenuScene';
 import { GameScene } from './scenes/GameScene';
-import { EndScene } from './scenes/EndScene';
 
 /* ============================================
  * GAME CONFIGURATION CONSTANTS
@@ -86,8 +84,7 @@ const config: Phaser.Types.Core.GameConfig = {
   scene: [
     BootScene,   // Asset loading and initialization
     MenuScene,   // Main menu and matchmaking
-    GameScene,   // Core gameplay
-    EndScene     // Victory/defeat screen and rematch
+    GameScene    // Core gameplay
   ]
 };
 

@@ -60,7 +60,7 @@ const TIME_COLORS = {
  * formatTime(65)  // Returns "01:05"
  * formatTime(0)   // Returns "00:00"
  * 
- * Used by: ClockComponent.setTime(), EndScene for final stats display
+ * Used by: ClockComponent.setTime()
  */
 export function formatTime(seconds: number): string {
   const mins = Math.floor(Math.max(0, seconds) / 60);

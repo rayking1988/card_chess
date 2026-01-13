@@ -38,6 +38,11 @@ export function createEventLog(this: GameScene, layout: GameLayout): void {
   this.eventLog = new EventLogComponent(this, layout.eventLogX, layout.eventLogY);
   this.eventLog.setDepth(10);
   this.eventLog.setScale(layout.panelScale);
+  this.eventLog.onQuickChatSelect = (message) => {
+    const senderName = this.playerName;
+    this.eventLog.addEntry(this.localColor, message, senderName);
+    this.networkManager?.sendChatMessage(message, this.localColor, senderName);
+  };
 
   // Preview area removed per user request
 }
@@ -239,7 +244,7 @@ export function createLeftPanel(this: GameScene, layout: GameLayout): void {
   }).setOrigin(0.5).setDepth(10);
 
   // === OPPONENT'S DISCARD (below deck) ===
-  // No stack for discard - only show top card
+  this.opponentDiscardStack = createPileStack(this, x, layout.opponentDiscardY, deckScale, stackDepth, 1);
 
   this.opponentDiscardLabelText = this.add.text(x, layout.opponentDiscardY - 60 * scale, 'Opp Discard', {
     fontSize: `${10 * scale}px`, fontFamily: 'BoldPixels, Arial', color: '#888888'
@@ -250,7 +255,7 @@ export function createLeftPanel(this: GameScene, layout: GameLayout): void {
   }).setOrigin(0.5).setDepth(10);
 
   // === PLAYER'S DISCARD (above player deck) ===
-  // No stack for discard - only show top card
+  this.playerDiscardStack = createPileStack(this, x, layout.playerDiscardY, deckScale, stackDepth, 1);
 
   this.playerDiscardLabelText = this.add.text(x, layout.playerDiscardY - 60 * scale, 'Your Discard', {
     fontSize: `${10 * scale}px`, fontFamily: 'BoldPixels, Arial', color: '#888888'

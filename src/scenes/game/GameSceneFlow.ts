@@ -12,6 +12,9 @@ import { createImageButton } from './GameUIHelpers';
 import { hex } from '../../utils/colors';
 import type { GameScene } from '../GameScene';
 
+const INTERACTION_BLOCKER_ALPHA = 0.3;
+const INTERACTION_BLOCKER_DEPTH = 90;
+
 /**
  * Initializes the game state
  * Requirement 3.1: Initialize and shuffle deck at game start
@@ -82,6 +85,48 @@ export function updateCardCount(this: GameScene): void {
 }
 
 /**
+ * Refreshes interaction blockers to cover everything except the event log
+ */
+export function refreshInteractionBlockers(this: GameScene): void {
+  if (!this.interactionBlockersActive || !this.eventLog) return;
+
+  const { width, height } = this.scale;
+  const bounds = this.eventLog.getContainer().getBounds();
+  const left = Math.max(0, Math.min(width, bounds.x));
+  const right = Math.max(0, Math.min(width, bounds.x + bounds.width));
+  const top = Math.max(0, Math.min(height, bounds.y));
+  const bottom = Math.max(0, Math.min(height, bounds.y + bounds.height));
+  const middleHeight = Math.max(0, bottom - top);
+
+  this.interactionBlockers.forEach(rect => rect.destroy());
+  this.interactionBlockers = [];
+
+  const addBlocker = (x: number, y: number, w: number, h: number): void => {
+    if (w <= 0 || h <= 0) return;
+    const rect = this.add.rectangle(x, y, w, h, hex('#000000'), INTERACTION_BLOCKER_ALPHA);
+    rect.setDepth(INTERACTION_BLOCKER_DEPTH);
+    rect.setInteractive();
+    this.interactionBlockers.push(rect);
+  };
+
+  addBlocker(width / 2, top / 2, width, top);
+  addBlocker(width / 2, bottom + (height - bottom) / 2, width, height - bottom);
+  if (middleHeight > 0) {
+    addBlocker(left / 2, top + middleHeight / 2, left, middleHeight);
+    addBlocker(right + (width - right) / 2, top + middleHeight / 2, width - right, middleHeight);
+  }
+}
+
+/**
+ * Clears interaction blockers
+ */
+export function clearInteractionBlockers(this: GameScene): void {
+  this.interactionBlockers.forEach(rect => rect.destroy());
+  this.interactionBlockers = [];
+  this.interactionBlockersActive = false;
+}
+
+/**
  * Shows the mulligan phase UI
  * Displays overlay with mulligan and ready buttons
  */
@@ -90,47 +135,74 @@ export function showMulliganUI(this: GameScene): void {
   const layout = this.currentLayout ?? calculateLayout(width, height);
   const scale = layout.panelScale;
 
-  // Semi-transparent overlay (using Rectangle for better performance)
-  this.mulliganOverlay = this.add.rectangle(width / 2, height / 2, width, height, hex('#000000'), 0.5);
-  this.mulliganOverlay.setDepth(50);
+  this.isMobileEventLogVisible = true;
+  this.positionEventLog(layout);
+  this.interactionBlockersActive = true;
+  this.refreshInteractionBlockers();
+  this.cardHand.disableInteraction();
 
-  // Instructions - title
-  this.mulliganTitleText = this.add.text(width / 2, height / 2 - 180, 'Mulligan Phase', {
-    fontSize: `${32 * scale}px`,
-    fontFamily: 'BoldPixels, Arial',
-    color: '#ffffff'
-  }).setOrigin(0.5).setDepth(51);
+  const overlayWidth = layout.boardSize;
+  const overlayHeight = this.boardSquareSize * 2;
+  const overlayX = this.boardTopLeft.x + overlayWidth / 2;
+  const overlayY = this.boardTopLeft.y + this.boardSquareSize * 3 + overlayHeight / 2;
 
-  // Instructions - subtitle (more space from buttons)
-  this.mulliganInstructionText = this.add.text(width / 2, height / 2 - 130, 'Mulligan costs 10 seconds. Click Done when ready.', {
-    fontSize: `${16 * scale}px`,
-    fontFamily: 'BoldPixels, Arial',
-    color: '#cccccc'
-  }).setOrigin(0.5).setDepth(51);
+  if (!this.mulliganBannerRect) {
+    this.mulliganBannerRect = this.add.rectangle(overlayX, overlayY, overlayWidth, overlayHeight, hex('#ff9a2a'), 0.9);
+    this.mulliganBannerRect.setDepth(120);
+  } else {
+    this.mulliganBannerRect.setPosition(overlayX, overlayY);
+    this.mulliganBannerRect.setSize(overlayWidth, overlayHeight);
+  }
 
-  // Mulligan button (red) - more space from text
-  this.mulliganButton = createImageButton(this,
-    width / 2 - 140 * scale, height / 2 - 40 * scale,
-    'MULLIGAN (-10s)',
-    'red_button',
-    'red_button_pressed',
-    () => this.handleMulligan()
-  );
-  this.mulliganButton.setDepth(51);
-  this.mulliganButton.setData('baseScale', scale);
-  this.mulliganButton.setScale(scale);
+  if (!this.mulliganTitleText) {
+    this.mulliganTitleText = this.add.text(overlayX, overlayY - overlayHeight * 0.18, 'Mulligan?', {
+      fontSize: `${28 * scale}px`,
+      fontFamily: 'BoldPixels, Arial',
+      color: '#ffffff'
+    }).setOrigin(0.5).setDepth(121);
+  } else {
+    this.mulliganTitleText.setPosition(overlayX, overlayY - overlayHeight * 0.18);
+    this.mulliganTitleText.setFontSize(28 * scale);
+    this.mulliganTitleText.setText('Mulligan?');
+  }
 
-  // Ready button (blue)
-  this.readyButton = createImageButton(this,
-    width / 2 + 140 * scale, height / 2 - 40 * scale,
-    'DONE',
-    'blue_button',
-    'blue_button_pressed',
-    () => this.handleReady()
-  );
-  this.readyButton.setDepth(51);
-  this.readyButton.setData('baseScale', scale);
-  this.readyButton.setScale(scale);
+  const buttonScale = scale * 0.8;
+  const buttonY = overlayY + overlayHeight * 0.18;
+  const buttonOffset = 160 * scale;
+
+  if (!this.mulliganButton) {
+    this.mulliganButton = createImageButton(
+      this,
+      overlayX - buttonOffset,
+      buttonY,
+      'Mulligan (-10)',
+      'yellow_button',
+      'yellow_button_pressed',
+      () => this.handleMulligan()
+    );
+    this.mulliganButton.setDepth(122);
+  } else {
+    this.mulliganButton.setPosition(overlayX - buttonOffset, buttonY);
+  }
+  this.mulliganButton.setData('baseScale', buttonScale);
+  this.mulliganButton.setScale(buttonScale);
+
+  if (!this.readyButton) {
+    this.readyButton = createImageButton(
+      this,
+      overlayX + buttonOffset,
+      buttonY,
+      'Keep Hand',
+      'blue_button',
+      'blue_button_pressed',
+      () => this.handleReady()
+    );
+    this.readyButton.setDepth(122);
+  } else {
+    this.readyButton.setPosition(overlayX + buttonOffset, buttonY);
+  }
+  this.readyButton.setData('baseScale', buttonScale);
+  this.readyButton.setScale(buttonScale);
 }
 
 /**
@@ -196,10 +268,6 @@ export function handleReady(this: GameScene): void {
  * Hides the mulligan UI elements
  */
 export function hideMulliganUI(this: GameScene): void {
-  if (this.mulliganOverlay) {
-    this.mulliganOverlay.destroy();
-    this.mulliganOverlay = null;
-  }
   if (this.mulliganButton) {
     this.mulliganButton.destroy();
     this.mulliganButton = null;
@@ -207,6 +275,10 @@ export function hideMulliganUI(this: GameScene): void {
   if (this.readyButton) {
     this.readyButton.destroy();
     this.readyButton = null;
+  }
+  if (this.mulliganBannerRect) {
+    this.mulliganBannerRect.destroy();
+    this.mulliganBannerRect = null;
   }
   if (this.mulliganTitleText) {
     this.mulliganTitleText.destroy();
@@ -216,6 +288,8 @@ export function hideMulliganUI(this: GameScene): void {
     this.mulliganInstructionText.destroy();
     this.mulliganInstructionText = null;
   }
+  this.clearInteractionBlockers();
+  this.cardHand.enableInteraction();
 }
 
 /**
@@ -227,7 +301,8 @@ export function checkGameStart(this: GameScene): void {
   if (!this.networkManager && this.localPlayerReady) {
     this.gameStateManager.startGame();
     this.logEvent('system', 'Game started!');
-    this.showTurnBanner(this.gameStateManager.getCurrentTurn());
+    // Reset lastTurnOverlayTurn to force the turn overlay to show
+    this.lastTurnOverlayTurn = undefined;
     this.updateUIFromState();
     return;
   }
@@ -236,7 +311,8 @@ export function checkGameStart(this: GameScene): void {
   if (this.localPlayerReady && this.opponentPlayerReady) {
     this.gameStateManager.startGame();
     this.logEvent('system', 'Both players ready - Game started!');
-    this.showTurnBanner(this.gameStateManager.getCurrentTurn());
+    // Reset lastTurnOverlayTurn to force the turn overlay to show
+    this.lastTurnOverlayTurn = undefined;
     this.updateUIFromState();
   }
 }
@@ -311,7 +387,7 @@ export function discardCard(this: GameScene, card: Card): void {
       
       // Send END_TURN to opponent with the disturb amount
       if (this.networkManager) {
-        this.networkManager.sendGameAction({ type: 'END_TURN', disturbAmount: disturbToAdd } as any);
+        this.networkManager.sendEndTurn(disturbToAdd);
       }
     } else {
       // Update prompt
@@ -396,12 +472,14 @@ export function checkGameEndConditions(this: GameScene): void {
 
 /**
  * Handles game end
- * Logs result and transitions to EndScene
+ * Logs result and shows end-game overlay
  *
  * @param winner - Winning player color (null for draw)
  * @param reason - Text description of how game ended
  */
 export function handleGameEnd(this: GameScene, winner: PlayerColor | null, reason: string): void {
+  if (this.gameStateManager.getPhase() === 'ended') return;
+
   this.gameStateManager.endGame();
 
   this.logEvent('system', reason);
@@ -411,22 +489,158 @@ export function handleGameEnd(this: GameScene, winner: PlayerColor | null, reaso
     this.logEvent('system', isLocalWin ? 'You win!' : 'You lose!');
   }
 
-  // Transition to EndScene with network manager for rematch flow
-  const finalStats = {
-    turnNumber: this.gameStateManager.getState().turnNumber,
-    localClock: this.playerClock.getTime(),
-    opponentClock: this.opponentClock.getTime()
-  };
+  const layout = this.currentLayout ?? calculateLayout(this.scale.width, this.scale.height);
+  this.isMobileEventLogVisible = true;
+  this.positionEventLog(layout);
+  this.interactionBlockersActive = true;
+  this.refreshInteractionBlockers();
+  this.cardHand.disableInteraction();
 
-  this.time.delayedCall(2000, () => {
-    this.scene.start('EndScene', {
-      winner,
-      reason,
-      localColor: this.localColor,
+  const overlayWidth = layout.boardSize;
+  const overlayHeight = this.boardSquareSize * 2;
+  const overlayX = this.boardTopLeft.x + overlayWidth / 2;
+  const overlayY = this.boardTopLeft.y + this.boardSquareSize * 3 + overlayHeight / 2;
+
+  const isLocalWin = winner === this.localColor;
+  const bannerText = winner === null ? 'Draw' : isLocalWin ? 'You win!' : 'You lose';
+  const bannerColor = winner === null ? '#777777' : isLocalWin ? '#2e6bff' : '#cc3333';
+
+  if (!this.gameEndBannerRect) {
+    this.gameEndBannerRect = this.add.rectangle(overlayX, overlayY, overlayWidth, overlayHeight, hex(bannerColor), 0.9);
+    this.gameEndBannerRect.setDepth(140);
+  } else {
+    this.gameEndBannerRect.setPosition(overlayX, overlayY);
+    this.gameEndBannerRect.setSize(overlayWidth, overlayHeight);
+    this.gameEndBannerRect.setFillStyle(hex(bannerColor), 0.9);
+  }
+
+  if (!this.gameEndBannerText) {
+    this.gameEndBannerText = this.add.text(overlayX, overlayY - overlayHeight * 0.18, bannerText, {
+      fontSize: `${30 * layout.panelScale}px`,
+      fontFamily: 'BoldPixels, Arial',
+      color: '#ffffff'
+    }).setOrigin(0.5).setDepth(141);
+  } else {
+    this.gameEndBannerText.setPosition(overlayX, overlayY - overlayHeight * 0.18);
+    this.gameEndBannerText.setFontSize(30 * layout.panelScale);
+    this.gameEndBannerText.setText(bannerText);
+  }
+
+  this.localRematchRequested = false;
+  this.opponentRematchRequested = false;
+
+  const buttonScale = layout.panelScale * 0.8;
+  const buttonY = overlayY + overlayHeight * 0.18;
+  const buttonOffset = 180 * layout.panelScale;
+
+  if (!this.gameEndRematchButton) {
+    this.gameEndRematchButton = createImageButton(
+      this,
+      overlayX - buttonOffset,
+      buttonY,
+      'Rematch',
+      'blue_button',
+      'blue_button_pressed',
+      () => this.handleRematchRequest()
+    );
+    this.gameEndRematchButton.setDepth(142);
+  } else {
+    this.gameEndRematchButton.setPosition(overlayX - buttonOffset, buttonY);
+  }
+  this.gameEndRematchButton.setData('baseScale', buttonScale);
+  this.gameEndRematchButton.setScale(buttonScale);
+  this.gameEndRematchButton.setInteractive({ useHandCursor: true });
+  this.gameEndRematchButton.setAlpha(1);
+
+  if (!this.gameEndMenuButton) {
+    this.gameEndMenuButton = createImageButton(
+      this,
+      overlayX + buttonOffset,
+      buttonY,
+      'Back to Main Menu',
+      'brown_button',
+      'brown_button_pressed',
+      () => this.handleReturnToMenu()
+    );
+    this.gameEndMenuButton.setDepth(142);
+  } else {
+    this.gameEndMenuButton.setPosition(overlayX + buttonOffset, buttonY);
+  }
+  this.gameEndMenuButton.setData('baseScale', buttonScale);
+  this.gameEndMenuButton.setScale(buttonScale);
+}
+
+/**
+ * Handles rematch button click
+ */
+export function handleRematchRequest(this: GameScene): void {
+  if (!this.networkManager) {
+    this.startRematch();
+    return;
+  }
+  if (this.localRematchRequested) return;
+  this.localRematchRequested = true;
+
+  if (this.gameEndRematchButton) {
+    this.gameEndRematchButton.disableInteractive();
+    this.gameEndRematchButton.setAlpha(0.7);
+  }
+
+  this.logEvent('system', 'Rematch requested');
+  this.networkManager?.sendRematchRequest();
+
+  if (this.opponentRematchRequested) {
+    this.startRematch();
+  }
+}
+
+/**
+ * Handles receiving a rematch request
+ */
+export function handleRematchReceived(this: GameScene): void {
+  if (this.opponentRematchRequested) return;
+  this.opponentRematchRequested = true;
+  this.logEvent('system', `${this.opponentName} wants a rematch`);
+
+  if (this.localRematchRequested) {
+    this.startRematch();
+  }
+}
+
+/**
+ * Handles opponent declining rematch
+ */
+export function handleRematchDeclined(this: GameScene): void {
+  this.localRematchRequested = false;
+  this.opponentRematchRequested = false;
+  this.logEvent('system', 'Opponent declined rematch');
+  if (this.gameEndRematchButton) {
+    this.gameEndRematchButton.setInteractive({ useHandCursor: true });
+    this.gameEndRematchButton.setAlpha(1);
+  }
+}
+
+/**
+ * Starts rematch with swapped colors
+ */
+export function startRematch(this: GameScene): void {
+  this.clearInteractionBlockers();
+  const newLocalColor: PlayerColor = this.localColor === 'white' ? 'black' : 'white';
+  this.time.delayedCall(300, () => {
+    this.scene.start('GameScene', {
       playerName: this.playerName,
-      opponentName: this.opponentName,
-      finalStats,
-      networkManager: this.networkManager
+      localColor: newLocalColor,
+      networkManager: this.networkManager,
+      opponentName: this.opponentName
     });
   });
+}
+
+/**
+ * Returns to main menu and disconnects
+ */
+export function handleReturnToMenu(this: GameScene): void {
+  this.networkManager?.sendRematchDecline();
+  this.networkManager?.leaveRoom();
+  this.scene.start('MenuScene');
 }

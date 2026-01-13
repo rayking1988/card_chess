@@ -581,18 +581,26 @@ export class GameStateManager {
    * Resolves Disturb tags when playing first card of turn
    * 
    * Requirement 8.3: First card play removes all tags, deducting 1 second per tag
+   * Note: Energy cards do not trigger disturb clear and time deduction
    * 
    * @param player - Player color
+   * @param card - The card being played (optional, if not provided disturb is resolved)
    */
-  resolveDisturbTagsOnCardPlay(player: PlayerColor): void {
+  resolveDisturbTagsOnCardPlay(player: PlayerColor, card?: Card): void {
     const playerState = this.state.players[player];
     
-    if (!playerState.hasPlayedCardThisTurn && playerState.disturbTags > 0) {
+    // Energy cards don't trigger disturb clear and time deduction
+    const isEnergyCard = card && card.effect.action === 'ENERGY_CARD';
+    
+    if (!playerState.hasPlayedCardThisTurn && playerState.disturbTags > 0 && !isEnergyCard) {
       this.deductTime(player, playerState.disturbTags);
       playerState.disturbTags = 0;
     }
     
-    playerState.hasPlayedCardThisTurn = true;
+    // Only mark card played for non-energy cards
+    if (!isEnergyCard) {
+      playerState.hasPlayedCardThisTurn = true;
+    }
     this.notifyStateChange();
   }
 
@@ -891,7 +899,8 @@ export class GameStateManager {
     }
 
     // Resolve Disturb tags on first card play (Requirement 8.3)
-    this.resolveDisturbTagsOnCardPlay(player);
+    // Energy cards don't trigger disturb clear and time deduction
+    this.resolveDisturbTagsOnCardPlay(player, card);
 
     // Deduct costs
     if (card.energyCost !== null) {

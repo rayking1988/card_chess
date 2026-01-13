@@ -19,7 +19,7 @@
  * @requires managers/NetworkManager
  * @requires managers/GameStateManager
  * 
- * Used by: main.ts (scene registration), EndScene (return to menu)
+ * Used by: main.ts (scene registration), GameScene (return to menu)
  */
 
 import Phaser from 'phaser';
@@ -66,7 +66,7 @@ const BASE_HEIGHT = 1080;
  * 4. When peer found, colors assigned randomly
  * 5. Transition to GameScene with connection data
  * 
- * Used by: main.ts, EndScene (return to menu)
+ * Used by: main.ts, GameScene (return to menu)
  */
 export class MenuScene extends Phaser.Scene {
   /** Network manager for P2P connections */

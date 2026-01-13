@@ -228,10 +228,13 @@ export class AnimationManager {
     target: Phaser.GameObjects.GameObject,
     config: TweenConfig = {}
   ): Phaser.Tweens.Tween {
+    const container = target as Phaser.GameObjects.Container;
+    const baseScaleX = container.scaleX || 1;
+    const baseScaleY = container.scaleY || 1;
     const tween = this.scene.tweens.add({
       targets: target,
-      scaleX: 1.15,
-      scaleY: 1.15,
+      scaleX: baseScaleX * 1.15,
+      scaleY: baseScaleY * 1.15,
       duration: config.duration ?? ANIM_DURATION.BOUNCE,
       ease: EASING.BOUNCE_OUT,
       yoyo: true,

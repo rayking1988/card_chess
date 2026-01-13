@@ -77,7 +77,7 @@ export function handleNetworkAction(this: GameScene, action: GameAction): void {
     case 'END_TURN':
       // Opponent ended their turn, now it's our turn
       // Apply disturb effect if opponent sent a disturb amount
-      const disturbAmount = (action as any).disturbAmount || 0;
+      const disturbAmount = action.disturbAmount ?? 0;
       if (disturbAmount > 0) {
         // Add disturb tags to local player
         const localPlayer = this.gameStateManager.getPlayer(this.localColor);
@@ -92,6 +92,16 @@ export function handleNetworkAction(this: GameScene, action: GameAction): void {
       this.refreshNameDisplays();
       this.logEvent('system', `${this.opponentName} joined`);
       this.updateUIFromState({ sendStats: false });
+      break;
+    case 'REMATCH_REQUEST':
+    case 'REMATCH_ACCEPT':
+      this.handleRematchReceived();
+      break;
+    case 'REMATCH_DECLINE':
+      this.handleRematchDeclined();
+      break;
+    case 'CHAT_MESSAGE':
+      this.eventLog.addEntry(action.senderColor, action.message, action.senderName);
       break;
     case 'PLAYER_STATS_SYNC':
       this.handleOpponentStatsSync(

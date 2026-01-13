@@ -85,7 +85,7 @@ import type {
  * 
  * await network.joinRoom('my-room-id');
  * 
- * Used by: MenuScene (matchmaking), GameScene (gameplay), EndScene (rematch)
+ * Used by: MenuScene (matchmaking), GameScene (gameplay)
  */
 export class NetworkManager {
   /* ----------------------------------------
@@ -254,7 +254,7 @@ export class NetworkManager {
   /**
    * Leaves the current room and cleans up all resources
    * 
-   * Used by: MenuScene.onCancelQueue(), EndScene.handleReturnToMenu()
+   * Used by: MenuScene.onCancelQueue(), GameScene.handleReturnToMenu()
    */
   leaveRoom(): void {
     this.stopPingInterval();
@@ -380,7 +380,7 @@ export class NetworkManager {
    * 
    * @param callback - Function called with action and peer ID
    * 
-   * Used by: GameScene.setupNetworkCallbacks(), EndScene.setupNetworkCallbacks()
+   * Used by: GameScene.setupNetworkCallbacks()
    */
   onAction(callback: (action: GameAction, peerId: string) => void): void {
     this.callbacks.onAction = callback;
@@ -521,8 +521,8 @@ export class NetworkManager {
    * 
    * Used by: GameScene.handleEndTurn()
    */
-  sendEndTurn(): void {
-    this.sendGameAction({ type: 'END_TURN' });
+  sendEndTurn(disturbAmount?: number): void {
+    this.sendGameAction({ type: 'END_TURN', disturbAmount });
   }
 
   /**
@@ -534,6 +534,17 @@ export class NetworkManager {
    */
   sendPlayerName(name: string): void {
     this.sendGameAction({ type: 'PLAYER_NAME', name });
+  }
+
+  /**
+   * Sends a quick chat message
+   *
+   * @param message - Chat message text
+   * @param senderColor - Sender's player color
+   * @param senderName - Sender's display name
+   */
+  sendChatMessage(message: string, senderColor: PlayerColor, senderName: string): void {
+    this.sendGameAction({ type: 'CHAT_MESSAGE', message, senderColor, senderName });
   }
 
   /**
@@ -573,7 +584,7 @@ export class NetworkManager {
   /**
    * Sends a rematch request
    * 
-   * Used by: EndScene.handleRematchRequest()
+   * Used by: GameScene.handleRematchRequest()
    */
   sendRematchRequest(): void {
     this.sendGameAction({ type: 'REMATCH_REQUEST' });
@@ -582,7 +593,7 @@ export class NetworkManager {
   /**
    * Sends rematch acceptance
    * 
-   * Used by: EndScene.handleAcceptRematch()
+   * Used by: GameScene.handleRematchReceived()
    */
   sendRematchAccept(): void {
     this.sendGameAction({ type: 'REMATCH_ACCEPT' });
@@ -591,7 +602,7 @@ export class NetworkManager {
   /**
    * Sends rematch decline
    * 
-   * Used by: EndScene.handleDeclineRematch()
+   * Used by: GameScene.handleRematchDeclined()
    */
   sendRematchDecline(): void {
     this.sendGameAction({ type: 'REMATCH_DECLINE' });

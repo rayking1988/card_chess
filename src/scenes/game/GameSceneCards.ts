@@ -81,36 +81,36 @@ export function validateCardTarget(this: GameScene, card: Card, square: Square):
  * @param card - Card being played
  * @param target - Target square (for targeted cards)
  */
-export function handleLocalCardPlay(this: GameScene, card: Card, target?: Square): void {
+export function handleLocalCardPlay(this: GameScene, card: Card, target?: Square): boolean {
   // Check if it's our turn
   if (!this.gameStateManager.isLocalPlayerTurn()) {
     this.logEvent('system', 'Not your turn!');
-    return;
+    return false;
   }
 
   if (this.isConnectionPaused) {
     this.logEvent('system', 'Connection paused. Waiting for opponent.');
-    return;
+    return false;
   }
 
   // Check if in discard mode
   if (this.isDiscardMode) {
     // In discard mode, clicking a card discards it
     this.discardCard(card);
-    return;
+    return true;
   }
 
   // Check game phase
   if (this.gameStateManager.getPhase() !== 'playing') {
     this.logEvent('system', 'Game not started yet!');
-    return;
+    return false;
   }
 
   // Validate card can be played
   const validation = this.gameStateManager.canPlayCard(card, this.localColor);
   if (!validation.canPlay) {
     this.logEvent('system', validation.reason);
-    return;
+    return false;
   }
 
   // Lock discard display BEFORE playing card to prevent UI update during animation
@@ -150,9 +150,11 @@ export function handleLocalCardPlay(this: GameScene, card: Card, target?: Square
     // Release lock if card play failed
     this.releaseDiscardTop('local');
     this.logEvent('system', result.message);
+    return false;
   }
 
   this.updateUIFromState();
+  return true;
 }
 
 /**
@@ -175,7 +177,7 @@ export function setDiscardTopCard(this: GameScene, side: 'local' | 'opponent', c
     existing.destroy();
   }
 
-  // If no card data, clear the reference (don't show card back for unknown cards)
+  // If no card data, clear the reference (don't create card back)
   if (!cardData) {
     if (isOpponent) {
       this.opponentDiscardTopCard = null;
@@ -186,6 +188,7 @@ export function setDiscardTopCard(this: GameScene, side: 'local' | 'opponent', c
   }
 
   // Create top card - always face-up (discard piles are public information)
+  // Only create if we have actual card data (no card back for empty/unknown)
   const topCard = new CardComponent(this, 0, 0, cardData, false, scale);
   topCard.setDepth(11);
   topCard.getContainer().setPosition(layout.leftPanelX, position);

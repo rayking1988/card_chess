@@ -28,34 +28,56 @@ const LOG_WIDTH = 300;
 /** Log panel height in pixels */
 const LOG_HEIGHT = 600;
 
+/** Header space for top padding (no title) */
+const HEADER_HEIGHT = 18;
+
+/** Footer space reserved for quick chat dropdown */
+const FOOTER_HEIGHT = 56;
+
 /** Height of each log entry in pixels */
 const ENTRY_HEIGHT = 30;
 
 /** Padding inside the log panel */
 const PADDING = 10;
 
-/** Vertical margin for the scroll mask */
-const MASK_VERTICAL_MARGIN = 35;
+/** Quick chat dropdown button height */
+const QUICK_CHAT_HEIGHT = 32;
+
+/** Quick chat dropdown button margin from bottom */
+const QUICK_CHAT_MARGIN = 12;
+
+/** Quick chat dropdown width */
+const QUICK_CHAT_WIDTH = LOG_WIDTH - PADDING * 2 - 12;
+
+/** Quick chat options */
+const QUICK_CHAT_OPTIONS = ['Hello!', 'Good Move!', 'Good Game!', 'One More Game?'] as const;
+
+/** Quick chat option height */
+const QUICK_CHAT_OPTION_HEIGHT = 24;
+
+/** Quick chat option padding */
+const QUICK_CHAT_OPTION_PADDING = 6;
 
 /** Background colors for different player entries */
 const ENTRY_BACKGROUNDS = {
-  white: hex('#2a2f45'),   // Blue-gray for white player
-  black: hex('#3a2a2a'),   // Red-gray for black player
-  system: hex('#3a3a1a')   // Yellow-gray for system messages
+  white: hex('#3b3326'),
+  black: hex('#2d2624'),
+  system: hex('#3a2e1a')
 };
 
 /** Text colors for different player entries */
 const ENTRY_COLORS = {
-  white: '#ffffff',
-  black: '#dddddd',
-  system: '#ffff44'
+  white: '#f6e6b3',
+  black: '#e2d6b0',
+  system: '#ffdd88'
 };
 
-/** Prefixes for different player entries */
-const ENTRY_PREFIXES = {
-  white: '[W] ',
-  black: '[B] ',
-  system: '[SYS] '
+/** Panel styling colors (matched to main menu input) */
+const PANEL_COLORS = {
+  fill: hex('#23211f'),
+  border: hex('#000000'),
+  inner1: hex('#2a1a0a'),
+  inner2: hex('#1d1b1a')
 };
 
 /* ============================================
@@ -96,7 +118,7 @@ export interface LogEntry {
  * 
  * Visual structure:
  * - Background panel (semi-transparent dark)
- * - Title text ("Event Log")
+ * - Top padding with scroll controls
  * - Scrollable entries container (masked)
  * - Scroll up/down buttons
  * 
@@ -129,14 +151,32 @@ export class EventLogComponent {
   /** Container for entry elements (scrollable) */
   private entriesContainer: Phaser.GameObjects.Container;
   
-  /** Title text at top of log */
-  private titleText: Phaser.GameObjects.Text;
-  
   /** Scroll up button */
   private scrollUpButton: Phaser.GameObjects.Text;
   
   /** Scroll down button */
   private scrollDownButton: Phaser.GameObjects.Text;
+
+  /** Quick chat container */
+  private quickChatContainer!: Phaser.GameObjects.Container;
+
+  /** Quick chat button container */
+  private quickChatButton!: Phaser.GameObjects.Container;
+
+  /** Quick chat button label */
+  private quickChatLabel!: Phaser.GameObjects.Text;
+
+  /** Quick chat dropdown arrow */
+  private quickChatArrow!: Phaser.GameObjects.Text;
+
+  /** Quick chat options container */
+  private quickChatOptionsContainer!: Phaser.GameObjects.Container;
+
+  /** Quick chat option texts */
+  private quickChatOptionTexts: Phaser.GameObjects.Text[] = [];
+
+  /** Whether quick chat dropdown is open */
+  private quickChatOpen: boolean = false;
   
   /** Array of log entry data */
   private entries: LogEntry[] = [];
@@ -174,6 +214,9 @@ export class EventLogComponent {
   /** Maximum visible entries based on panel size */
   private maxVisibleEntries: number = 0;
 
+  /** Callback when quick chat option is selected */
+  public onQuickChatSelect?: (text: string) => void;
+
   /**
    * Creates a new EventLogComponent
    * 
@@ -208,15 +251,6 @@ export class EventLogComponent {
     this.drawBackground();
     this.convertBackgroundToTexture();
     
-    // Title text
-    this.titleText = scene.add.text(0, -LOG_HEIGHT / 2 + 15, 'Event Log', {
-      fontSize: '14px',
-      fontFamily: 'BoldPixels, Arial',
-      color: '#ffffff',
-      fontStyle: 'bold'
-    }).setOrigin(0.5);
-    this.container.add(this.titleText);
-    
     // Scrollable entries container
     this.entriesContainer = scene.add.container(0, 0);
     this.container.add(this.entriesContainer);
@@ -227,37 +261,42 @@ export class EventLogComponent {
     const mask = this.maskGraphics.createGeometryMask();
     this.entriesContainer.setMask(mask);
     
+    const scrollUpY = -LOG_HEIGHT / 2 + HEADER_HEIGHT + 6;
+    const scrollDownY = LOG_HEIGHT / 2 - FOOTER_HEIGHT + 8;
+
     // Scroll up button
     this.scrollUpButton = scene.add.text(
       LOG_WIDTH / 2 - 20,
-      -LOG_HEIGHT / 2 + 40,
+      scrollUpY,
       '▲',
       {
-        fontSize: '16px',
-        fontFamily: 'Arial',
-        color: '#888888'
+        fontSize: '14px',
+        fontFamily: 'BoldPixels, Arial',
+        color: '#dba616'
       }
     ).setOrigin(0.5).setInteractive({ useHandCursor: true });
     this.scrollUpButton.on('pointerdown', () => this.scrollUp());
-    this.scrollUpButton.on('pointerover', () => this.scrollUpButton.setColor('#ffffff'));
-    this.scrollUpButton.on('pointerout', () => this.scrollUpButton.setColor('#888888'));
+    this.scrollUpButton.on('pointerover', () => this.scrollUpButton.setColor('#ffe4a8'));
+    this.scrollUpButton.on('pointerout', () => this.scrollUpButton.setColor('#dba616'));
     this.container.add(this.scrollUpButton);
     
     // Scroll down button
     this.scrollDownButton = scene.add.text(
       LOG_WIDTH / 2 - 20,
-      LOG_HEIGHT / 2 - 25,
+      scrollDownY,
       '▼',
       {
-        fontSize: '16px',
-        fontFamily: 'Arial',
-        color: '#888888'
+        fontSize: '14px',
+        fontFamily: 'BoldPixels, Arial',
+        color: '#dba616'
       }
     ).setOrigin(0.5).setInteractive({ useHandCursor: true });
     this.scrollDownButton.on('pointerdown', () => this.scrollDown());
-    this.scrollDownButton.on('pointerover', () => this.scrollDownButton.setColor('#ffffff'));
-    this.scrollDownButton.on('pointerout', () => this.scrollDownButton.setColor('#888888'));
+    this.scrollDownButton.on('pointerover', () => this.scrollDownButton.setColor('#ffe4a8'));
+    this.scrollDownButton.on('pointerout', () => this.scrollDownButton.setColor('#dba616'));
     this.container.add(this.scrollDownButton);
+
+    this.createQuickChat();
     
     // Enable mouse wheel scrolling
     this.setupMouseWheelScroll();
@@ -282,12 +321,14 @@ export class EventLogComponent {
     this.backgroundGraphics.clear();
     
     // Draw at (0,0) for texture capture
-    this.backgroundGraphics.fillStyle(hex('#1a1a2e'), 0.9);
-    this.backgroundGraphics.fillRoundedRect(0, 0, LOG_WIDTH, LOG_HEIGHT, 8);
-    this.backgroundGraphics.lineStyle(2, hex('#4a4a6e'), 1);
-    this.backgroundGraphics.strokeRoundedRect(0, 0, LOG_WIDTH, LOG_HEIGHT, 8);
-    this.backgroundGraphics.lineStyle(1, hex('#4a4a6e'), 0.5);
-    this.backgroundGraphics.lineBetween(PADDING, 30, LOG_WIDTH - PADDING, 30);
+    this.backgroundGraphics.fillStyle(PANEL_COLORS.fill, 0.96);
+    this.backgroundGraphics.fillRoundedRect(0, 0, LOG_WIDTH, LOG_HEIGHT, 10);
+    this.backgroundGraphics.lineStyle(4, PANEL_COLORS.border, 1);
+    this.backgroundGraphics.strokeRoundedRect(0, 0, LOG_WIDTH, LOG_HEIGHT, 10);
+    this.backgroundGraphics.lineStyle(2, PANEL_COLORS.inner1, 1);
+    this.backgroundGraphics.strokeRoundedRect(4, 4, LOG_WIDTH - 8, LOG_HEIGHT - 8, 8);
+    this.backgroundGraphics.lineStyle(2, PANEL_COLORS.inner2, 1);
+    this.backgroundGraphics.strokeRoundedRect(8, 8, LOG_WIDTH - 16, LOG_HEIGHT - 16, 6);
     
     // Generate texture from graphics
     this.backgroundGraphics.generateTexture(textureKey, LOG_WIDTH, LOG_HEIGHT);
@@ -319,33 +360,40 @@ export class EventLogComponent {
   private drawBackground(): void {
     this.backgroundGraphics.clear();
     
-    // Semi-transparent dark background
-    this.backgroundGraphics.fillStyle(hex('#1a1a2e'), 0.9);
+    // Pixel-style panel background
+    this.backgroundGraphics.fillStyle(PANEL_COLORS.fill, 0.96);
     this.backgroundGraphics.fillRoundedRect(
       -LOG_WIDTH / 2,
       -LOG_HEIGHT / 2,
       LOG_WIDTH,
       LOG_HEIGHT,
-      8
+      10
     );
     
-    // Border
-    this.backgroundGraphics.lineStyle(2, hex('#4a4a6e'), 1);
+    // Border and inset strokes
+    this.backgroundGraphics.lineStyle(4, PANEL_COLORS.border, 1);
     this.backgroundGraphics.strokeRoundedRect(
       -LOG_WIDTH / 2,
       -LOG_HEIGHT / 2,
       LOG_WIDTH,
       LOG_HEIGHT,
+      10
+    );
+    this.backgroundGraphics.lineStyle(2, PANEL_COLORS.inner1, 1);
+    this.backgroundGraphics.strokeRoundedRect(
+      -LOG_WIDTH / 2 + 4,
+      -LOG_HEIGHT / 2 + 4,
+      LOG_WIDTH - 8,
+      LOG_HEIGHT - 8,
       8
     );
-    
-    // Title separator line
-    this.backgroundGraphics.lineStyle(1, hex('#4a4a6e'), 0.5);
-    this.backgroundGraphics.lineBetween(
-      -LOG_WIDTH / 2 + PADDING,
-      -LOG_HEIGHT / 2 + 30,
-      LOG_WIDTH / 2 - PADDING,
-      -LOG_HEIGHT / 2 + 30
+    this.backgroundGraphics.lineStyle(2, PANEL_COLORS.inner2, 1);
+    this.backgroundGraphics.strokeRoundedRect(
+      -LOG_WIDTH / 2 + 8,
+      -LOG_HEIGHT / 2 + 8,
+      LOG_WIDTH - 16,
+      LOG_HEIGHT - 16,
+      6
     );
   }
 
@@ -385,6 +433,98 @@ export class EventLogComponent {
   }
 
   /**
+   * Creates the quick chat dropdown UI
+   *
+   * @private
+   */
+  private createQuickChat(): void {
+    this.quickChatContainer = this.scene.add.container(0, 0);
+
+    const buttonY = LOG_HEIGHT / 2 - QUICK_CHAT_MARGIN - QUICK_CHAT_HEIGHT / 2;
+    this.quickChatButton = this.scene.add.container(0, buttonY);
+
+    const buttonBg = this.scene.add.graphics();
+    buttonBg.fillStyle(PANEL_COLORS.fill, 0.98);
+    buttonBg.fillRoundedRect(-QUICK_CHAT_WIDTH / 2, -QUICK_CHAT_HEIGHT / 2, QUICK_CHAT_WIDTH, QUICK_CHAT_HEIGHT, 6);
+    buttonBg.lineStyle(3, PANEL_COLORS.border, 1);
+    buttonBg.strokeRoundedRect(-QUICK_CHAT_WIDTH / 2, -QUICK_CHAT_HEIGHT / 2, QUICK_CHAT_WIDTH, QUICK_CHAT_HEIGHT, 6);
+    buttonBg.lineStyle(1, PANEL_COLORS.inner1, 0.8);
+    buttonBg.strokeRoundedRect(-QUICK_CHAT_WIDTH / 2 + 2, -QUICK_CHAT_HEIGHT / 2 + 2, QUICK_CHAT_WIDTH - 4, QUICK_CHAT_HEIGHT - 4, 4);
+
+    this.quickChatLabel = this.scene.add.text(-QUICK_CHAT_WIDTH / 2 + 12, 0, 'Quick Chat', {
+      fontSize: '16px',
+      fontFamily: 'BoldPixels, Arial',
+      color: '#dba616'
+    }).setOrigin(0, 0.5);
+
+    this.quickChatArrow = this.scene.add.text(QUICK_CHAT_WIDTH / 2 - 16, -1, '▼', {
+      fontSize: '14px',
+      fontFamily: 'BoldPixels, Arial',
+      color: '#dba616'
+    }).setOrigin(0.5);
+
+    this.quickChatButton.add([buttonBg, this.quickChatLabel, this.quickChatArrow]);
+    this.quickChatButton.setSize(QUICK_CHAT_WIDTH, QUICK_CHAT_HEIGHT);
+    this.quickChatButton.setInteractive({ useHandCursor: true });
+    this.quickChatButton.on('pointerdown', () => this.toggleQuickChatOptions());
+
+    this.quickChatContainer.add(this.quickChatButton);
+
+    const optionsHeight = QUICK_CHAT_OPTIONS.length * QUICK_CHAT_OPTION_HEIGHT + QUICK_CHAT_OPTION_PADDING * 2;
+    const optionsY = buttonY - QUICK_CHAT_HEIGHT / 2 - optionsHeight / 2 - 6;
+    this.quickChatOptionsContainer = this.scene.add.container(0, optionsY);
+
+    const optionsBg = this.scene.add.graphics();
+    optionsBg.fillStyle(PANEL_COLORS.fill, 0.98);
+    optionsBg.fillRoundedRect(-QUICK_CHAT_WIDTH / 2, -optionsHeight / 2, QUICK_CHAT_WIDTH, optionsHeight, 6);
+    optionsBg.lineStyle(3, PANEL_COLORS.border, 1);
+    optionsBg.strokeRoundedRect(-QUICK_CHAT_WIDTH / 2, -optionsHeight / 2, QUICK_CHAT_WIDTH, optionsHeight, 6);
+    optionsBg.lineStyle(1, PANEL_COLORS.inner1, 0.8);
+    optionsBg.strokeRoundedRect(-QUICK_CHAT_WIDTH / 2 + 2, -optionsHeight / 2 + 2, QUICK_CHAT_WIDTH - 4, optionsHeight - 4, 4);
+    this.quickChatOptionsContainer.add(optionsBg);
+
+    let optionY = -optionsHeight / 2 + QUICK_CHAT_OPTION_PADDING + QUICK_CHAT_OPTION_HEIGHT / 2;
+    QUICK_CHAT_OPTIONS.forEach((option) => {
+      const optionBg = this.scene.add.rectangle(0, optionY, QUICK_CHAT_WIDTH - 10, QUICK_CHAT_OPTION_HEIGHT, PANEL_COLORS.inner1, 0.2);
+      optionBg.setInteractive({ useHandCursor: true });
+      optionBg.on('pointerover', () => optionBg.setFillStyle(PANEL_COLORS.inner1, 0.45));
+      optionBg.on('pointerout', () => optionBg.setFillStyle(PANEL_COLORS.inner1, 0.2));
+      optionBg.on('pointerdown', () => {
+        this.onQuickChatSelect?.(option);
+        this.toggleQuickChatOptions(false);
+      });
+
+      const optionText = this.scene.add.text(-QUICK_CHAT_WIDTH / 2 + 12, optionY, option, {
+        fontSize: '14px',
+        fontFamily: 'BoldPixels, Arial',
+        color: '#f6e6b3'
+      }).setOrigin(0, 0.5);
+
+      this.quickChatOptionTexts.push(optionText);
+      this.quickChatOptionsContainer.add([optionBg, optionText]);
+      optionY += QUICK_CHAT_OPTION_HEIGHT;
+    });
+
+    this.quickChatOptionsContainer.setVisible(false);
+    this.quickChatContainer.add(this.quickChatOptionsContainer);
+
+    this.container.add(this.quickChatContainer);
+  }
+
+  /**
+   * Toggles quick chat options visibility
+   *
+   * @param force - Optional forced state
+   * @private
+   */
+  private toggleQuickChatOptions(force?: boolean): void {
+    const nextState = force ?? !this.quickChatOpen;
+    this.quickChatOpen = nextState;
+    this.quickChatOptionsContainer.setVisible(nextState);
+    this.quickChatArrow.setText(nextState ? '▲' : '▼');
+  }
+
+  /**
    * Creates visual elements for a log entry
    * 
    * Algorithm:
@@ -401,15 +541,14 @@ export class EventLogComponent {
   private createEntryText(entry: LogEntry, index: number): void {
     // Get styling based on player type
     const color = ENTRY_COLORS[entry.player];
-    const prefix = ENTRY_PREFIXES[entry.player];
     const backgroundColor = ENTRY_BACKGROUNDS[entry.player];
     
-    const label = entry.displayName ? `${entry.displayName}: ` : '';
-    const y = -LOG_HEIGHT / 2 + 40 + (index * ENTRY_HEIGHT);
+    const label = entry.displayName ? `[${entry.displayName}]: ` : '';
+    const y = -LOG_HEIGHT / 2 + HEADER_HEIGHT + 10 + (index * ENTRY_HEIGHT);
 
     // Create entry background
     const bg = this.scene.add.graphics();
-    bg.fillStyle(backgroundColor, 0.22);
+    bg.fillStyle(backgroundColor, 0.28);
     bg.fillRoundedRect(
       -LOG_WIDTH / 2 + PADDING,
       y - 2,
@@ -424,7 +563,7 @@ export class EventLogComponent {
     const text = this.scene.add.text(
       -LOG_WIDTH / 2 + PADDING + 5,
       y,
-      prefix + label + entry.message,
+      label + entry.message,
       {
         fontSize: '18px',
         fontFamily: 'BoldPixels, Arial',
@@ -450,14 +589,16 @@ export class EventLogComponent {
     const width = LOG_WIDTH * scale;
     const height = LOG_HEIGHT * scale;
     const padding = PADDING * scale;
+    const topInset = HEADER_HEIGHT * scale;
+    const bottomInset = FOOTER_HEIGHT * scale;
     
     this.maskGraphics.clear();
     this.maskGraphics.fillStyle(hex('#ffffff'));
     this.maskGraphics.fillRect(
       this.currentX - width / 2 + padding,
-      this.currentY - height / 2 + MASK_VERTICAL_MARGIN * scale,
+      this.currentY - height / 2 + topInset,
       width - padding * 2,
-      height - MASK_VERTICAL_MARGIN * 2 * scale
+      height - topInset - bottomInset
     );
   }
 
@@ -468,7 +609,7 @@ export class EventLogComponent {
    * @private
    */
   private calculateMaxVisibleEntries(): number {
-    const visibleHeight = LOG_HEIGHT - MASK_VERTICAL_MARGIN * 2;
+    const visibleHeight = LOG_HEIGHT - HEADER_HEIGHT - FOOTER_HEIGHT;
     return Math.max(1, Math.floor(visibleHeight / ENTRY_HEIGHT));
   }
 
@@ -697,6 +838,9 @@ export class EventLogComponent {
   setVisible(visible: boolean): void {
     this.container.setVisible(visible);
     this.maskGraphics.setVisible(visible);
+    if (!visible) {
+      this.toggleQuickChatOptions(false);
+    }
   }
 
   /**

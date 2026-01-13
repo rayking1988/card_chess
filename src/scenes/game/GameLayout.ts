@@ -147,9 +147,9 @@ export function calculateLayout(width: number, height: number): GameLayout {
   const leftPanelPadding = leftPanel.height * 0.06;
   const pileSpacing = leftPanel.height * 0.18;
   const opponentDeckY = leftPanel.y + leftPanelPadding + pileSpacing * 0.25;
-  const opponentDiscardY = opponentDeckY + pileSpacing * 1.1;
+  const opponentDiscardY = opponentDeckY + pileSpacing * 1.35; // Moved lower to avoid overlap with deck
   const playerDeckY = leftPanel.y + leftPanel.height - leftPanelPadding - pileSpacing * 0.25;
-  const playerDiscardY = playerDeckY - pileSpacing;
+  const playerDiscardY = playerDeckY - pileSpacing * 1.25; // Moved higher to avoid overlap with deck
   
   // Right panel elements: vertically distributed from top
   const rightPanelX = rightPanel.centerX;

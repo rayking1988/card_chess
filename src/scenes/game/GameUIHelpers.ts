@@ -152,8 +152,8 @@ export function layoutPileStack(
   alpha: number
 ): void {
   const layers = getPileLayerCount(count);
-  const offsetX = 1.8 * scale;
-  const offsetY = 3.2 * scale;
+  const offsetX = -1.8 * scale;
+  const offsetY = -3.2 * scale;
   for (let i = 0; i < stack.length; i++) {
     const card = stack[i];
     if (i < layers) {
