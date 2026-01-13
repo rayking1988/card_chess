@@ -142,9 +142,7 @@ export function createRightPanel(this: GameScene, layout: GameLayout): void {
 
   // 2. Opponent Stopwatch
   this.opponentStopwatch = new StopwatchComponent(this, x, y);
-  this.opponentStopwatch.setLabel('');
-  this.opponentStopwatch.setThresholdVisible(false);
-  this.opponentStopwatch.setBaseTimeColor(this.localColor === 'black' ? '#ffffff' : '#000000');
+  this.opponentStopwatch.setBaseTimeColor('#000000');
   this.opponentStopwatch.setDepth(10);
   this.opponentStopwatch.setScale(scale);
 
@@ -173,9 +171,7 @@ export function createRightPanel(this: GameScene, layout: GameLayout): void {
 
   // 5. Your Stopwatch
   this.playerStopwatch = new StopwatchComponent(this, x, y);
-  this.playerStopwatch.setLabel('');
-  this.playerStopwatch.setThresholdVisible(false);
-  this.playerStopwatch.setBaseTimeColor(this.localColor === 'black' ? '#000000' : '#ffffff');
+  this.playerStopwatch.setBaseTimeColor('#000000');
   this.playerStopwatch.setDepth(10);
   this.playerStopwatch.setScale(scale);
 

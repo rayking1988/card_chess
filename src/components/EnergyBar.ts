@@ -25,10 +25,10 @@ import { hex } from '../utils/colors';
 const BAR_WIDTH = 140;
 
 /** Energy bar height in pixels */
-const BAR_HEIGHT = 18;
+const BAR_HEIGHT = 25;
 
 /** Icon size in pixels */
-const ICON_SIZE = 22;
+const ICON_SIZE = 30;
 
 /** Gap between icon and bar */
 const ICON_GAP = 8;
@@ -41,20 +41,20 @@ const MAX_SEGMENTS = 10;
 
 /** Fill colors based on energy level (as ratio of current/cap) */
 const FILL_COLORS = {
-  high: hex('#44ff44'),      // Green - 75%+ energy
-  medium: hex('#ffff44'),    // Yellow - 50-74% energy
-  low: hex('#ffaa44'),       // Orange - 25-49% energy
-  critical: hex('#ff4444')   // Red - below 25% energy
+  high: hex('#f0e130'),      // Lemon yellow - 75%+ energy
+  medium: hex('#f0e130'),    // Lemon yellow - 50-74% energy
+  low: hex('#f0e130'),       // Lemon yellow - 25-49% energy
+  critical: hex('#f0e130')   // Lemon yellow - below 25% energy
 };
 
 const EMPTY_SEGMENT_COLOR = hex('#2a2a2a');
 
 /** Text colors for different energy states */
 const TEXT_COLORS = {
-  empty: '#888888',    // Gray - no energy system yet (0/0)
-  depleted: '#ff6666', // Red - empty (0/X where X > 0)
-  full: '#66ff66',     // Green - at capacity
-  normal: '#ffffff'    // White - partial energy
+  empty: '#555555',    // Dark gray - no energy system yet (0/0)
+  depleted: '#005488ff', // Dark red - empty (0/X where X > 0)
+  full: '#006657ff',     // Dark green - at capacity
+  normal: '#000000'    // Black - partial energy
 };
 
 /* ============================================
@@ -157,8 +157,8 @@ export class EnergyBarComponent {
     this.drawBackground();
     this.convertBackgroundToTexture();
 
-    if (scene.textures.exists('energy_circle')) {
-      this.energyIcon = scene.add.image(iconCenterX, 0, 'energy_circle');
+    if (scene.textures.exists('energy_icon')) {
+      this.energyIcon = scene.add.image(iconCenterX, 0, 'energy_icon');
       this.energyIcon.setDisplaySize(ICON_SIZE, ICON_SIZE);
       this.container.add(this.energyIcon);
     }
@@ -167,12 +167,14 @@ export class EnergyBarComponent {
     this.fillGraphics = scene.add.graphics();
     this.container.add(this.fillGraphics);
     
-    // Energy text (current/cap format)
+    // Count text with stroke for readability on yellow background
     this.energyText = scene.add.text(this.barCenterX, 0, '0/0', {
       fontSize: '16px',
       fontFamily: 'BoldPixels, Arial',
-      color: '#ffffff',
-      fontStyle: 'bold'
+      color: '#000000',
+      fontStyle: 'bold',
+      stroke: '#ffffff',
+      strokeThickness: 2
     }).setOrigin(0.5);
     this.container.add(this.energyText);
     

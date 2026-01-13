@@ -140,15 +140,19 @@ export class GameStateManager {
    * Requirement 3.3: White doesn't draw on first turn
    * Requirement 3.5: Can play any number of cards during turn
    * 
+   * @param skipModeProcessing - If true, skip processing Focus/Disturb mode effects (used when receiving from network)
+   * 
    * Used by: GameScene.endTurn()
    */
-  endTurn(): void {
+  endTurn(skipModeProcessing: boolean = false): void {
     if (this.state.phase !== 'playing') return;
 
     const currentPlayer = this.getCurrentPlayer();
     
-    // Process end-of-turn Focus/Disturb mode effects
-    this.processEndOfTurnMode(this.state.currentTurn);
+    // Process end-of-turn Focus/Disturb mode effects (only for local player)
+    if (!skipModeProcessing) {
+      this.processEndOfTurnMode(this.state.currentTurn);
+    }
     
     // Reset stopwatch for next turn
     currentPlayer.stopwatch = 0;

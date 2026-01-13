@@ -143,11 +143,11 @@ export function calculateLayout(width: number, height: number): GameLayout {
   const boardY = board.centerY;
   
   // Left panel elements: vertically distributed
-  const leftPanelX = leftPanel.centerX;
+  const leftPanelX = leftPanel.centerX + 10;
   const leftPanelPadding = leftPanel.height * 0.06;
   const pileSpacing = leftPanel.height * 0.18;
   const opponentDeckY = leftPanel.y + leftPanelPadding + pileSpacing * 0.25;
-  const opponentDiscardY = opponentDeckY + pileSpacing;
+  const opponentDiscardY = opponentDeckY + pileSpacing * 1.1;
   const playerDeckY = leftPanel.y + leftPanel.height - leftPanelPadding - pileSpacing * 0.25;
   const playerDiscardY = playerDeckY - pileSpacing;
   

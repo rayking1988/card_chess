@@ -23,13 +23,13 @@ import { hex } from '../utils/colors';
  */
 
 /** Stopwatch display width in pixels */
-const STOPWATCH_WIDTH = 100;
+const STOPWATCH_WIDTH = 66;
 
 /** Stopwatch display height in pixels */
-const STOPWATCH_HEIGHT = 100;
+const STOPWATCH_HEIGHT = 80;
 
-/** Radius for warning circle textures */
-const WARNING_CIRCLE_RADIUS = STOPWATCH_WIDTH / 2 + 10;
+/** Radius for warning circle textures - smaller to fit stopwatch */
+const WARNING_CIRCLE_RADIUS = STOPWATCH_WIDTH*3;
 
 /** 
  * Threshold in seconds that triggers opponent card draw
@@ -39,17 +39,9 @@ const THRESHOLD_SECONDS = 60;
 
 /** Progress thresholds for visual warnings (as percentage of threshold) */
 const WARNING_THRESHOLDS = {
-  low: 0.25,      // 25% - Yellow tint starts
-  medium: 0.5,    // 50% - Orange tint
-  high: 0.75      // 75% - Red tint
-};
-
-/** Colors for different warning levels */
-const WARNING_COLORS = {
-  normal: '#ffffff',   // White - safe
-  low: '#ffff44',      // Yellow - approaching threshold
-  medium: '#ffaa44',   // Orange - getting close
-  high: '#ff4444'      // Red - near threshold
+  low: 0.5,      // 25% - Yellow tint starts
+  medium: 0.75,    // 50% - Orange tint
+  high: 0.9      // 75% - Red tint
 };
 
 /* ============================================
@@ -114,12 +106,6 @@ export class StopwatchComponent {
   /** Text displaying the current time */
   private timeText: Phaser.GameObjects.Text;
   
-  /** Text showing threshold status */
-  private thresholdText: Phaser.GameObjects.Text;
-  
-  /** Label text above the stopwatch */
-  private labelText: Phaser.GameObjects.Text;
-  
   /** Graphics for warning background and progress arc */
   private warningGraphics: Phaser.GameObjects.Graphics;
   
@@ -150,9 +136,6 @@ export class StopwatchComponent {
   /** Base text color for the time display */
   private baseTimeColor: string = '#ffffff05';
 
-  /** Whether threshold text should be visible */
-  private thresholdVisible: boolean = true;
-
   /**
    * Creates a new StopwatchComponent
    * 
@@ -181,31 +164,14 @@ export class StopwatchComponent {
     this.stopwatchSprite.setDisplaySize(STOPWATCH_WIDTH, STOPWATCH_HEIGHT);
     this.container.add(this.stopwatchSprite);
     
-    // Label text above stopwatch
-    this.labelText = scene.add.text(0, -55, 'Turn Timer', {
-      fontSize: '14px',
-      fontFamily: 'BoldPixels, Arial',
-      color: '#cccccc',
-      fontStyle: 'bold'
-    }).setOrigin(0.5);
-    this.container.add(this.labelText);
-    
     // Time display (digital style)
-    this.timeText = scene.add.text(0, -4, '00', {
-      fontSize: '24px',
+    this.timeText = scene.add.text(0, 5, '00', {
+      fontSize: '28px',
       fontFamily: 'Digital7, "Courier New"',
       color: '#ffffff',
       fontStyle: 'normal'
     }).setOrigin(0.5);
     this.container.add(this.timeText);
-    
-    // Threshold indicator below stopwatch
-    this.thresholdText = scene.add.text(0, 46, `Draw @ ${THRESHOLD_SECONDS}s`, {
-      fontSize: '12px',
-      fontFamily: 'BoldPixels, Arial',
-      color: '#888888'
-    }).setOrigin(0.5);
-    this.container.add(this.thresholdText);
     
     // Pre-generate warning circle textures for each level
     this.generateWarningTextures();
@@ -220,20 +186,21 @@ export class StopwatchComponent {
    * @private
    */
   private generateWarningTextures(): void {
-    const textureSize = WARNING_CIRCLE_RADIUS * 2 + 4;
+    const textureSize = WARNING_CIRCLE_RADIUS * 2;
     const center = textureSize / 2;
+    const circleRadius = WARNING_CIRCLE_RADIUS;
     
     // Generate high warning texture (red circle)
     const highGraphics = this.scene.add.graphics();
-    highGraphics.fillStyle(hex('#ff0000'), 0.25);
-    highGraphics.fillCircle(center, center, STOPWATCH_WIDTH / 2 + 8);
+    highGraphics.fillStyle(hex('#ff0000'), 0.35);
+    highGraphics.fillCircle(center, center, circleRadius);
     highGraphics.generateTexture(`${this.textureId}_warning_high`, textureSize, textureSize);
     highGraphics.destroy();
     
     // Generate medium warning texture (orange circle)
     const mediumGraphics = this.scene.add.graphics();
-    mediumGraphics.fillStyle(hex('#ffaa00'), 0.2);
-    mediumGraphics.fillCircle(center, center, STOPWATCH_WIDTH / 2 + 6);
+    mediumGraphics.fillStyle(hex('#ffaa00'), 0.3);
+    mediumGraphics.fillCircle(center, center, circleRadius);
     mediumGraphics.generateTexture(`${this.textureId}_warning_medium`, textureSize, textureSize);
     mediumGraphics.destroy();
   }
@@ -371,28 +338,15 @@ export class StopwatchComponent {
         this.warningSprite = null;
       }
       
-      // Apply warning colors based on progress
+      // Apply warning colors based on progress - add on top of stopwatch
       if (currentWarningLevel === 'high') {
         this.warningSprite = this.scene.add.image(0, 0, `${this.textureId}_warning_high`);
-        this.container.addAt(this.warningSprite, 0);
+        this.container.add(this.warningSprite);
+        this.container.bringToTop(this.timeText); // Keep text on top
       } else if (currentWarningLevel === 'medium') {
         this.warningSprite = this.scene.add.image(0, 0, `${this.textureId}_warning_medium`);
-        this.container.addAt(this.warningSprite, 0);
-      } else if (currentWarningLevel === 'low') {
-      } else {
-      }
-      
-      // Update threshold indicator
-      if (this.thresholdVisible) {
-        const crossings = this.getThresholdCrossings();
-        if (crossings > 0) {
-          const plural = crossings > 1 ? 's' : '';
-          this.thresholdText.setText(`+${crossings} card${plural}`);
-          this.thresholdText.setColor('#66ff66');
-        } else {
-          this.thresholdText.setText(`Draw @ ${THRESHOLD_SECONDS}s`);
-          this.thresholdText.setColor('#888888');
-        }
+        this.container.add(this.warningSprite);
+        this.container.bringToTop(this.timeText); // Keep text on top
       }
     }
     
@@ -432,7 +386,7 @@ export class StopwatchComponent {
     
     // Calculate progress toward threshold (wraps at 60)
     const progress = (this.currentTime % THRESHOLD_SECONDS) / THRESHOLD_SECONDS;
-    const textureSize = WARNING_CIRCLE_RADIUS * 2 + 4;
+    const textureSize = WARNING_CIRCLE_RADIUS;
     const center = textureSize / 2;
     
     // Generate progress arc texture
@@ -548,26 +502,6 @@ export class StopwatchComponent {
    */
   getTimeText(): Phaser.GameObjects.Text {
     return this.timeText;
-  }
-
-  /**
-   * Updates the label text
-   * 
-   * @param label - New label text
-   */
-  setLabel(label: string): void {
-    this.labelText.setText(label);
-    this.labelText.setVisible(label.trim().length > 0);
-  }
-
-  /**
-   * Sets visibility of the threshold text
-   *
-   * @param visible - Whether threshold text should be shown
-   */
-  setThresholdVisible(visible: boolean): void {
-    this.thresholdVisible = visible;
-    this.thresholdText.setVisible(visible);
   }
 
   /**

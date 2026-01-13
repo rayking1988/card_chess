@@ -19,12 +19,6 @@ export function refreshNameDisplays(this: GameScene): void {
   if (this.playerClock) {
     this.playerClock.setLabel(this.playerName);
   }
-  if (this.opponentStopwatch) {
-    this.opponentStopwatch.setLabel('');
-  }
-  if (this.playerStopwatch) {
-    this.playerStopwatch.setLabel('');
-  }
   if (this.opponentNameText) {
     this.opponentNameText.setText(this.opponentName);
   }

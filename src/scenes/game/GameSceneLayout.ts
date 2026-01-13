@@ -358,7 +358,7 @@ export function positionLeftPanel(this: GameScene, layout: GameLayout): void {
   const scale = layout.panelScale;
   const leftX = layout.leftPanelX;
   const deckScale = 0.14 * scale;
-  const topCardScale = 0.55 * scale;
+  const topCardScale = 0.75 * scale; // Same as deck scale
   const labelSize = 11 * scale;
   const countSize = 12 * scale;
 
@@ -518,7 +518,7 @@ export function positionCardHand(this: GameScene, layout: GameLayout): void {
   const usableHeight = section.height;
   this.cardHand.setSectionSize(
     section.centerX,
-    section.centerY,
+    section.centerY + 50,
     section.width,
     usableHeight
   );

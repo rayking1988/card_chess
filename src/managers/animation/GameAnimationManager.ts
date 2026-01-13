@@ -68,8 +68,8 @@ export class GameAnimationManager extends BoardAnimationManager {
 
     scene.tweens.add({
       targets: clockContainer,
-      scaleX: 1.1,
-      scaleY: 1.1,
+      scaleX: 1,
+      scaleY: 1,
       duration: config.duration ?? ANIM_DURATION.CLOCK_CHANGE,
       ease: EASING.QUAD_OUT,
       yoyo: true,

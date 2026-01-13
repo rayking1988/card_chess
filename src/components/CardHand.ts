@@ -40,7 +40,7 @@ const FAN_SPREAD_ANGLE = 30;
 const MAX_FAN_ANGLE = 80;
 
 /** Radius of the arc for fan arrangement (affects curvature) */
-const FAN_RADIUS = 1200;
+const FAN_RADIUS = 900;
 
 /** Normal card scale when displayed in hand */
 const CARD_SCALE = 0.8;
@@ -607,7 +607,7 @@ export class CardHandComponent {
       const radians = (angle * Math.PI) / 180;
       
       const x = startX + i * spacing;
-      const arcHeight = this.sectionHeight > 0 ? this.sectionHeight * 0.05 : 20;
+      const arcHeight = this.sectionHeight > 0 ? this.sectionHeight * 0.2 : 20;
       const y = this.centerY + Math.abs(angle / MAX_FAN_ANGLE) * arcHeight;
       
       positions.push({

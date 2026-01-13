@@ -144,9 +144,6 @@ export function handleLocalCardPlay(this: GameScene, card: Card, target?: Square
     const pieceType = card.effect.action === 'DEPLOY_PIECE' ? (card.effect as { piece: PieceSymbol }).piece : undefined;
     this.networkManager?.sendPlayCard(card.id, card.name, target, pieceType, card.effect.action);
 
-    // Update hand display
-    this.updateHandDisplay();
-
     // Check for checkmate/stalemate after card play (Requirement 3.8)
     this.checkGameEndConditions();
   } else {
@@ -167,7 +164,8 @@ export function handleLocalCardPlay(this: GameScene, card: Card, target?: Square
 export function setDiscardTopCard(this: GameScene, side: 'local' | 'opponent', cardData: Card | null): void {
   const layout = this.currentLayout;
   if (!layout) return;
-  const scale = 0.55 * layout.panelScale;
+  // Use same scale as deck cards (0.14) instead of larger scale
+  const scale = 0.75 * layout.panelScale;
   const isOpponent = side === 'opponent';
   const existing = isOpponent ? this.opponentDiscardTopCard : this.playerDiscardTopCard;
   const position = isOpponent ? layout.opponentDiscardY : layout.playerDiscardY;

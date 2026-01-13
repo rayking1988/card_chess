@@ -76,7 +76,15 @@ export function handleNetworkAction(this: GameScene, action: GameAction): void {
       break;
     case 'END_TURN':
       // Opponent ended their turn, now it's our turn
-      this.gameStateManager.endTurn();
+      // Apply disturb effect if opponent sent a disturb amount
+      const disturbAmount = (action as any).disturbAmount || 0;
+      if (disturbAmount > 0) {
+        // Add disturb tags to local player
+        const localPlayer = this.gameStateManager.getPlayer(this.localColor);
+        localPlayer.disturbTags += disturbAmount;
+      }
+      // Skip mode processing since we just handled it above
+      this.gameStateManager.endTurn(true);
       this.updateUIFromState();
       break;
     case 'PLAYER_NAME':

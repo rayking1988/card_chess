@@ -299,14 +299,20 @@ export function discardCard(this: GameScene, card: Card): void {
     if (playerState.hand.length <= MAX_HAND_SIZE) {
       this.exitDiscardMode();
 
-      // Now end the turn
+      // Calculate disturb to add to opponent BEFORE endTurn clears energy
+      const localPlayer = this.gameStateManager.getPlayer(this.localColor);
+      const disturbToAdd = localPlayer.mode === 'disturb' ? localPlayer.energy : 0;
+      
+      // Send local player stats before ending turn (includes energy before conversion)
       this.sendLocalPlayerStats();
+      
+      // Now end the turn - this processes mode effects and adds disturb to opponent
       this.gameStateManager.endTurn();
+      
+      // Send END_TURN to opponent with the disturb amount
       if (this.networkManager) {
-        const opponentColor = this.localColor === 'white' ? 'black' : 'white';
-        this.opponentDisturbTags = this.gameStateManager.getPlayer(opponentColor).disturbTags;
+        this.networkManager.sendGameAction({ type: 'END_TURN', disturbAmount: disturbToAdd } as any);
       }
-      this.networkManager?.sendEndTurn();
     } else {
       // Update prompt
       const toDiscard = playerState.hand.length - MAX_HAND_SIZE;

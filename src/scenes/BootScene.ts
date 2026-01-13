@@ -80,8 +80,10 @@ const CARD_ART_ASSETS = {
 
 /** UI element asset paths */
 const UI_ASSETS = {
-  clock: 'clock/chess_clock.png',
-  stopwatch: 'stopwatch/stopwatch.png',
+  clock: 'side_menu/chess_clock.png',
+  stopwatch: 'side_menu/stopwatch.png',
+  energy: 'side_menu/energy.png',
+  disturb: 'side_menu/disturb.png',
   switches: {
     focus: 'button/switch_focus.png',
     disturb: 'button/switch_disturb.png'
@@ -313,6 +315,8 @@ export class BootScene extends Phaser.Scene {
    * Includes:
    * - Chess clock display
    * - Stopwatch display
+   * - Energy icon
+   * - Disturb icon
    * - Focus/Disturb mode toggle switches
    * - Menu buttons (normal and pressed states)
    * 
@@ -324,6 +328,10 @@ export class BootScene extends Phaser.Scene {
     // Clock and stopwatch displays
     this.load.image('chess_clock', UI_ASSETS.clock);
     this.load.image('stopwatch', UI_ASSETS.stopwatch);
+    
+    // Energy and disturb icons
+    this.load.image('energy_icon', UI_ASSETS.energy);
+    this.load.image('disturb_icon', UI_ASSETS.disturb);
     
     // Focus/Disturb mode toggle switches
     this.load.image('switch_focus', UI_ASSETS.switches.focus);

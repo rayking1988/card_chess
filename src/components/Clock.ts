@@ -23,10 +23,10 @@ import { hex } from '../utils/colors';
  */
 
 /** Clock display width in pixels */
-const CLOCK_WIDTH = 120;
+const CLOCK_WIDTH = 150;
 
 /** Clock display height in pixels */
-const CLOCK_HEIGHT = 120;
+const CLOCK_HEIGHT = 98;
 
 /** Time threshold for low time warning (seconds) */
 const LOW_TIME_THRESHOLD = 60;
@@ -147,8 +147,8 @@ export class ClockComponent {
     
     // Add time display text with digital font
     // Positioned slightly above center for visual balance
-    this.timeText = scene.add.text(0, -5, formatTime(initialTime), {
-      fontSize: '30px',
+    this.timeText = scene.add.text(0, -11, formatTime(initialTime), {
+      fontSize: '47px',
       fontFamily: 'Digital7, "Courier New"',
       color: TIME_COLORS.normal,
       fontStyle: 'normal'
