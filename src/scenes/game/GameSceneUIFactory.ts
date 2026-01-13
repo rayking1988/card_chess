@@ -229,7 +229,6 @@ export function createLeftPanel(this: GameScene, layout: GameLayout): void {
   const scale = layout.panelScale;
   const x = layout.leftPanelX;
   const deckScale = 0.14 * scale;
-  const topCardScale = 0.55 * scale;
   const stackDepth = MAX_PILE_LAYERS;
 
   // === OPPONENT'S DECK (top) ===
