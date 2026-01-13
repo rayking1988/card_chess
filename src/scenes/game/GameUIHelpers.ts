@@ -213,13 +213,32 @@ export function drawTargetArrow(
 ): Phaser.GameObjects.Graphics {
   const arrow = scene.add.graphics();
   arrow.setDepth(45);
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+  const midX = (from.x + to.x) / 2;
+  const midY = (from.y + to.y) / 2;
+  const curveFactor = 0.25;
+  const controlX = midX - dy * curveFactor;
+  const controlY = midY + dx * curveFactor;
+
   arrow.lineStyle(lineWidth, color, 0.9);
   arrow.beginPath();
   arrow.moveTo(from.x, from.y);
-  arrow.lineTo(to.x, to.y);
+
+  const segments = Math.max(20, Math.floor(distance / 10));
+  for (let i = 1; i <= segments; i++) {
+    const t = i / segments;
+    const invT = 1 - t;
+    const x = invT * invT * from.x + 2 * invT * t * controlX + t * t * to.x;
+    const y = invT * invT * from.y + 2 * invT * t * controlY + t * t * to.y;
+    arrow.lineTo(x, y);
+  }
   arrow.strokePath();
 
-  const angle = Phaser.Math.Angle.Between(from.x, from.y, to.x, to.y);
+  const tangentX = 2 * (to.x - controlX);
+  const tangentY = 2 * (to.y - controlY);
+  const angle = Math.atan2(tangentY, tangentX);
   const headLength = headSize;
   const headWidth = headSize * 0.75;
 

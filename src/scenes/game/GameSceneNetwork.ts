@@ -240,11 +240,21 @@ export function handleOpponentPlayCard(
     }
   }
 
+  if (cardData) {
+    // Apply disturb tag penalty/time before card cost (matches local play order)
+    this.gameStateManager.resolveDisturbTagsOnCardPlay(opponentColor, cardData);
+  }
+
   if (cardData?.timeCost) {
-    this.opponentClockTime = Math.max(0, this.opponentClockTime - cardData.timeCost);
-    this.opponentStopwatchTime += cardData.timeCost;
     // Deduct time through GameStateManager to trigger stopwatch threshold check
     this.gameStateManager.deductTime(opponentColor, cardData.timeCost);
+  }
+
+  if (cardData) {
+    const opponentState = this.gameStateManager.getPlayer(opponentColor);
+    this.opponentClockTime = opponentState.clock;
+    this.opponentStopwatchTime = opponentState.stopwatch;
+    this.opponentDisturbTags = opponentState.disturbTags;
   }
 
   this.checkGameEndConditions();
@@ -271,9 +281,10 @@ export function handleOpponentMovePiece(this: GameScene, from: string, to: strin
     this.gameStateManager.setBoardFEN(this.chessBoard.getPosition());
     this.gameStateManager.deductMoveTimeCost(opponentColor);
     this.gameStateManager.resolveDisturbTagsOnMove(opponentColor);
-
-    this.opponentClockTime = Math.max(0, this.opponentClockTime - 3);
-    this.opponentStopwatchTime += 3;
+    const opponentState = this.gameStateManager.getPlayer(opponentColor);
+    this.opponentClockTime = opponentState.clock;
+    this.opponentStopwatchTime = opponentState.stopwatch;
+    this.opponentDisturbTags = opponentState.disturbTags;
 
     this.logEvent(opponentColor, `Moved ${from} to ${to}`);
 
@@ -301,7 +312,9 @@ export function handleOpponentMulligan(this: GameScene): void {
   const opponentColor = this.localColor === 'white' ? 'black' : 'white';
   this.gameStateManager.deductMulliganTimeCost(opponentColor);
   this.logEvent(opponentColor, 'Mulligan');
-  this.opponentClockTime = Math.max(0, this.opponentClockTime - 10);
+  const opponentState = this.gameStateManager.getPlayer(opponentColor);
+  this.opponentClockTime = opponentState.clock;
+  this.opponentStopwatchTime = opponentState.stopwatch;
   this.updateUIFromState();
 }
 

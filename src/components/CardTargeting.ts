@@ -426,8 +426,8 @@ export class CardTargetingComponent {
    * 
    * Used by: CardHandComponent.handleCardDragEnd()
    */
-  endTargeting(x: number, y: number): void {
-    if (!this.activeCard) return;
+  endTargeting(x: number, y: number): 'played' | 'cancelled' | 'armed' {
+    if (!this.activeCard) return 'cancelled';
     
     const card = this.activeCard;
     
@@ -440,12 +440,31 @@ export class CardTargetingComponent {
         if (this.onCardTargeted) {
           this.onCardTargeted(card, target);
         }
-      } else {
-        // Requirement 9.6: Invalid target - cancel
-        if (this.onTargetingCancel) {
-          this.onTargetingCancel(card);
-        }
+        this.cancelTargeting();
+        return 'played';
       }
+
+      // Tap-to-target: keep targeting active when releasing on the card
+      if (this.isPointerOnActiveCard(x, y)) {
+        if (this.activeCardComponent) {
+          const pos = this.activeCardComponent.getPosition();
+          this.startX = pos.x;
+          this.startY = pos.y;
+        }
+        this.currentX = x;
+        this.currentY = y;
+        this.lastUpdateX = null;
+        this.lastUpdateY = null;
+        this.arrowGraphics.clear();
+        return 'armed';
+      }
+
+      // Requirement 9.6: Invalid target - cancel
+      if (this.onTargetingCancel) {
+        this.onTargetingCancel(card);
+      }
+      this.cancelTargeting();
+      return 'cancelled';
     } else if (this.isDragging) {
       // Drag-to-play - check if we're in the play zone
       if (this.isInPlayZone(x, y)) {
@@ -453,15 +472,20 @@ export class CardTargetingComponent {
         if (this.onCardPlayed) {
           this.onCardPlayed(card);
         }
+        this.cancelTargeting();
+        return 'played';
       } else {
         // Requirement 9.6: Outside play zone - cancel
         if (this.onTargetingCancel) {
           this.onTargetingCancel(card);
         }
+        this.cancelTargeting();
+        return 'cancelled';
       }
     }
     
     this.cancelTargeting();
+    return 'cancelled';
   }
 
   /**
@@ -756,6 +780,20 @@ export class CardTargetingComponent {
     if (col < 0 || col > 7 || row < 0 || row > 7) return null;
     
     return this.coordsToSquare(col, row);
+  }
+
+  /**
+   * Checks if the pointer is within the active card bounds
+   * 
+   * @param x - Screen X coordinate
+   * @param y - Screen Y coordinate
+   * @returns True if pointer is over the active card
+   * @private
+   */
+  private isPointerOnActiveCard(x: number, y: number): boolean {
+    if (!this.activeCardComponent) return false;
+    const bounds = this.activeCardComponent.getContainer().getBounds();
+    return Phaser.Geom.Rectangle.Contains(bounds, x, y);
   }
 
   /**

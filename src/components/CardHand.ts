@@ -21,7 +21,7 @@
  */
 
 import Phaser from 'phaser';
-import { Card as CardData } from '../managers/GameStateManager';
+import { Card as CardData, MAX_HAND_SIZE } from '../managers/GameStateManager';
 import { CardComponent, CARD_WIDTH, CARD_HEIGHT } from './Card';
 import { CardTargetingComponent, TargetValidator, PlayZoneBounds } from './CardTargeting';
 import { Square } from 'chess.js';
@@ -261,7 +261,7 @@ export class CardHandComponent {
     // Requirement 9.3: Drag card to board area to play
     this.targeting.onCardPlayed = (card: CardData) => {
       // Clear dragging reference immediately
-      const draggedCard = this.draggingCard;
+      const draggedCard = this.draggingCard ?? this.targeting?.getActiveCardComponent() ?? null;
       this.draggingCard = null;
       
       if (draggedCard) {
@@ -288,7 +288,7 @@ export class CardHandComponent {
     // Requirement 9.5: Resolve effect when arrow released on valid target
     this.targeting.onCardTargeted = (card: CardData, target: Square) => {
       // Clear dragging reference immediately
-      const draggedCard = this.draggingCard;
+      const draggedCard = this.draggingCard ?? this.targeting?.getActiveCardComponent() ?? null;
       this.draggingCard = null;
       
       if (draggedCard) {
@@ -613,14 +613,17 @@ export class CardHandComponent {
       return positions;
     }
     
-    // Calculate spread based on section width or default
-    let maxSpread: number;
+    // Calculate spread based on section width so cards don't squeeze too tightly
+    const cardWidth = CARD_WIDTH * effectiveScale;
+    let totalSpread: number;
+
     if (this.sectionWidth > 0) {
-      const cardWidth = CARD_WIDTH * effectiveScale;
-      // Use smaller spread to bring cards closer together (40% of available space)
-      maxSpread = (this.sectionWidth - cardWidth) * 0.7;
+      const maxSpread = Math.max(0, (this.sectionWidth - cardWidth) * 0.8);
+      const spacing = this.sectionWidth / (MAX_HAND_SIZE + 1);
+      totalSpread = Math.min(spacing * (cardCount - 1), maxSpread);
     } else {
-      maxSpread = FAN_RADIUS * 0.3;
+      const spacing = cardWidth * 0.6;
+      totalSpread = Math.min(spacing * (cardCount - 1), FAN_RADIUS * 0.3);
     }
     
     // Calculate total spread angle
@@ -629,8 +632,8 @@ export class CardHandComponent {
     const angleStep = cardCount > 1 ? totalAngle / (cardCount - 1) : 0;
     
     // Calculate horizontal spacing
-    const spacing = maxSpread / (cardCount - 1);
-    const startX = this.centerX - maxSpread / 2;
+    const spacing = cardCount > 1 ? totalSpread / (cardCount - 1) : 0;
+    const startX = this.centerX - totalSpread / 2;
     
     for (let i = 0; i < cardCount; i++) {
       const angle = startAngle + (i * angleStep);
@@ -894,7 +897,11 @@ export class CardHandComponent {
   ): void {
     // The targeting component handles the actual resolution
     if (this.targeting && this.targeting.isActive()) {
-      this.targeting.endTargeting(pointer.x, pointer.y);
+      const result = this.targeting.endTargeting(pointer.x, pointer.y);
+      if (result === 'armed') {
+        this.resetCardPosition(card);
+        this.draggingCard = null;
+      }
     } else {
       // Fallback: reset card position if targeting wasn't active
       this.resetCardPosition(card);
