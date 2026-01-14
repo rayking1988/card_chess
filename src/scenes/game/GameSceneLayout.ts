@@ -13,6 +13,16 @@ import { layoutPileStack } from './GameUIHelpers';
 import { scaleBackgroundToCover } from './GameSceneBackground';
 import { updateDebugOverlays } from './GameSceneDebug';
 import { buildDiscardViewerCards, layoutDiscardViewer } from './GameSceneDiscardViewer';
+import {
+  LEFT_PANEL_LAYOUT,
+  RIGHT_PANEL_LAYOUT,
+  MOBILE_BAR_LAYOUT,
+  OPPONENT_HAND_LAYOUT,
+  CARD_HAND_LAYOUT,
+  OVERLAY_LAYOUT,
+  TURN_OVERLAY,
+  NAMEPLATE
+} from '../../config';
 
 /**
  * Handles window resize - repositions all UI elements
@@ -117,7 +127,7 @@ export function positionEventLog(this: GameScene, layout: GameLayout): void {
 export function positionRightPanel(this: GameScene, layout: GameLayout): void {
   const baseScale = layout.panelScale;
   const rightX = layout.sections.rightPanel.centerX;
-  const baseGap = 10;
+  const baseGap = RIGHT_PANEL_LAYOUT.BASE_GAP;
 
   if (layout.isMobile) {
     this.opponentClock?.setVisible(false);
@@ -190,10 +200,10 @@ export function positionRightPanel(this: GameScene, layout: GameLayout): void {
 
     const baseTotal = active.reduce((sum, component) => sum + component.getDimensions().height, 0)
       + baseGap * (active.length - 1);
-    const availableHeight = section.height * 0.84;
+    const availableHeight = section.height * RIGHT_PANEL_LAYOUT.AVAILABLE_HEIGHT_FACTOR;
     const baseStackHeight = baseTotal * baseScale;
     const scaleFactor = availableHeight > 0 ? (availableHeight / baseStackHeight) : 1;
-    const scale = baseScale * Math.min(1.4, Math.max(0.85, scaleFactor));
+    const scale = baseScale * Math.min(RIGHT_PANEL_LAYOUT.MAX_SCALE_FACTOR, Math.max(RIGHT_PANEL_LAYOUT.MIN_SCALE_FACTOR, scaleFactor));
     const gap = baseGap * scale;
     const stackHeight = baseTotal * scale;
     let y = section.y + (section.height - stackHeight) / 2;
@@ -229,7 +239,7 @@ export function positionRightPanel(this: GameScene, layout: GameLayout): void {
   if (this.controlledSquaresButton) {
     this.controlledSquaresButton.setVisible(true);
     this.controlledSquaresButton.setPosition(rightX, bottomSection.centerY);
-    const buttonScale = Math.min(topScale, midScale) * 0.7;
+    const buttonScale = Math.min(topScale, midScale) * RIGHT_PANEL_LAYOUT.BUTTON_SCALE_FACTOR;
     this.controlledSquaresButton.setData('baseScale', buttonScale);
     this.controlledSquaresButton.setScale(buttonScale);
   }
@@ -254,9 +264,9 @@ export function positionMobileBars(this: GameScene, layout: GameLayout): void {
   const topBounds = layout.sections.mobileTopBar;
   const bottomBounds = layout.sections.mobileBottomBar;
   const scale = layout.panelScale;
-  const iconSize = 16 * scale;
-  const padding = 8 * scale;
-  const gap = 10 * scale;
+  const iconSize = MOBILE_BAR_LAYOUT.ICON_SIZE * scale;
+  const padding = MOBILE_BAR_LAYOUT.PADDING * scale;
+  const gap = MOBILE_BAR_LAYOUT.GAP * scale;
 
   this.mobileTopBar.setPosition(topBounds.centerX, topBounds.centerY);
   this.mobileBottomBar.setPosition(bottomBounds.centerX, bottomBounds.centerY);
@@ -273,7 +283,7 @@ export function positionMobileBars(this: GameScene, layout: GameLayout): void {
   let topX = -topBounds.width / 2 + padding;
   const topY = 0;
   if (this.mobileTopNameText) {
-    this.mobileTopNameText.setFontSize(12 * scale);
+    this.mobileTopNameText.setFontSize(MOBILE_BAR_LAYOUT.ICON_SIZE * scale * 0.75);
     this.mobileTopNameText.setPosition(topX, topY);
     topX += this.mobileTopNameText.width + gap;
   }
@@ -282,14 +292,14 @@ export function positionMobileBars(this: GameScene, layout: GameLayout): void {
   let bottomX = -bottomBounds.width / 2 + padding;
   const bottomY = 0;
   if (this.mobileBottomNameText) {
-    this.mobileBottomNameText.setFontSize(12 * scale);
+    this.mobileBottomNameText.setFontSize(MOBILE_BAR_LAYOUT.ICON_SIZE * scale * 0.75);
     this.mobileBottomNameText.setPosition(bottomX, bottomY);
     bottomX += this.mobileBottomNameText.width + gap;
   }
   bottomX = layoutMobileStatRow(this, bottomX, bottomY, iconSize, gap, 'bottom');
 
-  const buttonScale = Math.max(0.3, scale * 0.55);
-  const buttonPadding = 6 * scale;
+  const buttonScale = Math.max(MOBILE_BAR_LAYOUT.MIN_BUTTON_SCALE, scale * MOBILE_BAR_LAYOUT.BUTTON_SCALE);
+  const buttonPadding = MOBILE_BAR_LAYOUT.BUTTON_PADDING * scale;
   const rightEdge = bottomBounds.width / 2 - buttonPadding;
   if (this.mobileEventLogButton) {
     this.mobileEventLogButton.setData('baseScale', buttonScale);
@@ -314,7 +324,7 @@ function layoutMobileStatRow(
   gap: number,
   side: 'top' | 'bottom'
 ): number {
-  const iconGap = 4 * (scene.currentLayout?.panelScale ?? 1);
+  const iconGap = MOBILE_BAR_LAYOUT.ICON_GAP * (scene.currentLayout?.panelScale ?? 1);
   const clockIcon = side === 'top' ? scene.mobileTopClockIcon : scene.mobileBottomClockIcon;
   const clockText = side === 'top' ? scene.mobileTopClockText : scene.mobileBottomClockText;
   const stopwatchIcon = side === 'top' ? scene.mobileTopStopwatchIcon : scene.mobileBottomStopwatchIcon;
@@ -331,7 +341,7 @@ function layoutMobileStatRow(
       icon.setPosition(x + iconSize / 2, centerY);
     }
     if (text) {
-      text.setFontSize(12 * (scene.currentLayout?.panelScale ?? 1));
+      text.setFontSize(MOBILE_BAR_LAYOUT.ICON_SIZE * 0.75 * (scene.currentLayout?.panelScale ?? 1));
       const textX = x + iconSize + iconGap;
       text.setPosition(textX, centerY);
       x = textX + text.width + gap;
@@ -357,18 +367,18 @@ function layoutMobileStatRow(
 export function positionLeftPanel(this: GameScene, layout: GameLayout): void {
   const scale = layout.panelScale;
   const leftX = layout.leftPanelX;
-  const deckScale = 0.14 * scale;
-  const topCardScale = 0.75 * scale;
-  const labelSize = 11 * scale;
-  const countSize = 12 * scale;
+  const deckScale = LEFT_PANEL_LAYOUT.DECK_SCALE * scale;
+  const topCardScale = LEFT_PANEL_LAYOUT.TOP_CARD_SCALE * scale;
+  const labelSize = LEFT_PANEL_LAYOUT.LABEL_FONT_SIZE * scale;
+  const countSize = LEFT_PANEL_LAYOUT.COUNT_FONT_SIZE * scale;
 
   layoutPileStack(this.opponentDeckStack, leftX, layout.opponentDeckY, deckScale, this.opponentDeckCount, 1);
   if (this.opponentDeckLabelText) {
-    this.opponentDeckLabelText.setPosition(leftX, layout.opponentDeckY - 60 * scale);
+    this.opponentDeckLabelText.setPosition(leftX, layout.opponentDeckY - LEFT_PANEL_LAYOUT.LABEL_Y_OFFSET * scale);
     this.opponentDeckLabelText.setFontSize(labelSize);
   }
   if (this.opponentDeckCountText) {
-    this.opponentDeckCountText.setPosition(leftX, layout.opponentDeckY + 55 * scale);
+    this.opponentDeckCountText.setPosition(leftX, layout.opponentDeckY + LEFT_PANEL_LAYOUT.COUNT_Y_OFFSET * scale);
     this.opponentDeckCountText.setFontSize(countSize);
   }
 
@@ -382,7 +392,7 @@ export function positionLeftPanel(this: GameScene, layout: GameLayout): void {
     this.opponentDiscardLabelText.setFontSize(labelSize);
   }
   if (this.opponentDiscardCountText) {
-    this.opponentDiscardCountText.setPosition(leftX, layout.opponentDiscardY + 55 * scale);
+    this.opponentDiscardCountText.setPosition(leftX, layout.opponentDiscardY + LEFT_PANEL_LAYOUT.COUNT_Y_OFFSET * scale);
     this.opponentDiscardCountText.setFontSize(countSize);
   }
 
@@ -397,18 +407,18 @@ export function positionLeftPanel(this: GameScene, layout: GameLayout): void {
     this.playerDiscardLabelText.setFontSize(labelSize);
   }
   if (this.playerDiscardCountText) {
-    this.playerDiscardCountText.setPosition(leftX, layout.playerDiscardY + 55 * scale);
+    this.playerDiscardCountText.setPosition(leftX, layout.playerDiscardY + LEFT_PANEL_LAYOUT.COUNT_Y_OFFSET * scale);
     this.playerDiscardCountText.setFontSize(countSize);
   }
 
   const localDeckCount = this.gameStateManager ? this.gameStateManager.getPlayer(this.localColor).deck.length : 0;
   layoutPileStack(this.playerDeckStack, leftX, layout.playerDeckY, deckScale, localDeckCount, 1);
   if (this.playerDeckLabelText) {
-    this.playerDeckLabelText.setPosition(leftX, layout.playerDeckY - 60 * scale);
+    this.playerDeckLabelText.setPosition(leftX, layout.playerDeckY - LEFT_PANEL_LAYOUT.LABEL_Y_OFFSET * scale);
     this.playerDeckLabelText.setFontSize(labelSize);
   }
   if (this.playerDeckCountText) {
-    this.playerDeckCountText.setPosition(leftX, layout.playerDeckY + 55 * scale);
+    this.playerDeckCountText.setPosition(leftX, layout.playerDeckY + LEFT_PANEL_LAYOUT.COUNT_Y_OFFSET * scale);
     this.playerDeckCountText.setFontSize(countSize);
   }
 }
@@ -425,12 +435,12 @@ export function positionOpponentHand(this: GameScene, layout: GameLayout): void 
   const section = layout.sections.topBar;
   const visibleHeight = section.height;
   const maskY = section.y + section.height - visibleHeight;
-  this.opponentHandContainer.setPosition(section.centerX, maskY - visibleHeight * 1.2);
+  this.opponentHandContainer.setPosition(section.centerX, maskY - visibleHeight * OPPONENT_HAND_LAYOUT.VISIBLE_HEIGHT_FACTOR);
   
-  this.opponentHandLabelText.setPosition(section.centerX, section.y + section.height * 0.85);
-  this.opponentHandLabelText.setFontSize(12 * layout.panelScale);
-  this.opponentHandCountText.setPosition(section.centerX, section.y + section.height * 0.95);
-  this.opponentHandCountText.setFontSize(12 * layout.panelScale);
+  this.opponentHandLabelText.setPosition(section.centerX, section.y + section.height * OPPONENT_HAND_LAYOUT.LABEL_Y_FACTOR);
+  this.opponentHandLabelText.setFontSize(LEFT_PANEL_LAYOUT.COUNT_FONT_SIZE * layout.panelScale);
+  this.opponentHandCountText.setPosition(section.centerX, section.y + section.height * OPPONENT_HAND_LAYOUT.COUNT_Y_FACTOR);
+  this.opponentHandCountText.setFontSize(LEFT_PANEL_LAYOUT.COUNT_FONT_SIZE * layout.panelScale);
 
   updateOpponentHandDisplay.call(this, this.opponentHandCount);
 }
@@ -457,23 +467,23 @@ export function updateOpponentHandDisplay(this: GameScene, count: number): void 
   const section = layout.sections.topBar;
   
   // Calculate scale to fit cards within section
-  const baseCardHeight = 140;
-  const baseCardWidth = 100;
-  const availableHeight = section.height * 0.9;
+  const baseCardHeight = OPPONENT_HAND_LAYOUT.BASE_CARD_HEIGHT;
+  const baseCardWidth = OPPONENT_HAND_LAYOUT.BASE_CARD_WIDTH;
+  const availableHeight = section.height * OPPONENT_HAND_LAYOUT.AVAILABLE_HEIGHT_FACTOR;
   const scaleForHeight = availableHeight / baseCardHeight;
   
-  const overlapFactor = 0.3;
+  const overlapFactor = OPPONENT_HAND_LAYOUT.OVERLAP_FACTOR;
   const totalWidthNeeded = baseCardWidth + (displayCount - 1) * baseCardWidth * overlapFactor;
-  const availableWidth = section.width * 0.8;
+  const availableWidth = section.width * OPPONENT_HAND_LAYOUT.AVAILABLE_WIDTH_FACTOR;
   const scaleForWidth = availableWidth / totalWidthNeeded;
   
-  const scale = Math.min(scaleForHeight, scaleForWidth, 0.2);
+  const scale = Math.min(scaleForHeight, scaleForWidth, OPPONENT_HAND_LAYOUT.MAX_SCALE);
   
   const spacing = baseCardWidth * scale * overlapFactor;
   const totalWidth = spacing * (displayCount - 1);
   const startX = -totalWidth / 2;
-  const maxTilt = Math.min(0.3, displayCount * 0.05);
-  const arcDepth = section.height * 0.08;
+  const maxTilt = Math.min(OPPONENT_HAND_LAYOUT.MAX_TILT_LIMIT, displayCount * OPPONENT_HAND_LAYOUT.MAX_TILT_FACTOR);
+  const arcDepth = section.height * OPPONENT_HAND_LAYOUT.ARC_DEPTH_FACTOR;
 
   for (let i = 0; i < displayCount; i++) {
     const t = displayCount === 1 ? 0.5 : i / Math.max(1, displayCount - 1);
@@ -495,7 +505,7 @@ export function updateOpponentHandDisplay(this: GameScene, count: number): void 
  * @param layout - Current layout calculations
  */
 export function positionNameplates(this: GameScene, layout: GameLayout): void {
-  const fontSize = 20 * layout.panelScale;
+  const fontSize = NAMEPLATE.FONT_SIZE * layout.panelScale;
   const colorLocal = this.localColor === 'white' ? '#ffffff' : '#cccccc';
   const colorOpponent = this.localColor === 'white' ? '#cccccc' : '#ffffff';
 
@@ -521,7 +531,7 @@ export function positionCardHand(this: GameScene, layout: GameLayout): void {
   const usableHeight = section.height;
   this.cardHand.setSectionSize(
     section.centerX,
-    section.centerY + 50,
+    section.centerY + CARD_HAND_LAYOUT.CENTER_Y_OFFSET,
     section.width,
     usableHeight
   );
@@ -560,8 +570,8 @@ export function positionCardHand(this: GameScene, layout: GameLayout): void {
  */
 export function positionCardCount(this: GameScene, layout: GameLayout): void {
   if (!this.cardCountText) return;
-  this.cardCountText.setPosition(layout.boardX, layout.boardY + layout.boardSize / 2 + 18 * layout.panelScale);
-  this.cardCountText.setFontSize(14 * layout.panelScale);
+  this.cardCountText.setPosition(layout.boardX, layout.boardY + layout.boardSize / 2 + CARD_HAND_LAYOUT.COUNT_Y_OFFSET * layout.panelScale);
+  this.cardCountText.setFontSize(CARD_HAND_LAYOUT.COUNT_FONT_SIZE * layout.panelScale);
 }
 
 /**
@@ -582,14 +592,14 @@ export function positionTurnBanner(this: GameScene, layout: GameLayout): void {
  */
 export function positionTurnOverlay(this: GameScene, layout: GameLayout): void {
   if (!this.turnOverlayRect || !this.turnOverlayText) return;
-  const overlayY = this.boardTopLeft.y + this.boardSquareSize * 3;
-  const overlayHeight = this.boardSquareSize * 2;
+  const overlayY = this.boardTopLeft.y + this.boardSquareSize * OVERLAY_LAYOUT.Y_OFFSET_IN_SQUARES;
+  const overlayHeight = this.boardSquareSize * OVERLAY_LAYOUT.HEIGHT_IN_SQUARES;
   const overlayWidth = layout.boardSize;
 
   this.turnOverlayRect.setPosition(this.boardTopLeft.x, overlayY);
   this.turnOverlayRect.setSize(overlayWidth, overlayHeight);
   this.turnOverlayText.setPosition(this.boardTopLeft.x + overlayWidth / 2, overlayY + overlayHeight / 2);
-  this.turnOverlayText.setFontSize(28 * layout.panelScale);
+  this.turnOverlayText.setFontSize(TURN_OVERLAY.OVERLAY_FONT_SIZE * layout.panelScale);
 }
 
 /**

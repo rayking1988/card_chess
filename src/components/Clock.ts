@@ -16,6 +16,7 @@
 
 import Phaser from 'phaser';
 import { hex } from '../utils/colors';
+import { CLOCK, CLOCK_COLORS, CLOCK_LAYOUT } from '../config';
 
 /* ============================================
  * CLOCK CONFIGURATION CONSTANTS
@@ -23,19 +24,19 @@ import { hex } from '../utils/colors';
  */
 
 /** Clock display width in pixels */
-const CLOCK_WIDTH = 150;
+const CLOCK_WIDTH = CLOCK_LAYOUT.WIDTH;
 
 /** Clock display height in pixels */
-const CLOCK_HEIGHT = 98;
+const CLOCK_HEIGHT = CLOCK_LAYOUT.HEIGHT;
 
 /** Time threshold for low time warning (seconds) */
-const LOW_TIME_THRESHOLD = 60;
+const LOW_TIME_THRESHOLD = CLOCK.LOW_TIME_THRESHOLD;
 
 /** Text colors for different time states */
 const TIME_COLORS = {
-  normal: '#000000',      // Black - plenty of time
-  warning: '#ff6666',     // Light red - under 60 seconds
-  critical: '#ff0000'     // Red - time expired
+  normal: CLOCK_COLORS.NORMAL,
+  warning: CLOCK_COLORS.WARNING,
+  critical: CLOCK_COLORS.CRITICAL
 };
 
 /* ============================================
@@ -63,8 +64,8 @@ const TIME_COLORS = {
  * Used by: ClockComponent.setTime()
  */
 export function formatTime(seconds: number): string {
-  const mins = Math.floor(Math.max(0, seconds) / 60);
-  const secs = Math.max(0, seconds) % 60;
+  const mins = Math.floor(Math.max(0, seconds) / CLOCK.SECONDS_PER_MINUTE);
+  const secs = Math.max(0, seconds) % CLOCK.SECONDS_PER_MINUTE;
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 

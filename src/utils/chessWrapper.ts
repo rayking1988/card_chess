@@ -20,6 +20,7 @@
  */
 
 import { Chess, Square, PieceSymbol, Color } from 'chess.js';
+import { CHESS } from '../config';
 
 /* ============================================
  * CONFIGURATION CONSTANTS
@@ -32,10 +33,10 @@ import { Chess, Square, PieceSymbol, Color } from 'chess.js';
  * White King on e1, Black King on e8
  * Requirement 2.6
  */
-export const INITIAL_FEN = '4k3/8/8/8/8/8/8/4K3 w - - 0 1';
+export const INITIAL_FEN = CHESS.INITIAL_FEN;
 
 /** Standard chess board size (8x8) */
-export const BOARD_SIZE = 8;
+export const BOARD_SIZE = CHESS.BOARD_SIZE;
 
 /* ============================================
  * TYPE DEFINITIONS

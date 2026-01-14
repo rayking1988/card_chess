@@ -24,6 +24,7 @@ import { CardComponent } from './Card';
 import { cardRequiresTarget } from '../data/cards';
 import { Square } from 'chess.js';
 import { hex } from '../utils/colors.js';
+import { TARGETING_COLORS, TARGETING_LAYOUT, DEPTH, MATH } from '../config';
 
 /* ============================================
  * TARGETING VISUAL CONSTANTS
@@ -31,29 +32,29 @@ import { hex } from '../utils/colors.js';
  */
 
 /** Color for the targeting arrow (yellow) - CHANGE THIS TO MODIFY ARROW COLOR */
-const ARROW_COLOR = hex('#f1820c');
+const ARROW_COLOR = hex(TARGETING_COLORS.ARROW);
 
 /** Width of the arrow line in pixels */
-const ARROW_WIDTH = 4;
+const ARROW_WIDTH = TARGETING_LAYOUT.ARROW_WIDTH;
 
 /** Size of the arrow head in pixels */
-const ARROW_HEAD_SIZE = 15;
+const ARROW_HEAD_SIZE = TARGETING_LAYOUT.ARROW_HEAD_SIZE;
 
 /** Color for valid target highlights (green) */
-const VALID_TARGET_COLOR = hex('#eff708');
+const VALID_TARGET_COLOR = hex(TARGETING_COLORS.VALID_TARGET);
 
 /** Color for invalid target highlights (red) */
-const INVALID_TARGET_COLOR = hex('#e50b0b');
+const INVALID_TARGET_COLOR = hex(TARGETING_COLORS.INVALID_TARGET);
 
 /** Alpha for play zone highlight */
-const PLAY_ZONE_ALPHA = 0.3;
+const PLAY_ZONE_ALPHA = TARGETING_LAYOUT.PLAY_ZONE_ALPHA;
 
 /** 
  * Curve factor for the targeting arrow (0 = straight, higher = more curved)
  * CHANGE THIS TO MODIFY ARROW CURVE INTENSITY
  * Positive values curve upward, negative values curve downward
  */
-const ARROW_CURVE_FACTOR = 0.3;
+const ARROW_CURVE_FACTOR = TARGETING_LAYOUT.ARROW_CURVE_FACTOR;
 
 /* ============================================
  * TYPE DEFINITIONS
@@ -233,10 +234,10 @@ export class CardTargetingComponent {
     
     // Create graphics layers
     this.arrowGraphics = scene.add.graphics();
-    this.arrowGraphics.setDepth(500);
+    this.arrowGraphics.setDepth(DEPTH.TARGETING_ARROW);
     
     this.playZoneGraphics = scene.add.graphics();
-    this.playZoneGraphics.setDepth(499);
+    this.playZoneGraphics.setDepth(DEPTH.PLAY_ZONE);
     
     this.setupInputHandlers();
   }
@@ -636,7 +637,7 @@ export class CardTargetingComponent {
     this.arrowGraphics.moveTo(this.startX, this.startY);
     
     // Draw bezier curve as series of line segments for smooth appearance
-    const segments = Math.max(20, Math.floor(distance / 10));
+    const segments = Math.max(TARGETING_LAYOUT.MIN_ARROW_SEGMENTS, Math.floor(distance / TARGETING_LAYOUT.ARROW_SEGMENT_DIVISOR));
     for (let i = 1; i <= segments; i++) {
       const t = i / segments;
       const invT = 1 - t;
@@ -654,10 +655,10 @@ export class CardTargetingComponent {
     const angle = Math.atan2(tangentY, tangentX);
     
     // Draw arrow head aligned with curve tangent
-    const headX1 = this.currentX - ARROW_HEAD_SIZE * Math.cos(angle - Math.PI / 6);
-    const headY1 = this.currentY - ARROW_HEAD_SIZE * Math.sin(angle - Math.PI / 6);
-    const headX2 = this.currentX - ARROW_HEAD_SIZE * Math.cos(angle + Math.PI / 6);
-    const headY2 = this.currentY - ARROW_HEAD_SIZE * Math.sin(angle + Math.PI / 6);
+    const headX1 = this.currentX - ARROW_HEAD_SIZE * Math.cos(angle - MATH.ARROW_HEAD_ANGLE);
+    const headY1 = this.currentY - ARROW_HEAD_SIZE * Math.sin(angle - MATH.ARROW_HEAD_ANGLE);
+    const headX2 = this.currentX - ARROW_HEAD_SIZE * Math.cos(angle + MATH.ARROW_HEAD_ANGLE);
+    const headY2 = this.currentY - ARROW_HEAD_SIZE * Math.sin(angle + MATH.ARROW_HEAD_ANGLE);
     
     this.arrowGraphics.fillStyle(color, 1);
     this.arrowGraphics.beginPath();

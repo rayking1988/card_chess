@@ -15,6 +15,7 @@
 
 import Phaser from 'phaser';
 import { hex } from '../utils/colors';
+import { ENERGY, ENERGY_COLORS, BAR_LAYOUT } from '../config';
 
 /* ============================================
  * ENERGY BAR CONFIGURATION CONSTANTS
@@ -22,39 +23,39 @@ import { hex } from '../utils/colors';
  */
 
 /** Energy bar width in pixels (bar body only) */
-const BAR_WIDTH = 140;
+const BAR_WIDTH = BAR_LAYOUT.WIDTH;
 
 /** Energy bar height in pixels */
-const BAR_HEIGHT = 25;
+const BAR_HEIGHT = BAR_LAYOUT.HEIGHT;
 
 /** Icon size in pixels */
-const ICON_SIZE = 30;
+const ICON_SIZE = BAR_LAYOUT.ICON_SIZE;
 
 /** Gap between icon and bar */
-const ICON_GAP = 8;
+const ICON_GAP = BAR_LAYOUT.ICON_GAP;
 
 /** Gap between segments */
-const SEGMENT_GAP = 2;
+const SEGMENT_GAP = BAR_LAYOUT.SEGMENT_GAP;
 
 /** Maximum segments to display */
-const MAX_SEGMENTS = 10;
+const MAX_SEGMENTS = ENERGY.MAX_DISPLAY_SEGMENTS;
 
 /** Fill colors based on energy level (as ratio of current/cap) */
 const FILL_COLORS = {
-  high: hex('#f0e130'),      // Lemon yellow - 75%+ energy
-  medium: hex('#f0e130'),    // Lemon yellow - 50-74% energy
-  low: hex('#f0e130'),       // Lemon yellow - 25-49% energy
-  critical: hex('#f0e130')   // Lemon yellow - below 25% energy
+  high: hex(ENERGY_COLORS.FILL),
+  medium: hex(ENERGY_COLORS.FILL),
+  low: hex(ENERGY_COLORS.FILL),
+  critical: hex(ENERGY_COLORS.FILL)
 };
 
-const EMPTY_SEGMENT_COLOR = hex('#2a2a2a');
+const EMPTY_SEGMENT_COLOR = hex(ENERGY_COLORS.EMPTY_SEGMENT);
 
 /** Text colors for different energy states */
 const TEXT_COLORS = {
-  empty: '#555555',    // Dark gray - no energy system yet (0/0)
-  depleted: '#005488ff', // Dark red - empty (0/X where X > 0)
-  full: '#006657ff',     // Dark green - at capacity
-  normal: '#000000'    // Black - partial energy
+  empty: ENERGY_COLORS.TEXT.EMPTY,
+  depleted: ENERGY_COLORS.TEXT.DEPLETED,
+  full: ENERGY_COLORS.TEXT.FULL,
+  normal: ENERGY_COLORS.TEXT.NORMAL
 };
 
 /* ============================================

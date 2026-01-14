@@ -25,6 +25,7 @@
 import Phaser from 'phaser';
 import { NetworkManager, ConnectionState } from '../managers/NetworkManager';
 import type { PlayerColor } from '../managers/GameStateManager';
+import { NETWORK, DISPLAY, ANIMATION, SCALE } from '../config';
 
 /* ============================================
  * CONFIGURATION CONSTANTS
@@ -32,19 +33,19 @@ import type { PlayerColor } from '../managers/GameStateManager';
  */
 
 /** LocalStorage key for persisting player name (Requirement 1.2) */
-const STORAGE_KEY = 'card_chess_player_name';
+const STORAGE_KEY = NETWORK.STORAGE_KEY;
 
 /** Default room ID for matchmaking lobby */
-const DEFAULT_ROOM_ID = 'card-chess-matchmaking-lobby';
+const DEFAULT_ROOM_ID = NETWORK.DEFAULT_ROOM_ID;
 
 /** Ko-fi donation page URL (Requirement 1.6) */
-const KOFI_URL = 'https://ko-fi.com/cardchess';
+const KOFI_URL = NETWORK.KOFI_URL;
 
 /** GitHub issues page for bug reports */
-const BUG_REPORT_URL = 'https://github.com/cardchess/issues';
+const BUG_REPORT_URL = NETWORK.BUG_REPORT_URL;
 
 /** Base design height for UI scaling calculations */
-const BASE_HEIGHT = 1080;
+const BASE_HEIGHT = DISPLAY.GAME_HEIGHT;
 
 /* ============================================
  * MENU SCENE CLASS
@@ -256,7 +257,7 @@ export class MenuScene extends Phaser.Scene {
     this.nameInput.type = 'text';
     this.nameInput.placeholder = 'Player Name';
     this.nameInput.value = this.playerName;
-    this.nameInput.maxLength = 20;
+    this.nameInput.maxLength = NETWORK.MAX_NAME_LENGTH;
     this.nameInput.style.cssText = `
       position: absolute;
       font-family: 'BoldPixels', Arial, sans-serif;
@@ -434,7 +435,7 @@ export class MenuScene extends Phaser.Scene {
     container.setInteractive({ useHandCursor: true });
     
     container.on('pointerover', () => {
-      container.setScale(1.05);
+      container.setScale(SCALE.BUTTON_HOVER);
     });
     
     container.on('pointerout', () => {
@@ -446,13 +447,13 @@ export class MenuScene extends Phaser.Scene {
     container.on('pointerdown', () => {
       bgNormal.setVisible(false);
       bgPressed.setVisible(true);
-      container.setScale(0.98);
+      container.setScale(SCALE.BUTTON_PRESS);
     });
     
     container.on('pointerup', () => {
       bgNormal.setVisible(true);
       bgPressed.setVisible(false);
-      container.setScale(1.05);
+      container.setScale(SCALE.BUTTON_HOVER);
       onClick();
     });
     
@@ -553,7 +554,7 @@ export class MenuScene extends Phaser.Scene {
       this.localColor = color;
       console.log('Assigned color:', color);
       
-      this.time.delayedCall(1000, () => {
+      this.time.delayedCall(ANIMATION.GAME_START_DELAY, () => {
         this.startGame();
       });
     });
@@ -610,7 +611,7 @@ export class MenuScene extends Phaser.Scene {
     
     this.waitingTween = this.tweens.add({
       targets: {},
-      duration: 500,
+      duration: ANIMATION.WAITING_DOTS_INTERVAL,
       repeat: -1,
       onRepeat: () => {
         this.dotCount = (this.dotCount + 1) % 4;

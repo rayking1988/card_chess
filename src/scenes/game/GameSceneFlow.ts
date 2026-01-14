@@ -11,9 +11,7 @@ import { calculateLayout } from './GameLayout';
 import { createImageButton } from './GameUIHelpers';
 import { hex } from '../../utils/colors';
 import type { GameScene } from '../GameScene';
-
-const INTERACTION_BLOCKER_ALPHA = 0.3;
-const INTERACTION_BLOCKER_DEPTH = 90;
+import { INTERACTION_BLOCKER, OVERLAY_LAYOUT, CLOCK } from '../../config';
 
 /**
  * Initializes the game state
@@ -41,7 +39,7 @@ export function initializeGame(this: GameScene): void {
   this.opponentDeckCount = DECK_SIZE - INITIAL_DRAW_COUNT;
   this.opponentDiscardCount = 0;
   this.opponentHandCount = INITIAL_DRAW_COUNT;
-  this.opponentClockTime = 600;
+  this.opponentClockTime = CLOCK.INITIAL_SECONDS;
   this.opponentStopwatchTime = 0;
   this.opponentDiscardCards = [];
 
@@ -103,8 +101,8 @@ export function refreshInteractionBlockers(this: GameScene): void {
 
   const addBlocker = (x: number, y: number, w: number, h: number): void => {
     if (w <= 0 || h <= 0) return;
-    const rect = this.add.rectangle(x, y, w, h, hex('#000000'), INTERACTION_BLOCKER_ALPHA);
-    rect.setDepth(INTERACTION_BLOCKER_DEPTH);
+    const rect = this.add.rectangle(x, y, w, h, hex('#000000'), INTERACTION_BLOCKER.ALPHA);
+    rect.setDepth(INTERACTION_BLOCKER.DEPTH);
     rect.setInteractive();
     this.interactionBlockers.push(rect);
   };
@@ -155,20 +153,20 @@ export function showMulliganUI(this: GameScene): void {
   }
 
   if (!this.mulliganTitleText) {
-    this.mulliganTitleText = this.add.text(overlayX, overlayY - overlayHeight * 0.18, 'Mulligan?', {
-      fontSize: `${28 * scale}px`,
+    this.mulliganTitleText = this.add.text(overlayX, overlayY - overlayHeight * OVERLAY_LAYOUT.TITLE_Y_OFFSET_FACTOR, 'Mulligan?', {
+      fontSize: `${OVERLAY_LAYOUT.MULLIGAN_TITLE_FONT_SIZE * scale}px`,
       fontFamily: 'BoldPixels, Arial',
       color: '#ffffff'
     }).setOrigin(0.5).setDepth(121);
   } else {
-    this.mulliganTitleText.setPosition(overlayX, overlayY - overlayHeight * 0.18);
-    this.mulliganTitleText.setFontSize(28 * scale);
+    this.mulliganTitleText.setPosition(overlayX, overlayY - overlayHeight * OVERLAY_LAYOUT.TITLE_Y_OFFSET_FACTOR);
+    this.mulliganTitleText.setFontSize(OVERLAY_LAYOUT.MULLIGAN_TITLE_FONT_SIZE * scale);
     this.mulliganTitleText.setText('Mulligan?');
   }
 
-  const buttonScale = scale * 0.8;
-  const buttonY = overlayY + overlayHeight * 0.18;
-  const buttonOffset = 160 * scale;
+  const buttonScale = scale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR;
+  const buttonY = overlayY + overlayHeight * OVERLAY_LAYOUT.BUTTON_Y_OFFSET_FACTOR;
+  const buttonOffset = OVERLAY_LAYOUT.BUTTON_X_OFFSET * scale;
 
   if (!this.mulliganButton) {
     this.mulliganButton = createImageButton(
@@ -336,10 +334,10 @@ export function enterDiscardMode(this: GameScene): void {
   const toDiscard = handSize - MAX_HAND_SIZE;
 
   this.discardPromptText = this.add.text(
-    width / 2, height / 2 - 150 * scale,
+    width / 2, height / 2 - OVERLAY_LAYOUT.DISCARD_PROMPT_Y_OFFSET * scale,
     `Discard ${toDiscard} card(s) to continue`,
     {
-      fontSize: `${24 * scale}px`,
+      fontSize: `${OVERLAY_LAYOUT.DISCARD_PROMPT_FONT_SIZE * scale}px`,
       fontFamily: 'BoldPixels, Arial',
       color: '#ff6666'
     }
@@ -515,23 +513,23 @@ export function handleGameEnd(this: GameScene, winner: PlayerColor | null, reaso
   }
 
   if (!this.gameEndBannerText) {
-    this.gameEndBannerText = this.add.text(overlayX, overlayY - overlayHeight * 0.18, bannerText, {
-      fontSize: `${30 * layout.panelScale}px`,
+    this.gameEndBannerText = this.add.text(overlayX, overlayY - overlayHeight * OVERLAY_LAYOUT.TITLE_Y_OFFSET_FACTOR, bannerText, {
+      fontSize: `${OVERLAY_LAYOUT.GAME_END_TITLE_FONT_SIZE * layout.panelScale}px`,
       fontFamily: 'BoldPixels, Arial',
       color: '#ffffff'
     }).setOrigin(0.5).setDepth(141);
   } else {
-    this.gameEndBannerText.setPosition(overlayX, overlayY - overlayHeight * 0.18);
-    this.gameEndBannerText.setFontSize(30 * layout.panelScale);
+    this.gameEndBannerText.setPosition(overlayX, overlayY - overlayHeight * OVERLAY_LAYOUT.TITLE_Y_OFFSET_FACTOR);
+    this.gameEndBannerText.setFontSize(OVERLAY_LAYOUT.GAME_END_TITLE_FONT_SIZE * layout.panelScale);
     this.gameEndBannerText.setText(bannerText);
   }
 
   this.localRematchRequested = false;
   this.opponentRematchRequested = false;
 
-  const buttonScale = layout.panelScale * 0.8;
-  const buttonY = overlayY + overlayHeight * 0.18;
-  const buttonOffset = 180 * layout.panelScale;
+  const buttonScale = layout.panelScale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR;
+  const buttonY = overlayY + overlayHeight * OVERLAY_LAYOUT.BUTTON_Y_OFFSET_FACTOR;
+  const buttonOffset = OVERLAY_LAYOUT.GAME_END_BUTTON_X_OFFSET * layout.panelScale;
 
   if (!this.gameEndRematchButton) {
     this.gameEndRematchButton = createImageButton(
@@ -626,7 +624,7 @@ export function handleRematchDeclined(this: GameScene): void {
 export function startRematch(this: GameScene): void {
   this.clearInteractionBlockers();
   const newLocalColor: PlayerColor = this.localColor === 'white' ? 'black' : 'white';
-  this.time.delayedCall(300, () => {
+  this.time.delayedCall(OVERLAY_LAYOUT.REMATCH_DELAY, () => {
     this.scene.start('GameScene', {
       playerName: this.playerName,
       localColor: newLocalColor,

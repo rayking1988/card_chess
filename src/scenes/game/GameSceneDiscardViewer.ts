@@ -11,6 +11,7 @@ import type { GameLayout } from './GameTypes';
 import { createImageButton } from './GameUIHelpers';
 import { hex } from '../../utils/colors';
 import type { GameScene } from '../GameScene';
+import { DISCARD_VIEWER } from '../../config';
 
 /**
  * Shows the discard pile viewer overlay
@@ -27,13 +28,13 @@ export function showDiscardViewer(this: GameScene, side: 'local' | 'opponent'): 
   this.discardViewerScrollOffset = 0;
 
   this.discardViewer = this.add.container(0, 0);
-  this.discardViewer.setDepth(220);
+  this.discardViewer.setDepth(DISCARD_VIEWER.DEPTH);
 
   // Using Rectangle for better performance than Graphics
   this.discardViewerBackground = this.add.rectangle(
     layout.width / 2, layout.height / 2,
     layout.width, layout.height,
-    hex('#000000'), 0.6
+    hex('#000000'), DISCARD_VIEWER.BACKGROUND_ALPHA
   );
   this.discardViewerBackground.setInteractive();
   this.discardViewerBackground.on('pointerdown', () => this.hideDiscardViewer());
@@ -45,7 +46,7 @@ export function showDiscardViewer(this: GameScene, side: 'local' | 'opponent'): 
   const title = side === 'local' ? 'Your Discard Pile' : `${this.opponentName} Discard Pile`;
   this.discardViewerTitleText = this.add.text(0, 0, title, {
     fontFamily: 'BoldPixels, Arial',
-    fontSize: `${20 * layout.panelScale}px`,
+    fontSize: `${DISCARD_VIEWER.TITLE_FONT_SIZE * layout.panelScale}px`,
     color: '#ffffff'
   }).setOrigin(0.5, 0.5);
   this.discardViewer.add(this.discardViewerTitleText);
@@ -58,8 +59,8 @@ export function showDiscardViewer(this: GameScene, side: 'local' | 'opponent'): 
     'red_button_pressed',
     () => this.hideDiscardViewer()
   );
-  this.discardViewerCloseButton.setData('baseScale', layout.panelScale * 0.7);
-  this.discardViewerCloseButton.setScale(layout.panelScale * 0.7);
+  this.discardViewerCloseButton.setData('baseScale', layout.panelScale * DISCARD_VIEWER.CLOSE_BUTTON_SCALE);
+  this.discardViewerCloseButton.setScale(layout.panelScale * DISCARD_VIEWER.CLOSE_BUTTON_SCALE);
   this.discardViewer.add(this.discardViewerCloseButton);
 
   this.discardViewerContent = this.add.container(0, 0);
@@ -111,21 +112,21 @@ export function layoutDiscardViewer(this: GameScene, layout: GameLayout): void {
     return;
   }
 
-  const panelWidth = Math.min(layout.width * 0.72, 760 * layout.panelScale);
-  const panelHeight = Math.min(layout.height * 0.78, 640 * layout.panelScale);
+  const panelWidth = Math.min(layout.width * DISCARD_VIEWER.PANEL_WIDTH_FACTOR, DISCARD_VIEWER.PANEL_MAX_WIDTH * layout.panelScale);
+  const panelHeight = Math.min(layout.height * DISCARD_VIEWER.PANEL_HEIGHT_FACTOR, DISCARD_VIEWER.PANEL_MAX_HEIGHT * layout.panelScale);
   const panelX = layout.width / 2;
   const panelY = layout.height / 2;
-  const padding = 24 * layout.panelScale;
-  const titleHeight = 56 * layout.panelScale;
+  const padding = DISCARD_VIEWER.PADDING * layout.panelScale;
+  const titleHeight = DISCARD_VIEWER.TITLE_HEIGHT * layout.panelScale;
 
   this.discardViewerPanel.clear();
-  this.discardViewerPanel.fillStyle(hex('#1a1a2e'), 0.96);
+  this.discardViewerPanel.fillStyle(hex('#1a1a2e'), DISCARD_VIEWER.PANEL_FILL_ALPHA);
   this.discardViewerPanel.fillRoundedRect(
     panelX - panelWidth / 2,
     panelY - panelHeight / 2,
     panelWidth,
     panelHeight,
-    12
+    DISCARD_VIEWER.BORDER_RADIUS
   );
   this.discardViewerPanel.lineStyle(2, hex('#4a4a6e'), 1);
   this.discardViewerPanel.strokeRoundedRect(
@@ -133,15 +134,15 @@ export function layoutDiscardViewer(this: GameScene, layout: GameLayout): void {
     panelY - panelHeight / 2,
     panelWidth,
     panelHeight,
-    12
+    DISCARD_VIEWER.BORDER_RADIUS
   );
 
   this.discardViewerTitleText.setPosition(panelX, panelY - panelHeight / 2 + titleHeight * 0.55);
-  this.discardViewerTitleText.setFontSize(20 * layout.panelScale);
+  this.discardViewerTitleText.setFontSize(DISCARD_VIEWER.TITLE_FONT_SIZE * layout.panelScale);
 
-  this.discardViewerCloseButton.setPosition(panelX + panelWidth / 2 - 70 * layout.panelScale, panelY - panelHeight / 2 + titleHeight * 0.55);
-  this.discardViewerCloseButton.setData('baseScale', layout.panelScale * 0.7);
-  this.discardViewerCloseButton.setScale(layout.panelScale * 0.7);
+  this.discardViewerCloseButton.setPosition(panelX + panelWidth / 2 - DISCARD_VIEWER.CLOSE_BUTTON_X_OFFSET * layout.panelScale, panelY - panelHeight / 2 + titleHeight * 0.55);
+  this.discardViewerCloseButton.setData('baseScale', layout.panelScale * DISCARD_VIEWER.CLOSE_BUTTON_SCALE);
+  this.discardViewerCloseButton.setScale(layout.panelScale * DISCARD_VIEWER.CLOSE_BUTTON_SCALE);
 
   const contentX = panelX - panelWidth / 2 + padding;
   const contentY = panelY - panelHeight / 2 + titleHeight;
@@ -189,9 +190,9 @@ export function buildDiscardViewerCards(this: GameScene, layout: GameLayout): vo
   // Filter out null values and reverse (most recent first)
   const cards = [...rawCards].filter(c => c !== null).reverse();
 
-  const scale = 0.55 * layout.panelScale;
-  const spacingX = 140 * layout.panelScale;
-  const spacingY = 200 * layout.panelScale;
+  const scale = DISCARD_VIEWER.CARD_SCALE * layout.panelScale;
+  const spacingX = DISCARD_VIEWER.CARD_SPACING_X * layout.panelScale;
+  const spacingY = DISCARD_VIEWER.CARD_SPACING_Y * layout.panelScale;
   this.discardViewerCardSpacingY = spacingY;
 
   const columns = Math.max(1, Math.floor(this.discardViewerBounds.width / spacingX));
@@ -206,11 +207,11 @@ export function buildDiscardViewerCards(this: GameScene, layout: GameLayout): vo
     const cardData = cards[i];
     // Always show cards face-up in discard viewer (discard piles are public information)
     const card = new CardComponent(this, 0, 0, cardData, false, scale);
-    card.setDepth(230);
+    card.setDepth(DISCARD_VIEWER.CARD_DEPTH);
     const x = col * spacingX + spacingX / 2;
     const y = row * spacingY + spacingY / 2;
     card.setPosition(x, y);
-    card.getContainer().setDepth(230);
+    card.getContainer().setDepth(DISCARD_VIEWER.CARD_DEPTH);
     this.discardViewerCards.push(card);
     this.discardViewerContent.add(card.getContainer());
   }

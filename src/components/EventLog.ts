@@ -16,6 +16,7 @@
 
 import Phaser from 'phaser';
 import { hex } from '../utils/colors';
+import { EVENT_LOG_LAYOUT } from '../config';
 
 /* ============================================
  * EVENT LOG CONFIGURATION CONSTANTS
@@ -23,28 +24,28 @@ import { hex } from '../utils/colors';
  */
 
 /** Log panel width in pixels */
-const LOG_WIDTH = 300;
+const LOG_WIDTH = EVENT_LOG_LAYOUT.WIDTH;
 
 /** Log panel height in pixels */
-const LOG_HEIGHT = 600;
+const LOG_HEIGHT = EVENT_LOG_LAYOUT.HEIGHT;
 
 /** Header space for top padding (no title) */
-const HEADER_HEIGHT = 18;
+const HEADER_HEIGHT = EVENT_LOG_LAYOUT.HEADER_HEIGHT;
 
 /** Footer space reserved for quick chat dropdown */
-const FOOTER_HEIGHT = 56;
+const FOOTER_HEIGHT = EVENT_LOG_LAYOUT.FOOTER_HEIGHT;
 
 /** Height of each log entry in pixels */
-const ENTRY_HEIGHT = 30;
+const ENTRY_HEIGHT = EVENT_LOG_LAYOUT.ENTRY_HEIGHT;
 
 /** Padding inside the log panel */
-const PADDING = 10;
+const PADDING = EVENT_LOG_LAYOUT.PADDING;
 
 /** Quick chat dropdown button height */
-const QUICK_CHAT_HEIGHT = 32;
+const QUICK_CHAT_HEIGHT = EVENT_LOG_LAYOUT.QUICK_CHAT_HEIGHT;
 
 /** Quick chat dropdown button margin from bottom */
-const QUICK_CHAT_MARGIN = 12;
+const QUICK_CHAT_MARGIN = EVENT_LOG_LAYOUT.QUICK_CHAT_MARGIN;
 
 /** Quick chat dropdown width */
 const QUICK_CHAT_WIDTH = LOG_WIDTH - PADDING * 2 - 12;
@@ -53,10 +54,10 @@ const QUICK_CHAT_WIDTH = LOG_WIDTH - PADDING * 2 - 12;
 const QUICK_CHAT_OPTIONS = ['Hello!', 'Good Move!', 'Good Game!', 'One More Game?'] as const;
 
 /** Quick chat option height */
-const QUICK_CHAT_OPTION_HEIGHT = 24;
+const QUICK_CHAT_OPTION_HEIGHT = EVENT_LOG_LAYOUT.QUICK_CHAT_OPTION_HEIGHT;
 
 /** Quick chat option padding */
-const QUICK_CHAT_OPTION_PADDING = 6;
+const QUICK_CHAT_OPTION_PADDING = EVENT_LOG_LAYOUT.QUICK_CHAT_OPTION_PADDING;
 
 /** Background colors for different player entries */
 const ENTRY_BACKGROUNDS = {

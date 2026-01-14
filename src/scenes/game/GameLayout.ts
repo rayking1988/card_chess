@@ -9,36 +9,9 @@
  */
 
 import { GameLayout, SectionBounds } from './GameTypes';
-import { BASE_BOARD_SIZE } from './GameConstants';
+import { GAME_LAYOUT } from '../../config';
 
-/**
- * Section percentages for layout division
- * These define how the screen is divided into sections
- */
-const SECTION_CONFIG = {
-  // Horizontal division (must sum to 100%)
-  leftPanelWidth: 8,      // Left panel: decks/discards (full height)
-  boardWidth: 50,         // Board area (includes top/bottom bars)
-  rightPanelWidth: 18,    // Right panel: clocks/energy (full height)
-  eventLogWidth: 24,      // Event log (full height)
-  
-  // Vertical division for board column only
-  topBarHeight: 8,        // Opponent hand area (within board width)
-  middleHeight: 64,       // Board area
-  bottomBarHeight: 28,    // Player hand area (within board width)
-};
-
-const RIGHT_PANEL_SPLIT = {
-  top: 0.45,
-  middle: 0.45,
-  bottom: 0.1
-};
-
-const EVENT_LOG_SPLIT = {
-  top: 2 / 3
-};
-
-const MOBILE_RATIO_THRESHOLD = 0.85;
+const { SECTION, RIGHT_PANEL_SPLIT, EVENT_LOG_SPLIT_TOP, MOBILE_RATIO_THRESHOLD, BASE_BOARD_SIZE, MOBILE_BAR } = GAME_LAYOUT;
 
 /**
  * Creates a SectionBounds object from position and size
@@ -71,23 +44,23 @@ export function calculateLayout(width: number, height: number): GameLayout {
   const isMobile = width / height < MOBILE_RATIO_THRESHOLD;
 
   // Calculate horizontal section widths from percentages
-  const leftPanelW = width * (SECTION_CONFIG.leftPanelWidth / 100);
-  const rightPanelW = isMobile ? 0 : width * (SECTION_CONFIG.rightPanelWidth / 100);
-  const eventLogW = isMobile ? 0 : width * (SECTION_CONFIG.eventLogWidth / 100);
+  const leftPanelW = width * (SECTION.LEFT_PANEL_WIDTH / 100);
+  const rightPanelW = isMobile ? 0 : width * (SECTION.RIGHT_PANEL_WIDTH / 100);
+  const eventLogW = isMobile ? 0 : width * (SECTION.EVENT_LOG_WIDTH / 100);
   const boardW = width - leftPanelW - rightPanelW - eventLogW;
   
   // Calculate vertical section heights for board column
-  const topBarH = height * (SECTION_CONFIG.topBarHeight / 100);
-  const middleH = height * (SECTION_CONFIG.middleHeight / 100);
-  const bottomBarH = height * (SECTION_CONFIG.bottomBarHeight / 100);
+  const topBarH = height * (SECTION.TOP_BAR_HEIGHT / 100);
+  const middleH = height * (SECTION.MIDDLE_HEIGHT / 100);
+  const bottomBarH = height * (SECTION.BOTTOM_BAR_HEIGHT / 100);
   
   // Left panel, right panel, event log: full height
   const leftPanel = createBounds(0, 0, leftPanelW, height);
   const rightPanel = createBounds(leftPanelW + boardW, 0, rightPanelW, height);
   const eventLog = createBounds(leftPanelW + boardW + rightPanelW, 0, eventLogW, height);
 
-  const rightPanelTopH = rightPanel.height * RIGHT_PANEL_SPLIT.top;
-  const rightPanelMiddleH = rightPanel.height * RIGHT_PANEL_SPLIT.middle;
+  const rightPanelTopH = rightPanel.height * RIGHT_PANEL_SPLIT.TOP;
+  const rightPanelMiddleH = rightPanel.height * RIGHT_PANEL_SPLIT.MIDDLE;
   const rightPanelBottomH = rightPanel.height - rightPanelTopH - rightPanelMiddleH;
   const rightPanelTop = createBounds(rightPanel.x, rightPanel.y, rightPanel.width, rightPanelTopH);
   const rightPanelMiddle = createBounds(rightPanel.x, rightPanel.y + rightPanelTopH, rightPanel.width, rightPanelMiddleH);
@@ -100,11 +73,11 @@ export function calculateLayout(width: number, height: number): GameLayout {
   const bottomBar = createBounds(boardColumnX, topBarH + middleH, boardW, bottomBarH);
 
   const eventLogBase = isMobile ? leftPanel : eventLog;
-  const eventLogTopH = eventLogBase.height * EVENT_LOG_SPLIT.top;
+  const eventLogTopH = eventLogBase.height * EVENT_LOG_SPLIT_TOP;
   const eventLogTop = createBounds(eventLogBase.x, eventLogBase.y, eventLogBase.width, eventLogTopH);
   const eventLogPreview = createBounds(eventLogBase.x, eventLogBase.y + eventLogTopH, eventLogBase.width, eventLogBase.height - eventLogTopH);
 
-  const mobileBarHeight = isMobile ? Math.max(24, Math.min(40, height * 0.055)) : 0;
+  const mobileBarHeight = isMobile ? Math.max(MOBILE_BAR.MIN_HEIGHT, Math.min(MOBILE_BAR.MAX_HEIGHT, height * MOBILE_BAR.HEIGHT_FACTOR)) : 0;
   const mobileTopBar = createBounds(boardColumnX, topBar.y + topBar.height - mobileBarHeight, boardW, mobileBarHeight);
   const mobileBottomBar = createBounds(boardColumnX, bottomBar.y, boardW, mobileBarHeight);
   

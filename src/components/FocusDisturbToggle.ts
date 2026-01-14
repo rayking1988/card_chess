@@ -15,6 +15,7 @@
 
 import Phaser from 'phaser';
 import { hex } from '../utils/colors';
+import { TOGGLE_COLORS, TOGGLE_LAYOUT, ANIMATION, SCALE } from '../config';
 
 /* ============================================
  * TOGGLE CONFIGURATION CONSTANTS
@@ -22,22 +23,22 @@ import { hex } from '../utils/colors';
  */
 
 /** Toggle button width in pixels */
-const TOGGLE_WIDTH = 80;
+const TOGGLE_WIDTH = TOGGLE_LAYOUT.WIDTH;
 
 /** Toggle button height in pixels */
-const TOGGLE_HEIGHT = 40;
+const TOGGLE_HEIGHT = TOGGLE_LAYOUT.HEIGHT;
 
 /** Fallback colors when sprites are not available */
 const FALLBACK_COLORS = {
   focus: {
-    background: hex('#225522'),
-    border: hex('#44ff44'),
-    text: '#44ff44'
+    background: hex(TOGGLE_COLORS.FOCUS.BACKGROUND),
+    border: hex(TOGGLE_COLORS.FOCUS.BORDER),
+    text: TOGGLE_COLORS.FOCUS.TEXT
   },
   disturb: {
-    background: hex('#552222'),
-    border: hex('#ff4444'),
-    text: '#ff4444'
+    background: hex(TOGGLE_COLORS.DISTURB.BACKGROUND),
+    border: hex(TOGGLE_COLORS.DISTURB.BORDER),
+    text: TOGGLE_COLORS.DISTURB.TEXT
   }
 };
 
@@ -158,7 +159,7 @@ export class FocusDisturbToggleComponent {
     }
     
     // Label text above toggle
-    this.labelText = scene.add.text(0, -30, 'Mode', {
+    this.labelText = scene.add.text(0, TOGGLE_LAYOUT.LABEL_Y_OFFSET, 'Mode', {
       fontSize: '12px',
       fontFamily: 'BoldPixels, Arial',
       color: '#cccccc'
@@ -259,7 +260,7 @@ export class FocusDisturbToggleComponent {
     // Hover effect
     this.container.on('pointerover', () => {
       if (this.isEnabled) {
-        this.container.setScale(1.05);
+        this.container.setScale(SCALE.TOGGLE_HOVER);
       }
     });
     
@@ -283,9 +284,9 @@ export class FocusDisturbToggleComponent {
     // Bounce animation for feedback
     this.scene.tweens.add({
       targets: this.container,
-      scaleX: 1.1,
-      scaleY: 1.1,
-      duration: 100,
+      scaleX: SCALE.TOGGLE_BOUNCE,
+      scaleY: SCALE.TOGGLE_BOUNCE,
+      duration: ANIMATION.TOGGLE_BOUNCE_DURATION,
       yoyo: true,
       ease: 'Quad.easeOut'
     });

@@ -16,6 +16,7 @@ import Phaser from 'phaser';
 import { BootScene } from './scenes/BootScene';
 import { MenuScene } from './scenes/MenuScene';
 import { GameScene } from './scenes/GameScene';
+import { DISPLAY } from './config';
 
 /* ============================================
  * GAME CONFIGURATION CONSTANTS
@@ -26,13 +27,13 @@ import { GameScene } from './scenes/GameScene';
  */
 
 /** Base game width in pixels (reference resolution) */
-const GAME_WIDTH = 1920;
+const GAME_WIDTH = DISPLAY.GAME_WIDTH;
 
 /** Base game height in pixels (reference resolution) */
-const GAME_HEIGHT = 1080;
+const GAME_HEIGHT = DISPLAY.GAME_HEIGHT;
 
 /** Background color when no scene background is loaded (dark brown) */
-const BACKGROUND_COLOR = '#2a1a0a';
+const BACKGROUND_COLOR = DISPLAY.BACKGROUND_COLOR;
 
 /* ============================================
  * PHASER GAME CONFIGURATION
@@ -69,7 +70,7 @@ const config: Phaser.Types.Core.GameConfig = {
   
   // Performance settings - cap FPS to reduce CPU/GPU load
   fps: {
-    target: 30,                         // Target 30 FPS
+    target: DISPLAY.TARGET_FPS,
     forceSetTimeOut: false,             // Use requestAnimationFrame
     smoothStep: true                    // Smooth frame timing
   },

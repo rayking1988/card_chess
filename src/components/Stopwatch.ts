@@ -15,6 +15,7 @@
  */
 
 import Phaser from 'phaser';
+import { STOPWATCH, STOPWATCH_COLORS, STOPWATCH_LAYOUT } from '../config';
 
 /* ============================================
  * STOPWATCH CONFIGURATION CONSTANTS
@@ -22,22 +23,22 @@ import Phaser from 'phaser';
  */
 
 /** Stopwatch display width in pixels */
-const STOPWATCH_WIDTH = 66;
+const STOPWATCH_WIDTH = STOPWATCH_LAYOUT.WIDTH;
 
 /** Stopwatch display height in pixels */
-const STOPWATCH_HEIGHT = 80;
+const STOPWATCH_HEIGHT = STOPWATCH_LAYOUT.HEIGHT;
 
 /** 
  * Threshold in seconds that triggers opponent card draw
  * When stopwatch reaches this value, 60 is subtracted and opponent draws
  */
-const THRESHOLD_SECONDS = 60;
+const THRESHOLD_SECONDS = STOPWATCH.THRESHOLD_SECONDS;
 
 /** Progress thresholds for visual warnings (as percentage of threshold) */
 const WARNING_THRESHOLDS = {
-  low: 0.5,      // 50% - Yellow text starts
-  medium: 0.75,  // 75% - Orange text
-  high: 0.9      // 90% - Red text
+  low: STOPWATCH.WARNING_THRESHOLDS.LOW,
+  medium: STOPWATCH.WARNING_THRESHOLDS.MEDIUM,
+  high: STOPWATCH.WARNING_THRESHOLDS.HIGH
 };
 
 /* ============================================
@@ -159,11 +160,11 @@ export class StopwatchComponent {
     if (timeChanged || warningChanged) {
       let timeColor = this.baseTimeColor;
       if (currentWarningLevel === 'high') {
-        timeColor = '#ff4444';
+        timeColor = STOPWATCH_COLORS.HIGH;
       } else if (currentWarningLevel === 'medium') {
-        timeColor = '#ffaa44';
+        timeColor = STOPWATCH_COLORS.MEDIUM;
       } else if (currentWarningLevel === 'low') {
-        timeColor = '#ffff44';
+        timeColor = STOPWATCH_COLORS.LOW;
       }
       this.timeText.setColor(timeColor);
     }

@@ -11,6 +11,7 @@
 
 import Phaser from 'phaser';
 import { hex } from '../utils/colors';
+import { ENERGY, DISTURB_COLORS, BAR_LAYOUT } from '../config';
 
 /* ============================================
  * DISTURB BAR CONFIGURATION CONSTANTS
@@ -18,33 +19,33 @@ import { hex } from '../utils/colors';
  */
 
 /** Bar width in pixels (bar body only) */
-const BAR_WIDTH = 140;
+const BAR_WIDTH = BAR_LAYOUT.WIDTH;
 
 /** Bar height in pixels */
-const BAR_HEIGHT = 25;
+const BAR_HEIGHT = BAR_LAYOUT.HEIGHT;
 
 /** Icon size in pixels */
-const ICON_SIZE = 30;
+const ICON_SIZE = BAR_LAYOUT.ICON_SIZE;
 
 /** Gap between icon and bar */
-const ICON_GAP = 8;
+const ICON_GAP = BAR_LAYOUT.ICON_GAP;
 
 /** Gap between segments */
-const SEGMENT_GAP = 2;
+const SEGMENT_GAP = BAR_LAYOUT.SEGMENT_GAP;
 
 /** Maximum segments to display */
-const MAX_SEGMENTS = 10;
+const MAX_SEGMENTS = ENERGY.MAX_DISPLAY_SEGMENTS;
 
 /** Purple fill color for disturb */
-const FILL_COLOR = hex('#9b59b6');
+const FILL_COLOR = hex(DISTURB_COLORS.FILL);
 
-const EMPTY_SEGMENT_COLOR = hex('#2a2a2a');
+const EMPTY_SEGMENT_COLOR = hex(DISTURB_COLORS.EMPTY_SEGMENT);
 
 /** Text colors for different states */
 const TEXT_COLORS = {
-  empty: '#555555',    // Dark gray - no disturb tags
-  active: '#ffffff',   // White - has tags (readable on purple)
-  normal: '#000000'    // Black
+  empty: DISTURB_COLORS.TEXT.EMPTY,
+  active: DISTURB_COLORS.TEXT.ACTIVE,
+  normal: '#000000'
 };
 
 /* ============================================
