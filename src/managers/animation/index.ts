@@ -10,3 +10,5 @@ export * from './AnimationManager';
 export * from './CardAnimationManager';
 export * from './BoardAnimationManager';
 export * from './GameAnimationManager';
+export * from './TweenPool';
+export * from './GraphicsPool';

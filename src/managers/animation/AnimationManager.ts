@@ -7,6 +7,7 @@
 import Phaser from 'phaser';
 import { ANIM_DURATION, EASING } from './constants';
 import type { Position, TweenConfig } from './types';
+import { TweenPool, calculateArcPosition } from './TweenPool';
 
 /**
  * AnimationManager - Provides tween helpers for common game animations
@@ -26,9 +27,12 @@ import type { Position, TweenConfig } from './types';
  */
 export class AnimationManager {
   /** Reference to the Phaser scene */
-  private scene: Phaser.Scene;
+  protected scene: Phaser.Scene;
 
-  /** Set of currently active tweens */
+  /** Tween pool for lifecycle management */
+  protected tweenPool: TweenPool;
+
+  /** Set of currently active tweens (for backward compatibility) */
   private activeTweens: Set<Phaser.Tweens.Tween> = new Set();
 
   /**
@@ -38,6 +42,7 @@ export class AnimationManager {
    */
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+    this.tweenPool = new TweenPool(scene);
   }
 
   /* ============================================
@@ -390,6 +395,7 @@ export class AnimationManager {
    * Arc movement (for card draw animations)
    *
    * Uses quadratic bezier curve for smooth arc.
+   * Uses shared calculateArcPosition utility to avoid code duplication.
    *
    * @param target - Object to move
    * @param from - Starting position
@@ -408,10 +414,6 @@ export class AnimationManager {
     const container = target as Phaser.GameObjects.Container;
     container.setPosition(from.x, from.y);
 
-    // Calculate control point for arc
-    const midX = (from.x + to.x) / 2;
-    const midY = Math.min(from.y, to.y) - arcHeight;
-
     const duration = config.duration ?? ANIM_DURATION.CARD_DRAW;
 
     const tween = this.scene.tweens.add({
@@ -422,14 +424,9 @@ export class AnimationManager {
       ease: config.ease ?? EASING.QUAD_OUT,
       delay: config.delay ?? 0,
       onUpdate: (tween) => {
-        // Calculate arc position using quadratic bezier
-        const t = tween.progress;
-        const invT = 1 - t;
-
-        const x = invT * invT * from.x + 2 * invT * t * midX + t * t * to.x;
-        const y = invT * invT * from.y + 2 * invT * t * midY + t * t * to.y;
-
-        container.setPosition(x, y);
+        // Use shared arc calculation utility
+        const pos = calculateArcPosition(tween.progress, from, to, arcHeight);
+        container.setPosition(pos.x, pos.y);
       },
       onComplete: () => {
         container.setPosition(to.x, to.y);
@@ -612,6 +609,7 @@ export class AnimationManager {
    */
   destroy(): void {
     this.stopAll();
+    this.tweenPool.destroy();
   }
 }
 

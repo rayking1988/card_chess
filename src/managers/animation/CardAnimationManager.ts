@@ -8,6 +8,7 @@ import Phaser from 'phaser';
 import { ANIM_DURATION, EASING } from './constants';
 import type { Position, TweenConfig } from './types';
 import { AnimationManager } from './AnimationManager';
+import { calculateArcPosition } from './TweenPool';
 
 /**
  * CardAnimationManager - Extended AnimationManager with card-specific animations
@@ -56,7 +57,6 @@ export class CardAnimationManager extends AnimationManager {
       return;
     }
 
-    const scene = (this as unknown as { scene: Phaser.Scene }).scene;
     const centerX = deckContainer.x;
     const centerY = deckContainer.y;
 
@@ -73,7 +73,7 @@ export class CardAnimationManager extends AnimationManager {
       const rotation = (Math.random() - 0.5) * 0.5;
 
       scatterPromises.push(new Promise(resolve => {
-        scene.tweens.add({
+        this.scene.tweens.add({
           targets: card,
           x: targetX,
           y: targetY,
@@ -94,7 +94,7 @@ export class CardAnimationManager extends AnimationManager {
         const card = cardSprites[i];
 
         gatherPromises.push(new Promise(resolve => {
-          scene.tweens.add({
+          this.scene.tweens.add({
             targets: card,
             x: centerX,
             y: centerY,
@@ -109,7 +109,7 @@ export class CardAnimationManager extends AnimationManager {
 
       Promise.all(gatherPromises).then(() => {
         // Phase 3: Quick bounce to indicate completion
-        scene.tweens.add({
+        this.scene.tweens.add({
           targets: deckContainer,
           scaleX: 1.1,
           scaleY: 0.9,
@@ -131,16 +131,14 @@ export class CardAnimationManager extends AnimationManager {
     deckContainer: Phaser.GameObjects.Container,
     onComplete?: () => void
   ): void {
-    const scene = (this as unknown as { scene: Phaser.Scene }).scene;
-
-    scene.tweens.add({
+    this.scene.tweens.add({
       targets: deckContainer,
       x: deckContainer.x + 5,
       duration: 50,
       yoyo: true,
       repeat: 5,
       onComplete: () => {
-        scene.tweens.add({
+        this.scene.tweens.add({
           targets: deckContainer,
           scaleX: 1.1,
           scaleY: 0.9,
@@ -161,6 +159,7 @@ export class CardAnimationManager extends AnimationManager {
    * Animates card moving from deck to hand
    *
    * Uses arc movement with scale up effect.
+   * Uses shared calculateArcPosition utility to avoid code duplication.
    *
    * @param cardContainer - The card container
    * @param fromPosition - Starting position (deck)
@@ -176,38 +175,27 @@ export class CardAnimationManager extends AnimationManager {
     config: TweenConfig = {},
     onComplete?: () => void
   ): Phaser.Tweens.Tween {
-    const scene = (this as unknown as { scene: Phaser.Scene }).scene;
-
     // Start at deck position
     cardContainer.setPosition(fromPosition.x, fromPosition.y);
     cardContainer.setScale(0.5);
     cardContainer.setAlpha(1);
 
-    // Arc movement to hand with scale up
     const arcHeight = 80;
-    const midX = (fromPosition.x + toPosition.x) / 2;
-    const midY = Math.min(fromPosition.y, toPosition.y) - arcHeight;
-
     const duration = config.duration ?? ANIM_DURATION.CARD_DRAW;
 
-    return scene.tweens.add({
+    return this.scene.tweens.add({
       targets: cardContainer,
       x: toPosition.x,
       y: toPosition.y,
-      scaleX: config.yoyo ? 0.8 : 0.8,
-      scaleY: config.yoyo ? 0.8 : 0.8,
+      scaleX: 0.8,
+      scaleY: 0.8,
       duration: duration,
       ease: config.ease ?? EASING.QUAD_OUT,
       delay: config.delay ?? 0,
       onUpdate: (tween) => {
-        // Quadratic bezier for arc
-        const t = tween.progress;
-        const invT = 1 - t;
-
-        const x = invT * invT * fromPosition.x + 2 * invT * t * midX + t * t * toPosition.x;
-        const y = invT * invT * fromPosition.y + 2 * invT * t * midY + t * t * toPosition.y;
-
-        cardContainer.setPosition(x, y);
+        // Use shared arc calculation utility
+        const pos = calculateArcPosition(tween.progress, fromPosition, toPosition, arcHeight);
+        cardContainer.setPosition(pos.x, pos.y);
       },
       onComplete: () => {
         cardContainer.setPosition(toPosition.x, toPosition.y);
@@ -277,9 +265,7 @@ export class CardAnimationManager extends AnimationManager {
     config: TweenConfig = {},
     onComplete?: () => void
   ): Phaser.Tweens.Tween {
-    const scene = (this as unknown as { scene: Phaser.Scene }).scene;
-
-    return scene.tweens.add({
+    return this.scene.tweens.add({
       targets: cardContainer,
       x: toPosition.x,
       y: toPosition.y,
@@ -290,7 +276,7 @@ export class CardAnimationManager extends AnimationManager {
       delay: config.delay ?? 0,
       onComplete: () => {
         // Flash effect then fade out
-        scene.tweens.add({
+        this.scene.tweens.add({
           targets: cardContainer,
           alpha: 0,
           scaleX: 1.5,
@@ -320,10 +306,8 @@ export class CardAnimationManager extends AnimationManager {
     config: TweenConfig = {},
     onComplete?: () => void
   ): void {
-    const scene = (this as unknown as { scene: Phaser.Scene }).scene;
-
     // First move card toward target
-    scene.tweens.add({
+    this.scene.tweens.add({
       targets: cardContainer,
       x: (cardContainer.x + targetPosition.x) / 2,
       y: (cardContainer.y + targetPosition.y) / 2,
@@ -333,7 +317,7 @@ export class CardAnimationManager extends AnimationManager {
       ease: EASING.QUAD_OUT,
       onComplete: () => {
         // Then fade out toward target
-        scene.tweens.add({
+        this.scene.tweens.add({
           targets: cardContainer,
           x: targetPosition.x,
           y: targetPosition.y,
@@ -371,9 +355,7 @@ export class CardAnimationManager extends AnimationManager {
     config: TweenConfig = {},
     onComplete?: () => void
   ): Phaser.Tweens.Tween {
-    const scene = (this as unknown as { scene: Phaser.Scene }).scene;
-
-    return scene.tweens.add({
+    return this.scene.tweens.add({
       targets: cardContainer,
       x: discardPosition.x,
       y: discardPosition.y,
@@ -406,8 +388,6 @@ export class CardAnimationManager extends AnimationManager {
     config: TweenConfig = {},
     onComplete?: () => void
   ): Phaser.Tweens.Tween {
-    const scene = (this as unknown as { scene: Phaser.Scene }).scene;
-
     let targetX = cardContainer.x;
     let targetY = cardContainer.y;
     const distance = 500;
@@ -418,7 +398,7 @@ export class CardAnimationManager extends AnimationManager {
       case 'up': targetY -= distance; break;
     }
 
-    return scene.tweens.add({
+    return this.scene.tweens.add({
       targets: cardContainer,
       x: targetX,
       y: targetY,

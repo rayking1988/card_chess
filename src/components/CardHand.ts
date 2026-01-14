@@ -421,23 +421,203 @@ export class CardHandComponent {
   }
 
   /**
-   * Sets the cards in hand
+   * Finds the differences between current and new card arrays
    * 
-   * Replaces all current cards with the provided array.
-   * Optimized to skip rebuild if cards haven't changed.
+   * @param newCards - New card array
+   * @returns Object with added and removed card info
+   * @private
+   */
+  private findCardDifferences(newCards: CardData[]): {
+    added: CardData[];
+    removed: string[];
+    unchanged: boolean;
+  } {
+    const currentIds = new Set(this.cardData.map(c => c.id));
+    const newIds = new Set(newCards.map(c => c.id));
+    
+    const added: CardData[] = [];
+    const removed: string[] = [];
+    
+    // Find added cards
+    for (const card of newCards) {
+      if (!currentIds.has(card.id)) {
+        added.push(card);
+      }
+    }
+    
+    // Find removed cards
+    for (const card of this.cardData) {
+      if (!newIds.has(card.id)) {
+        removed.push(card.id);
+      }
+    }
+    
+    return {
+      added,
+      removed,
+      unchanged: added.length === 0 && removed.length === 0
+    };
+  }
+
+  /**
+   * Sets the cards in hand with incremental updates
+   * 
+   * Optimized to only add/remove changed cards instead of rebuilding entire hand.
+   * Falls back to full rebuild if order changed significantly.
    * 
    * @param cards - Array of card data to display
    * 
    * Used by: GameScene (when hand changes)
    */
   setCards(cards: CardData[]): void {
-    // Skip rebuild if cards haven't changed (performance optimization)
+    // Skip if cards haven't changed at all
     if (this.cardsEqual(this.cardData, cards)) {
       return;
     }
     
+    const diff = this.findCardDifferences(cards);
+    
+    // If only additions or removals (no reordering), use incremental update
+    if (diff.added.length <= 2 && diff.removed.length <= 2 && !diff.unchanged) {
+      // Check if remaining cards are in same relative order
+      const remainingOld = this.cardData.filter(c => !diff.removed.includes(c.id));
+      const remainingNew = cards.filter(c => !diff.added.some(a => a.id === c.id));
+      
+      if (this.cardsEqual(remainingOld, remainingNew)) {
+        // Incremental update is safe
+        for (const cardId of diff.removed) {
+          this.removeCardIncremental(cardId);
+        }
+        for (const card of diff.added) {
+          this.addCardIncremental(card);
+        }
+        this.cardData = [...cards];
+        this.repositionCards();
+        return;
+      }
+    }
+    
+    // Fall back to full rebuild for complex changes
     this.cardData = [...cards];
     this.rebuildHand();
+  }
+
+  /**
+   * Adds a card to the hand incrementally (without full rebuild)
+   * 
+   * @param card - Card data to add
+   * @private
+   */
+  private addCardIncremental(card: CardData): void {
+    const effectiveScale = this.calculateEffectiveScale();
+    
+    // Create card at temporary position (will be repositioned)
+    const cardComponent = new CardComponent(
+      this.scene,
+      this.centerX,
+      this.centerY + 100, // Start below hand
+      card,
+      false,
+      effectiveScale
+    );
+    
+    cardComponent.setAlpha(0);
+    this.cards.push(cardComponent);
+    this.container.add(cardComponent.getContainer());
+    
+    // Animate card appearing
+    this.scene.tweens.add({
+      targets: cardComponent.getContainer(),
+      alpha: 1,
+      y: this.centerY,
+      duration: 200,
+      ease: 'Back.easeOut'
+    });
+  }
+
+  /**
+   * Removes a card from hand incrementally (without full rebuild)
+   * 
+   * @param cardId - ID of card to remove
+   * @private
+   */
+  private removeCardIncremental(cardId: string): void {
+    const index = this.cards.findIndex((_, i) => this.cardData[i]?.id === cardId);
+    if (index === -1) return;
+    
+    const card = this.cards[index];
+    
+    // Clear hover state if this card was hovered
+    if (this.hoveredCard === card) {
+      this.hoveredCard = null;
+      this.hidePreview();
+    }
+    
+    // Animate card disappearing then destroy
+    this.scene.tweens.add({
+      targets: card.getContainer(),
+      alpha: 0,
+      y: card.getPosition().y - 50,
+      scaleX: 0.5,
+      scaleY: 0.5,
+      duration: 150,
+      ease: 'Quad.easeIn',
+      onComplete: () => {
+        card.destroy();
+      }
+    });
+    
+    // Remove from arrays immediately (position will be updated)
+    this.cards.splice(index, 1);
+  }
+
+  /**
+   * Repositions all cards to their correct fan positions
+   * Used after incremental add/remove operations
+   * 
+   * @private
+   */
+  private repositionCards(): void {
+    if (this.cardData.length === 0) return;
+    
+    const effectiveScale = this.calculateEffectiveScale();
+    const positions = this.calculateFanPositions(this.cardData.length, effectiveScale);
+    
+    for (let i = 0; i < this.cards.length; i++) {
+      const card = this.cards[i];
+      const pos = positions[i];
+      
+      if (!pos) continue;
+      
+      // Store original position for hover reset
+      (card as CardComponentWithOriginal).originalX = pos.x;
+      (card as CardComponentWithOriginal).originalY = pos.y;
+      (card as CardComponentWithOriginal).originalRotation = pos.rotation;
+      (card as CardComponentWithOriginal).originalDepth = i;
+      (card as CardComponentWithOriginal).originalScale = pos.scale;
+      
+      // Animate to new position
+      this.scene.tweens.add({
+        targets: card.getContainer(),
+        x: pos.x,
+        y: pos.y,
+        rotation: pos.rotation,
+        scaleX: pos.scale,
+        scaleY: pos.scale,
+        duration: 200,
+        ease: 'Quad.easeOut'
+      });
+      
+      card.setDepth(i);
+    }
+    
+    // Sort container children by depth
+    this.container.sort('depth');
+    
+    // Re-enable interaction if it was enabled
+    if (this.isInteractive) {
+      this.setupInteraction();
+    }
   }
 
   /**
@@ -449,7 +629,8 @@ export class CardHandComponent {
    */
   addCard(card: CardData): void {
     this.cardData.push(card);
-    this.rebuildHand();
+    this.addCardIncremental(card);
+    this.repositionCards();
   }
 
   /**
@@ -465,7 +646,13 @@ export class CardHandComponent {
     if (index === -1) return null;
     
     const removed = this.cardData.splice(index, 1)[0];
-    this.rebuildHand();
+    this.removeCardIncremental(cardId);
+    
+    // Reposition remaining cards after a short delay to allow remove animation
+    this.scene.time.delayedCall(100, () => {
+      this.repositionCards();
+    });
+    
     return removed;
   }
 

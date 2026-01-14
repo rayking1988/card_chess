@@ -8,6 +8,8 @@ import Phaser from 'phaser';
 import { ANIM_DURATION, EASING } from './constants';
 import type { BoardAnimationConfig, Position, TweenConfig } from './types';
 import { CardAnimationManager } from './CardAnimationManager';
+import { GraphicsPool } from './GraphicsPool';
+import { calculateArcPosition } from './TweenPool';
 
 /**
  * BoardAnimationManager - Extended CardAnimationManager with board-specific animations
@@ -16,6 +18,8 @@ import { CardAnimationManager } from './CardAnimationManager';
  * - Piece movement (Requirement 13.4)
  * - Piece deployment (Requirement 13.5)
  * - Piece destruction (Requirement 13.5)
+ *
+ * Uses GraphicsPool for particle effects to reduce GC pressure.
  *
  * @example
  * const boardAnim = new BoardAnimationManager(scene);
@@ -27,9 +31,13 @@ import { CardAnimationManager } from './CardAnimationManager';
 export class BoardAnimationManager extends CardAnimationManager {
   /** Board configuration for coordinate conversion */
   private boardConfig: BoardAnimationConfig | null = null;
+  
+  /** Graphics pool for particle effects */
+  private graphicsPool: GraphicsPool;
 
   constructor(scene: Phaser.Scene) {
     super(scene);
+    this.graphicsPool = new GraphicsPool(scene, 30);
   }
 
   /**
@@ -90,8 +98,6 @@ export class BoardAnimationManager extends CardAnimationManager {
     config: TweenConfig = {},
     onComplete?: () => void
   ): Phaser.Tweens.Tween | null {
-    const scene = (this as unknown as { scene: Phaser.Scene }).scene;
-
     const fromPos = this.squareToPixel(fromSquare);
     const toPos = this.squareToPixel(toSquare);
 
@@ -103,7 +109,7 @@ export class BoardAnimationManager extends CardAnimationManager {
     pieceSprite.setPosition(fromPos.x, fromPos.y);
     const originalScale = pieceSprite.scaleX;
 
-    return scene.tweens.add({
+    return this.scene.tweens.add({
       targets: pieceSprite,
       x: toPos.x,
       y: toPos.y,
@@ -112,7 +118,7 @@ export class BoardAnimationManager extends CardAnimationManager {
       delay: config.delay ?? 0,
       onStart: () => {
         // Slight scale up to indicate movement
-        scene.tweens.add({
+        this.scene.tweens.add({
           targets: pieceSprite,
           scaleX: originalScale * 1.15,
           scaleY: originalScale * 1.15,
@@ -184,8 +190,6 @@ export class BoardAnimationManager extends CardAnimationManager {
     config: TweenConfig = {},
     onComplete?: () => void
   ): Phaser.Tweens.Tween | null {
-    const scene = (this as unknown as { scene: Phaser.Scene }).scene;
-
     const pos = this.squareToPixel(square);
     if (!pos) {
       onComplete?.();
@@ -197,7 +201,7 @@ export class BoardAnimationManager extends CardAnimationManager {
     pieceSprite.setScale(0);
     pieceSprite.setAlpha(0);
 
-    return scene.tweens.add({
+    return this.scene.tweens.add({
       targets: pieceSprite,
       scaleX: pieceSprite.scaleX || 0.8,
       scaleY: pieceSprite.scaleY || 0.8,
@@ -206,7 +210,7 @@ export class BoardAnimationManager extends CardAnimationManager {
       ease: config.ease ?? EASING.BACK_OUT,
       delay: config.delay ?? 0,
       onStart: () => {
-        this.createDeployFlash(scene, pos.x, pos.y);
+        this.createDeployFlash(pos.x, pos.y);
         config.onStart?.();
       },
       onComplete: () => {
@@ -217,28 +221,14 @@ export class BoardAnimationManager extends CardAnimationManager {
   }
 
   /**
-   * Creates a flash effect at deploy position
+   * Creates a flash effect at deploy position using graphics pool
    *
-   * @param scene - The Phaser scene
    * @param x - X position
    * @param y - Y position
    * @private
    */
-  private createDeployFlash(scene: Phaser.Scene, x: number, y: number): void {
-    const flash = scene.add.graphics();
-    flash.fillStyle(0xffffff, 0.8);
-    flash.fillCircle(x, y, 40);
-    flash.setDepth(1000);
-
-    scene.tweens.add({
-      targets: flash,
-      alpha: 0,
-      scaleX: 2,
-      scaleY: 2,
-      duration: 300,
-      ease: EASING.QUAD_OUT,
-      onComplete: () => flash.destroy(),
-    });
+  private createDeployFlash(x: number, y: number): void {
+    this.graphicsPool.createFlash(x, y, 0xffffff, 40, 300, 1000);
   }
 
   /**
@@ -257,8 +247,6 @@ export class BoardAnimationManager extends CardAnimationManager {
     config: TweenConfig = {},
     onComplete?: () => void
   ): void {
-    const scene = (this as unknown as { scene: Phaser.Scene }).scene;
-
     const targetPos = this.squareToPixel(square);
     if (!targetPos) {
       onComplete?.();
@@ -270,14 +258,10 @@ export class BoardAnimationManager extends CardAnimationManager {
     pieceSprite.setScale(0.3);
     pieceSprite.setAlpha(0.5);
 
-    // Arc movement to target square
     const arcHeight = 100;
-    const midX = (cardPosition.x + targetPos.x) / 2;
-    const midY = Math.min(cardPosition.y, targetPos.y) - arcHeight;
-
     const duration = config.duration ?? ANIM_DURATION.PIECE_DEPLOY;
 
-    scene.tweens.add({
+    this.scene.tweens.add({
       targets: pieceSprite,
       x: targetPos.x,
       y: targetPos.y,
@@ -288,17 +272,13 @@ export class BoardAnimationManager extends CardAnimationManager {
       ease: EASING.QUAD_OUT,
       delay: config.delay ?? 0,
       onUpdate: (tween) => {
-        const t = tween.progress;
-        const invT = 1 - t;
-
-        const x = invT * invT * cardPosition.x + 2 * invT * t * midX + t * t * targetPos.x;
-        const y = invT * invT * cardPosition.y + 2 * invT * t * midY + t * t * targetPos.y;
-
-        pieceSprite.setPosition(x, y);
+        // Use shared arc calculation utility
+        const pos = calculateArcPosition(tween.progress, cardPosition, targetPos, arcHeight);
+        pieceSprite.setPosition(pos.x, pos.y);
       },
       onComplete: () => {
         pieceSprite.setPosition(targetPos.x, targetPos.y);
-        this.createDeployFlash(scene, targetPos.x, targetPos.y);
+        this.createDeployFlash(targetPos.x, targetPos.y);
         onComplete?.();
         config.onComplete?.();
       },
@@ -325,18 +305,16 @@ export class BoardAnimationManager extends CardAnimationManager {
     config: TweenConfig = {},
     onComplete?: () => void
   ): Phaser.Tweens.Tween | null {
-    const scene = (this as unknown as { scene: Phaser.Scene }).scene;
-
     const pos = this.squareToPixel(square);
     if (!pos) {
       onComplete?.();
       return null;
     }
 
-    // Create destruction particles
-    this.createDestroyParticles(scene, pos.x, pos.y);
+    // Create destruction particles using pool
+    this.createDestroyParticles(pos.x, pos.y);
 
-    return scene.tweens.add({
+    return this.scene.tweens.add({
       targets: pieceSprite,
       scaleX: 0,
       scaleY: 0,
@@ -353,40 +331,25 @@ export class BoardAnimationManager extends CardAnimationManager {
   }
 
   /**
-   * Creates particle effect for piece destruction
+   * Creates particle effect for piece destruction using graphics pool
    *
-   * @param scene - The Phaser scene
    * @param x - X position
    * @param y - Y position
    * @private
    */
-  private createDestroyParticles(scene: Phaser.Scene, x: number, y: number): void {
+  private createDestroyParticles(x: number, y: number): void {
     const particleCount = 8;
 
     for (let i = 0; i < particleCount; i++) {
       const angle = (i / particleCount) * Math.PI * 2;
       const distance = 30 + Math.random() * 20;
-
-      const particle = scene.add.graphics();
-      particle.fillStyle(0xff4444, 1);
-      particle.fillCircle(0, 0, 4 + Math.random() * 4);
-      particle.setPosition(x, y);
-      particle.setDepth(1000);
+      const radius = 4 + Math.random() * 4;
 
       const targetX = x + Math.cos(angle) * distance;
       const targetY = y + Math.sin(angle) * distance;
+      const duration = 300 + Math.random() * 100;
 
-      scene.tweens.add({
-        targets: particle,
-        x: targetX,
-        y: targetY,
-        alpha: 0,
-        scaleX: 0.5,
-        scaleY: 0.5,
-        duration: 300 + Math.random() * 100,
-        ease: EASING.QUAD_OUT,
-        onComplete: () => particle.destroy(),
-      });
+      this.graphicsPool.createParticle(x, y, 0xff4444, radius, targetX, targetY, duration, 1000);
     }
   }
 
@@ -404,8 +367,6 @@ export class BoardAnimationManager extends CardAnimationManager {
     config: TweenConfig = {},
     onComplete?: () => void
   ): void {
-    const scene = (this as unknown as { scene: Phaser.Scene }).scene;
-
     const pos = this.squareToPixel(square);
     if (!pos) {
       onComplete?.();
@@ -416,14 +377,14 @@ export class BoardAnimationManager extends CardAnimationManager {
     pieceSprite.setTint(0xffffff);
 
     // Scale up briefly then explode
-    scene.tweens.add({
+    this.scene.tweens.add({
       targets: pieceSprite,
       scaleX: pieceSprite.scaleX * 1.3,
       scaleY: pieceSprite.scaleY * 1.3,
       duration: 100,
       ease: EASING.QUAD_OUT,
       onComplete: () => {
-        this.createExplosionEffect(scene, pos.x, pos.y);
+        this.createExplosionEffect(pos.x, pos.y);
 
         this.animatePieceDestroy(pieceSprite, square, {
           ...config,
@@ -438,47 +399,36 @@ export class BoardAnimationManager extends CardAnimationManager {
   }
 
   /**
-   * Creates explosion visual effect
+   * Creates explosion visual effect using graphics pool
    *
-   * @param scene - The Phaser scene
    * @param x - X position
    * @param y - Y position
    * @private
    */
-  private createExplosionEffect(scene: Phaser.Scene, x: number, y: number): void {
+  private createExplosionEffect(x: number, y: number): void {
     // Central flash
-    const flash = scene.add.graphics();
-    flash.fillStyle(0xffaa00, 1);
-    flash.fillCircle(x, y, 20);
-    flash.setDepth(1001);
-
-    scene.tweens.add({
-      targets: flash,
-      alpha: 0,
-      scaleX: 3,
-      scaleY: 3,
-      duration: 250,
-      ease: EASING.QUAD_OUT,
-      onComplete: () => flash.destroy(),
-    });
+    this.graphicsPool.createFlash(x, y, 0xffaa00, 20, 250, 1001);
 
     // Ring effect
-    const ring = scene.add.graphics();
-    ring.lineStyle(4, 0xff6600, 1);
-    ring.strokeCircle(x, y, 10);
-    ring.setDepth(1000);
+    this.graphicsPool.createRing(x, y, 0xff6600, 10, 4, 350, 1000);
 
-    scene.tweens.add({
-      targets: ring,
-      alpha: 0,
-      scaleX: 4,
-      scaleY: 4,
-      duration: 350,
-      ease: EASING.QUAD_OUT,
-      onComplete: () => ring.destroy(),
-    });
+    // Particles
+    this.createDestroyParticles(x, y);
+  }
 
-    this.createDestroyParticles(scene, x, y);
+  /**
+   * Gets the graphics pool for external use or monitoring
+   */
+  getGraphicsPool(): GraphicsPool {
+    return this.graphicsPool;
+  }
+
+  /**
+   * Destroys the manager and cleans up resources
+   */
+  override destroy(): void {
+    super.destroy();
+    this.graphicsPool.destroy();
   }
 }
 
