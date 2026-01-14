@@ -35,3 +35,6 @@ coverage/
 
 # Kiro specific (optional - remove if you want to track specs)
 .kiro/
+
+# Exclude client builds for PCs
+release/

@@ -26,6 +26,7 @@ import Phaser from 'phaser';
 import { NetworkManager, ConnectionState } from '../managers/NetworkManager';
 import type { PlayerColor } from '../managers/GameStateManager';
 import { NETWORK, DISPLAY, ANIMATION, SCALE } from '../config';
+import { isElectron, quitApp } from '../utils/platform';
 
 /* ============================================
  * CONFIGURATION CONSTANTS
@@ -130,7 +131,7 @@ export class MenuScene extends Phaser.Scene {
     this.createNameInput();
     this.createJoinButton();
     this.createBugReportButton();
-    this.createKofiButton();
+    this.createBottomButton(); // Ko-fi or Exit depending on platform
     this.createStatusText();
     this.createCancelButton();
     
@@ -344,6 +345,21 @@ export class MenuScene extends Phaser.Scene {
   }
 
   /**
+   * Creates the bottom button - Ko-fi for web, Exit for Electron
+   * 
+   * @private
+   */
+  private createBottomButton(): void {
+    if (isElectron()) {
+      // In Electron app, show Exit button
+      this.createExitButton();
+    } else {
+      // In web browser, show Ko-fi button
+      this.createKofiButton();
+    }
+  }
+
+  /**
    * Creates the Ko-fi donation button
    * Requirement 1.6
    * 
@@ -359,6 +375,32 @@ export class MenuScene extends Phaser.Scene {
       () => this.openExternalLink(KOFI_URL)
     );
     this.uiContainer.add(btn);
+  }
+
+  /**
+   * Creates the Exit button for Electron app
+   * 
+   * @private
+   */
+  private createExitButton(): void {
+    const btn = this.createImageButton(
+      0,
+      BASE_HEIGHT * 0.32,
+      'EXIT GAME',
+      'red_button',
+      'red_button_pressed',
+      () => this.onExitGame()
+    );
+    this.uiContainer.add(btn);
+  }
+
+  /**
+   * Handles Exit button click - quits the Electron app
+   * 
+   * @private
+   */
+  private onExitGame(): void {
+    quitApp();
   }
 
   /**

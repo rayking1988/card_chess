@@ -28,6 +28,7 @@ import { joinRoom, Room, selfId } from 'trystero';
 import type { GameState, PlayerColor } from '../GameStateManager';
 import {
   DEFAULT_APP_ID,
+  DEFAULT_RTC_CONFIG,
   PEER_TIMEOUT_MS,
   PING_INTERVAL_MS,
   WSS_TRACKERS
@@ -168,7 +169,7 @@ export class NetworkManager {
   constructor(config?: Partial<TrysteroConfig>) {
     this.config = {
       appId: config?.appId || DEFAULT_APP_ID,
-      rtcConfig: config?.rtcConfig
+      rtcConfig: config?.rtcConfig || DEFAULT_RTC_CONFIG
     };
     this.localPlayerId = selfId;
   }

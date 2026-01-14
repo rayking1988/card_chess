@@ -28,3 +28,17 @@ export const WSS_TRACKERS = [
   'wss://tracker.btorrent.xyz',
   'wss://tracker.webtorrent.dev'
 ];
+
+/**
+ * Default WebRTC configuration with public STUN servers
+ * STUN servers help establish P2P connections through NAT
+ */
+export const DEFAULT_RTC_CONFIG: RTCConfiguration = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun.stunprotocol.org:3478' }
+  ],
+  iceCandidatePoolSize: 10
+};
