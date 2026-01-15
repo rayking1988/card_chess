@@ -213,31 +213,25 @@ export class EnergyBarComponent {
   /**
    * Draws the background bar (called once during construction)
    * 
-   * Creates a dark gray rounded rectangle with a gold border.
+   * Creates a dark gray rectangle with a gold border in pixel art style.
    * 
    * @private
    */
   private drawBackground(): void {
     this.backgroundGraphics.clear();
     
-    // Gold border
-    this.backgroundGraphics.lineStyle(2, hex('#ffd700'), 1);
+    // Pixel art style: sharp corners, no rounded rect
     // Dark gray fill
-    this.backgroundGraphics.fillStyle(hex('#333333'), 1);
-    this.backgroundGraphics.fillRoundedRect(
-      0,
-      0,
-      BAR_WIDTH,
-      BAR_HEIGHT,
-      5
-    );
-    this.backgroundGraphics.strokeRoundedRect(
-      0,
-      0,
-      BAR_WIDTH,
-      BAR_HEIGHT,
-      5
-    );
+    this.backgroundGraphics.fillStyle(hex('#2a2a2a'), 1);
+    this.backgroundGraphics.fillRect(0, 0, BAR_WIDTH, BAR_HEIGHT);
+    
+    // Gold border (2px thick for pixel art look)
+    this.backgroundGraphics.lineStyle(2, hex('#ffd700'), 1);
+    this.backgroundGraphics.strokeRect(0, 0, BAR_WIDTH, BAR_HEIGHT);
+    
+    // Inner shadow for depth (pixel art style)
+    this.backgroundGraphics.lineStyle(1, hex('#1a1a1a'), 0.5);
+    this.backgroundGraphics.strokeRect(1, 1, BAR_WIDTH - 2, BAR_HEIGHT - 2);
   }
 
   /**
@@ -299,11 +293,9 @@ export class EnergyBarComponent {
    * 1. Skip update if values haven't changed (performance optimization)
    * 2. Update text to show "current/cap"
    * 3. Clear previous fill graphics
-   * 4. If cap > 0, calculate fill ratio and width
-   * 5. Choose fill color based on ratio
-   * 6. Draw fill bar with rounded corners
-   * 7. Add shine effect (white highlight)
-   * 8. Update text color based on energy state
+   * 4. Calculate segment count based on cap (can exceed MAX_SEGMENTS)
+   * 5. Draw segments: empty (beyond cap), cap (within cap but not filled), filled (current energy)
+   * 6. Update text color based on energy state
    * 
    * @private
    */
@@ -324,10 +316,15 @@ export class EnergyBarComponent {
     this.fillGraphics.clear();
 
     const cap = Math.max(0, this.energyCap);
-    const ratio = cap > 0 ? this.currentEnergy / cap : 0;
-    const segmentCount = cap > 0 ? Math.min(MAX_SEGMENTS, cap) : MAX_SEGMENTS;
-    const filledSegments = cap > 0 ? Math.round(ratio * segmentCount) : 0;
-    const segmentWidth = (BAR_WIDTH - SEGMENT_GAP * (segmentCount - 1)) / segmentCount;
+    const current = Math.max(0, this.currentEnergy);
+    const ratio = cap > 0 ? current / cap : 0;
+    
+    // Dynamic segment count: use cap if > MAX_SEGMENTS, otherwise use MAX_SEGMENTS
+    const segmentCount = cap > 0 ? Math.max(MAX_SEGMENTS, cap) : MAX_SEGMENTS;
+    
+    // Calculate segment dimensions - segments get smaller as count increases
+    const totalGapWidth = SEGMENT_GAP * (segmentCount - 1);
+    const segmentWidth = Math.max(2, (BAR_WIDTH - totalGapWidth) / segmentCount);
     const barLeft = this.barCenterX - BAR_WIDTH / 2;
 
     let fillColor: number;
@@ -341,36 +338,39 @@ export class EnergyBarComponent {
       fillColor = FILL_COLORS.critical;
     }
 
+    // Draw all segments with three states:
+    // 1. Filled (current energy) - bright color
+    // 2. Cap (within cap but not filled) - dimmed outline showing potential
+    // 3. Empty (beyond cap) - dark/disabled
     for (let i = 0; i < segmentCount; i++) {
       const x = barLeft + i * (segmentWidth + SEGMENT_GAP);
-      this.fillGraphics.fillStyle(EMPTY_SEGMENT_COLOR, 0.9);
-      this.fillGraphics.fillRoundedRect(
-        x,
-        -BAR_HEIGHT / 2 + 2,
-        segmentWidth,
-        BAR_HEIGHT - 4,
-        2
-      );
-    }
-
-    for (let i = 0; i < filledSegments; i++) {
-      const x = barLeft + i * (segmentWidth + SEGMENT_GAP);
-      this.fillGraphics.fillStyle(fillColor, 0.95);
-      this.fillGraphics.fillRoundedRect(
-        x,
-        -BAR_HEIGHT / 2 + 2,
-        segmentWidth,
-        BAR_HEIGHT - 4,
-        2
-      );
-      this.fillGraphics.fillStyle(hex('#ffffff'), 0.2);
-      this.fillGraphics.fillRoundedRect(
-        x,
-        -BAR_HEIGHT / 2 + 2,
-        segmentWidth,
-        (BAR_HEIGHT - 4) * 0.35,
-        2
-      );
+      
+      if (i < current) {
+        // Filled segment - current energy
+        this.fillGraphics.fillStyle(fillColor, 0.95);
+        this.fillGraphics.fillRect(x, -BAR_HEIGHT / 2 + 2, segmentWidth, BAR_HEIGHT - 4);
+        // Pixel art highlight (top portion)
+        this.fillGraphics.fillStyle(hex('#ffffff'), 0.3);
+        this.fillGraphics.fillRect(x, -BAR_HEIGHT / 2 + 2, segmentWidth, Math.max(2, (BAR_HEIGHT - 4) * 0.3));
+        // Pixel art shadow (bottom edge)
+        this.fillGraphics.fillStyle(hex('#000000'), 0.2);
+        this.fillGraphics.fillRect(x, -BAR_HEIGHT / 2 + 2 + BAR_HEIGHT - 6, segmentWidth, 2);
+      } else if (i < cap) {
+        // Cap segment - within cap but not filled (shows potential energy)
+        // Use a dimmed version of the fill color with outline
+        this.fillGraphics.fillStyle(EMPTY_SEGMENT_COLOR, 0.6);
+        this.fillGraphics.fillRect(x, -BAR_HEIGHT / 2 + 2, segmentWidth, BAR_HEIGHT - 4);
+        // Gold outline to show it's part of the cap
+        this.fillGraphics.lineStyle(1, hex('#ffd700'), 0.6);
+        this.fillGraphics.strokeRect(x, -BAR_HEIGHT / 2 + 2, segmentWidth, BAR_HEIGHT - 4);
+      } else {
+        // Empty segment - beyond cap (disabled/locked)
+        this.fillGraphics.fillStyle(EMPTY_SEGMENT_COLOR, 0.3);
+        this.fillGraphics.fillRect(x, -BAR_HEIGHT / 2 + 2, segmentWidth, BAR_HEIGHT - 4);
+        // Dark border
+        this.fillGraphics.lineStyle(1, hex('#1a1a1a'), 0.5);
+        this.fillGraphics.strokeRect(x, -BAR_HEIGHT / 2 + 2, segmentWidth, BAR_HEIGHT - 4);
+      }
     }
     
     // Update text color based on energy state

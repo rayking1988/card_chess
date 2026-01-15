@@ -128,9 +128,10 @@ export function calculateLayout(width: number, height: number): GameLayout {
   const rightPanelX = rightPanel.centerX;
   const rightPanelTopY = rightPanel.y + rightPanel.height * 0.05;
   
-  // Event log: centered in section
+  // Event log: positioned at top of section
   const eventLogX = eventLogTop.centerX;
-  const eventLogY = eventLogTop.centerY;
+  const eventLogHeight = 600; // EVENT_LOG_LAYOUT.HEIGHT
+  const eventLogY = eventLogTop.y + (eventLogHeight / 2) * panelScale + 10; // Align to top with small padding
   const eventLogWidth = eventLogTop.width * 0.9;
   
   // Card hand: centered in bottom bar

@@ -90,6 +90,9 @@ export class DisturbCounterComponent {
   /** Cached total width for layout */
   private totalWidth: number;
 
+  /** Track the peak disturb value to maintain segment count */
+  private peakValue: number = 0;
+
   constructor(scene: Phaser.Scene, x: number, y: number, label: string = 'Disturb') {
     this.scene = scene;
     this.container = scene.add.container(x, y);
@@ -147,16 +150,31 @@ export class DisturbCounterComponent {
 
   private drawBackground(): void {
     this.backgroundGraphics.clear();
-    // Purple border
-    this.backgroundGraphics.lineStyle(2, hex('#9b59b6'), 1);
+    // Pixel art style: sharp corners, no rounded rect
     // Dark gray fill
-    this.backgroundGraphics.fillStyle(hex('#333333'), 1);
-    this.backgroundGraphics.fillRoundedRect(0, 0, BAR_WIDTH, BAR_HEIGHT, 5);
-    this.backgroundGraphics.strokeRoundedRect(0, 0, BAR_WIDTH, BAR_HEIGHT, 5);
+    this.backgroundGraphics.fillStyle(hex('#2a2a2a'), 1);
+    this.backgroundGraphics.fillRect(0, 0, BAR_WIDTH, BAR_HEIGHT);
+    
+    // Purple border (2px thick for pixel art look)
+    this.backgroundGraphics.lineStyle(2, hex('#9b59b6'), 1);
+    this.backgroundGraphics.strokeRect(0, 0, BAR_WIDTH, BAR_HEIGHT);
+    
+    // Inner shadow for depth (pixel art style)
+    this.backgroundGraphics.lineStyle(1, hex('#1a1a1a'), 0.5);
+    this.backgroundGraphics.strokeRect(1, 1, BAR_WIDTH - 2, BAR_HEIGHT - 2);
   }
 
   setValue(value: number): void {
     this.currentValue = value;
+    
+    // Track peak value for segment count
+    // Reset peak when value is cleared (goes to 0)
+    if (value === 0) {
+      this.peakValue = 0;
+    } else if (value > this.peakValue) {
+      this.peakValue = value;
+    }
+    
     this.updateDisplay();
   }
 
@@ -173,26 +191,39 @@ export class DisturbCounterComponent {
     this.countText.setText(`${this.currentValue}`);
     this.fillGraphics.clear();
 
-    const segmentCount = MAX_SEGMENTS;
+    // Dynamic segment count: use peak value if > MAX_SEGMENTS, otherwise use MAX_SEGMENTS
+    // This allows the bar to expand when disturb goes above 10, but resets to 10 when cleared
+    const segmentCount = Math.max(MAX_SEGMENTS, this.peakValue);
     const filledSegments = Math.min(this.currentValue, segmentCount);
-    const segmentWidth = (BAR_WIDTH - SEGMENT_GAP * (segmentCount - 1)) / segmentCount;
+    
+    // Calculate segment dimensions - segments get smaller as count increases
+    const totalGapWidth = SEGMENT_GAP * (segmentCount - 1);
+    const segmentWidth = Math.max(2, (BAR_WIDTH - totalGapWidth) / segmentCount);
     const barLeft = this.barCenterX - BAR_WIDTH / 2;
 
-    // Draw empty segments
+    // Draw empty segments with pixel art style (sharp edges)
     for (let i = 0; i < segmentCount; i++) {
       const x = barLeft + i * (segmentWidth + SEGMENT_GAP);
+      // Pixel art style: use fillRect instead of fillRoundedRect
       this.fillGraphics.fillStyle(EMPTY_SEGMENT_COLOR, 0.9);
-      this.fillGraphics.fillRoundedRect(x, -BAR_HEIGHT / 2 + 2, segmentWidth, BAR_HEIGHT - 4, 2);
+      this.fillGraphics.fillRect(x, -BAR_HEIGHT / 2 + 2, segmentWidth, BAR_HEIGHT - 4);
+      // Add 1px dark border for pixel art look
+      this.fillGraphics.lineStyle(1, hex('#1a1a1a'), 0.5);
+      this.fillGraphics.strokeRect(x, -BAR_HEIGHT / 2 + 2, segmentWidth, BAR_HEIGHT - 4);
     }
 
-    // Draw filled segments
+    // Draw filled segments with pixel art style
     for (let i = 0; i < filledSegments; i++) {
       const x = barLeft + i * (segmentWidth + SEGMENT_GAP);
+      // Main fill - pixel art style
       this.fillGraphics.fillStyle(FILL_COLOR, 0.95);
-      this.fillGraphics.fillRoundedRect(x, -BAR_HEIGHT / 2 + 2, segmentWidth, BAR_HEIGHT - 4, 2);
-      // Shine effect
-      this.fillGraphics.fillStyle(hex('#ffffff'), 0.2);
-      this.fillGraphics.fillRoundedRect(x, -BAR_HEIGHT / 2 + 2, segmentWidth, (BAR_HEIGHT - 4) * 0.35, 2);
+      this.fillGraphics.fillRect(x, -BAR_HEIGHT / 2 + 2, segmentWidth, BAR_HEIGHT - 4);
+      // Pixel art highlight (top portion)
+      this.fillGraphics.fillStyle(hex('#ffffff'), 0.3);
+      this.fillGraphics.fillRect(x, -BAR_HEIGHT / 2 + 2, segmentWidth, Math.max(2, (BAR_HEIGHT - 4) * 0.3));
+      // Pixel art shadow (bottom edge)
+      this.fillGraphics.fillStyle(hex('#000000'), 0.2);
+      this.fillGraphics.fillRect(x, -BAR_HEIGHT / 2 + 2 + BAR_HEIGHT - 6, segmentWidth, 2);
     }
     
     // Update text color

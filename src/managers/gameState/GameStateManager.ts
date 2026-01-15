@@ -228,9 +228,10 @@ export class GameStateManager {
    */
 
   /**
-   * Deducts time from player's clock
+   * Deducts time from player's clock and adds to stopwatch
    * 
-   * Also adds to stopwatch for current turn tracking.
+   * Only updates the values - does NOT trigger threshold check.
+   * Call checkStopwatchThreshold() separately after updating UI.
    * 
    * Requirement 4.3: Deduct card's time cost when played
    * Requirement 4.7: Deduct 3 seconds when moving a piece
@@ -242,14 +243,42 @@ export class GameStateManager {
     const playerState = this.state.players[player];
     playerState.clock = Math.max(0, playerState.clock - seconds);
     
-    // Also add to stopwatch for current turn tracking
-    if (player === this.state.currentTurn) {
+    // Add to stopwatch for current turn tracking (only during playing phase)
+    if (player === this.state.currentTurn && this.state.phase === 'playing') {
       playerState.stopwatch += seconds;
-
-      this.processStopwatchThreshold(this.state.currentTurn);
     }
     
     this.notifyStateChange();
+  }
+  
+  /**
+   * Checks if stopwatch threshold is reached and triggers opponent draw
+   * 
+   * This should be called after the UI has been updated to reflect
+   * the current stopwatch value. When threshold (60s) is reached:
+   * 1. Subtract 60 from stopwatch
+   * 2. Opponent draws 1 card (up to max hand size)
+   * 
+   * @param player - Player whose stopwatch to check
+   * @returns Number of cards drawn by opponent (0 or more)
+   */
+  checkStopwatchThreshold(player: PlayerColor): number {
+    const playerState = this.state.players[player];
+    const opponent = player === 'white' ? 'black' : 'white';
+    let cardsDrawn = 0;
+    
+    while (playerState.stopwatch >= STOPWATCH_THRESHOLD) {
+      playerState.stopwatch -= STOPWATCH_THRESHOLD;
+      // Opponent draws 1 card (up to max hand size)
+      const drawn = this.drawCards(opponent, 1, true);
+      cardsDrawn += drawn;
+    }
+    
+    if (cardsDrawn > 0) {
+      this.notifyStateChange();
+    }
+    
+    return cardsDrawn;
   }
 
   /**
@@ -325,26 +354,6 @@ export class GameStateManager {
    * Requirements: 5.3, 5.4
    * ============================================
    */
-
-  /**
-   * Processes stopwatch threshold at end of turn
-   * 
-   * Requirement 5.3: At 60+ seconds, subtract 60 and opponent draws 1 card
-   * Requirement 5.4: Reset to 0 when turn ends
-   * 
-   * @param player - Player color
-   * @private
-   */
-  private processStopwatchThreshold(player: PlayerColor): void {
-    const playerState = this.state.players[player];
-    const opponent = player === 'white' ? 'black' : 'white';
-    
-    while (playerState.stopwatch >= STOPWATCH_THRESHOLD) {
-      playerState.stopwatch -= STOPWATCH_THRESHOLD;
-      // Opponent draws 1 card (up to max hand size)
-      this.drawCards(opponent, 1, true);
-    }
-  }
 
   /**
    * Gets player's current stopwatch value

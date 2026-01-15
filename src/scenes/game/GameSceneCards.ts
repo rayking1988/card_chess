@@ -241,6 +241,15 @@ export function handleLocalCardPlay(this: GameScene, card: Card, target?: Square
   }
 
   this.updateUIFromState();
+  
+  // Check stopwatch threshold AFTER UI is updated
+  // This ensures the displayed stopwatch value matches when draws are triggered
+  const cardsDrawn = this.gameStateManager.checkStopwatchThreshold(this.localColor);
+  if (cardsDrawn > 0) {
+    this.logEvent('system', `Opponent drew ${cardsDrawn} card(s) (stopwatch threshold)`);
+    this.updateUIFromState();
+  }
+  
   return true;
 }
 

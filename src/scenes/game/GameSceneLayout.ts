@@ -99,7 +99,10 @@ export function positionEventLog(this: GameScene, layout: GameLayout): void {
   const showLog = !layout.isMobile || this.isMobileEventLogVisible;
   this.eventLog.setVisible(showLog);
   if (showLog) {
-    this.eventLog.setPosition(logArea.centerX, logArea.centerY);
+    // Position at top of log area (account for scaled height, origin is center)
+    const scaledHeight = logDims.height * logScale;
+    const topY = logArea.y + scaledHeight / 2 + 5; // 5px padding from top
+    this.eventLog.setPosition(logArea.centerX, topY);
     this.eventLog.setScale(logScale);
     this.eventLog.setDepth(layout.isMobile ? 80 : 10);
   }

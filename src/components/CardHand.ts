@@ -1179,6 +1179,18 @@ export class CardHandComponent {
   }
 
   /**
+   * Cancels current targeting/dragging and resets card position
+   * 
+   * Can be called externally (e.g., on right-click or escape key)
+   */
+  cancelTargeting(): void {
+    if (this.targeting?.isActive()) {
+      this.targeting.forceCancel();
+    }
+    this.resetDraggingCard();
+  }
+
+  /**
    * Gets the main container
    * 
    * @returns The Phaser container

@@ -65,7 +65,7 @@ const config: Phaser.Types.Core.GameConfig = {
   
   // Visual quality settings
   pixelArt: false,                      // Disable NEAREST filtering for smooth scaling
-  antialias: false,                      // Enable antialiasing for smooth edges
+  antialias: true,                      // Enable antialiasing for smooth edges
   roundPixels: false,                   // Allow sub-pixel positioning
   
   // Performance settings - cap FPS to reduce CPU/GPU load

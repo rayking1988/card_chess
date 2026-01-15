@@ -216,6 +216,13 @@ export class CardTargetingComponent {
   /** Bound input handlers for cleanup */
   private boundPointerMove?: (pointer: Phaser.Input.Pointer) => void;
   private boundPointerUp?: (pointer: Phaser.Input.Pointer) => void;
+  private boundRightClick?: (pointer: Phaser.Input.Pointer) => void;
+  
+  /** Throttle timestamp for update calls */
+  private lastUpdateTime: number = 0;
+  
+  /** Minimum ms between update calls to prevent glitches from fast movement */
+  private static readonly UPDATE_THROTTLE_MS = 8; // ~120fps max
 
   /**
    * Creates a new CardTargetingComponent
@@ -380,6 +387,8 @@ export class CardTargetingComponent {
    * - If arrow targeting: Draw arrow from start to cursor
    * - If drag-to-play: Move card with cursor (using offset to prevent jump)
    * 
+   * Includes throttling to prevent glitches from very fast mouse movement.
+   * 
    * @param x - Current pointer X
    * @param y - Current pointer Y
    * 
@@ -388,9 +397,25 @@ export class CardTargetingComponent {
   updateTargeting(x: number, y: number): void {
     if (!this.activeCard) return;
     
+    // Skip if coordinates haven't changed
     if (this.lastUpdateX === x && this.lastUpdateY === y) {
       return;
     }
+    
+    // Throttle updates to prevent glitches from very fast movement
+    const now = performance.now();
+    if (now - this.lastUpdateTime < CardTargetingComponent.UPDATE_THROTTLE_MS) {
+      // Still update position tracking but skip expensive operations
+      this.currentX = x;
+      this.currentY = y;
+      
+      // For drag mode, always update card position to keep it responsive
+      if (this.isDragging && this.activeCardComponent) {
+        this.activeCardComponent.setPosition(x + this.dragOffsetX, y + this.dragOffsetY);
+      }
+      return;
+    }
+    this.lastUpdateTime = now;
     
     this.lastUpdateX = x;
     this.lastUpdateY = y;
@@ -492,7 +517,7 @@ export class CardTargetingComponent {
   /**
    * Cancels current targeting and cleans up
    * 
-   * Used by: endTargeting(), external cancellation
+   * Used by: endTargeting(), external cancellation, right-click cancel
    */
   cancelTargeting(): void {
     this.isTargeting = false;
@@ -502,9 +527,19 @@ export class CardTargetingComponent {
     this.lastUpdateX = null;
     this.lastUpdateY = null;
     this.lastPlayZoneInBounds = null;
+    this.lastUpdateTime = 0;
     
     this.arrowGraphics.clear();
     this.hidePlayZone();
+  }
+  
+  /**
+   * Forcefully cancels targeting with callback notification
+   * 
+   * Used by: External cancel requests (e.g., from CardHand on right-click)
+   */
+  forceCancel(): void {
+    this.handleCancelRequest();
   }
 
   /* ============================================
@@ -568,6 +603,7 @@ export class CardTargetingComponent {
    * Listens for:
    * - pointermove: Update targeting position
    * - pointerup: End targeting
+   * - pointerdown (right button): Cancel targeting
    * 
    * @private
    */
@@ -584,8 +620,35 @@ export class CardTargetingComponent {
       }
     };
     
+    // Right-click to cancel targeting
+    this.boundRightClick = (pointer: Phaser.Input.Pointer) => {
+      if (pointer.rightButtonDown() && this.isActive()) {
+        this.handleCancelRequest();
+      }
+    };
+    
     this.scene.input.on('pointermove', this.boundPointerMove);
     this.scene.input.on('pointerup', this.boundPointerUp);
+    this.scene.input.on('pointerdown', this.boundRightClick);
+  }
+  
+  /**
+   * Handles a cancel request (from right-click or escape key)
+   * Cancels current targeting and notifies callback
+   * 
+   * @private
+   */
+  private handleCancelRequest(): void {
+    if (!this.activeCard) return;
+    
+    const card = this.activeCard;
+    
+    // Notify cancel callback
+    if (this.onTargetingCancel) {
+      this.onTargetingCancel(card);
+    }
+    
+    this.cancelTargeting();
   }
 
   /* ============================================
@@ -883,6 +946,10 @@ export class CardTargetingComponent {
     if (this.boundPointerUp) {
       this.scene.input.off('pointerup', this.boundPointerUp);
       this.boundPointerUp = undefined;
+    }
+    if (this.boundRightClick) {
+      this.scene.input.off('pointerdown', this.boundRightClick);
+      this.boundRightClick = undefined;
     }
     this.arrowGraphics.destroy();
     this.playZoneGraphics.destroy();

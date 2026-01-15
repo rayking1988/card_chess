@@ -158,7 +158,7 @@ export const BOARD_COLORS = {
   GRID_LINE: '#5C4033',
   
   /** Valid move highlight color (green) */
-  HIGHLIGHT_VALID: '#7fff00',
+  HIGHLIGHT_VALID: '#6bc512',
   
   /** Selected square highlight color (yellow) */
   HIGHLIGHT_SELECTED: '#ffff00',
@@ -276,7 +276,7 @@ export const TARGETING_COLORS = {
   ARROW: '#f1820c',
   
   /** Valid target highlight (yellow) */
-  VALID_TARGET: '#eff708',
+  VALID_TARGET: '#6bc512',
   
   /** Invalid target highlight (red) */
   INVALID_TARGET: '#e50b0b',
@@ -992,13 +992,13 @@ export const EVENT_LOG_LAYOUT = {
   FOOTER_HEIGHT: 56,
   
   /** Entry height */
-  ENTRY_HEIGHT: 30,
+  ENTRY_HEIGHT: 40,
   
   /** Padding */
   PADDING: 10,
   
   /** Quick chat button height */
-  QUICK_CHAT_HEIGHT: 32,
+  QUICK_CHAT_HEIGHT: 30,
   
   /** Quick chat margin */
   QUICK_CHAT_MARGIN: 12,
@@ -1013,7 +1013,7 @@ export const EVENT_LOG_LAYOUT = {
   SCROLL_BUTTON_FONT_SIZE: 14,
   
   /** Entry font size */
-  ENTRY_FONT_SIZE: 18,
+  ENTRY_FONT_SIZE: 24,
   
   /** Entry background alpha */
   ENTRY_BACKGROUND_ALPHA: 0.28,
@@ -1040,10 +1040,10 @@ export const EVENT_LOG_LAYOUT = {
   BORDER_INSET_2: 8,
   
   /** Quick chat font size */
-  QUICK_CHAT_FONT_SIZE: 16,
+  QUICK_CHAT_FONT_SIZE: 24,
   
   /** Quick chat option font size */
-  QUICK_CHAT_OPTION_FONT_SIZE: 14,
+  QUICK_CHAT_OPTION_FONT_SIZE: 20,
 } as const;
 
 /* ============================================

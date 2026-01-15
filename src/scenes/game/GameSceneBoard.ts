@@ -117,7 +117,9 @@ export function handleLocalMove(this: GameScene, from: Square, to: Square, promo
     this.gameStateManager.deductMoveTimeCost(movingColor);
     this.gameStateManager.resolveDisturbTagsOnMove(movingColor);
 
-    this.logEvent(movingColor, `Moved ${from} to ${to}`);
+    // Log move with piece type (K=King, Q=Queen, R=Rook, B=Bishop, N=Knight, P=Pawn)
+    const pieceSymbol = movingPiece ? movingPiece.type.toUpperCase() : '?';
+    this.logEvent(movingColor, `Moved ${pieceSymbol} ${from} to ${to}`);
 
     // Send to network (only if it's our piece in multiplayer)
     if (!isSinglePlayer) {
@@ -132,6 +134,16 @@ export function handleLocalMove(this: GameScene, from: Square, to: Square, promo
 
     // Check for checkmate/stalemate (Requirement 3.8)
     this.checkGameEndConditions();
+
+    // Update UI to show current stopwatch value
+    this.updateUIFromState();
+    
+    // Check stopwatch threshold AFTER UI is updated, BEFORE ending turn
+    const cardsDrawn = this.gameStateManager.checkStopwatchThreshold(movingColor);
+    if (cardsDrawn > 0) {
+      this.logEvent('system', `Opponent drew ${cardsDrawn} card(s) (stopwatch threshold)`);
+      this.updateUIFromState();
+    }
 
     // Check hand size before ending turn (Requirement 3.6)
     const currentPlayer = this.gameStateManager.getPlayer(movingColor);

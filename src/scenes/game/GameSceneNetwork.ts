@@ -101,7 +101,7 @@ export function handleNetworkAction(this: GameScene, action: GameAction): void {
       this.handleRematchDeclined();
       break;
     case 'CHAT_MESSAGE':
-      this.eventLog.addEntry(action.senderColor, action.message, action.senderName);
+      this.eventLog.addEntry('chat', action.message, action.senderName);
       break;
     case 'PLAYER_STATS_SYNC':
       this.handleOpponentStatsSync(
@@ -242,19 +242,26 @@ export function handleOpponentPlayCard(
 
   if (cardData) {
     // Apply disturb tag penalty/time before card cost (matches local play order)
+    // Note: We don't call deductTime here because the opponent's stopwatch
+    // is already synced via PLAYER_STATS_SYNC. Calling deductTime would add
+    // the time cost twice.
     this.gameStateManager.resolveDisturbTagsOnCardPlay(opponentColor, cardData);
   }
 
-  if (cardData?.timeCost) {
-    // Deduct time through GameStateManager to trigger stopwatch threshold check
-    this.gameStateManager.deductTime(opponentColor, cardData.timeCost);
-  }
-
+  // Update local tracking of opponent's state from their synced values
   if (cardData) {
     const opponentState = this.gameStateManager.getPlayer(opponentColor);
     this.opponentClockTime = opponentState.clock;
     this.opponentStopwatchTime = opponentState.stopwatch;
     this.opponentDisturbTags = opponentState.disturbTags;
+  }
+  
+  // Check stopwatch threshold for opponent - if reached, local player draws
+  // The opponent's stopwatch value comes from their stats sync
+  const cardsDrawn = this.gameStateManager.checkStopwatchThreshold(opponentColor);
+  if (cardsDrawn > 0) {
+    this.logEvent('system', `You drew ${cardsDrawn} card(s) (opponent stopwatch threshold)`);
+    this.updateHandDisplay();
   }
 
   this.checkGameEndConditions();
@@ -279,14 +286,24 @@ export function handleOpponentMovePiece(this: GameScene, from: string, to: strin
       this.animatePieceMove(from as Square, to as Square, movingPiece, capturedPiece);
     }
     this.gameStateManager.setBoardFEN(this.chessBoard.getPosition());
-    this.gameStateManager.deductMoveTimeCost(opponentColor);
+    // Note: We don't call deductMoveTimeCost here because the opponent's stopwatch
+    // is already synced via PLAYER_STATS_SYNC. Calling it would add time twice.
     this.gameStateManager.resolveDisturbTagsOnMove(opponentColor);
     const opponentState = this.gameStateManager.getPlayer(opponentColor);
     this.opponentClockTime = opponentState.clock;
     this.opponentStopwatchTime = opponentState.stopwatch;
     this.opponentDisturbTags = opponentState.disturbTags;
 
-    this.logEvent(opponentColor, `Moved ${from} to ${to}`);
+    // Log move with piece type (K=King, Q=Queen, R=Rook, B=Bishop, N=Knight, P=Pawn)
+    const pieceSymbol = movingPiece ? movingPiece.type.toUpperCase() : '?';
+    this.logEvent(opponentColor, `Moved ${pieceSymbol} ${from} to ${to}`);
+
+    // Check stopwatch threshold for opponent - if reached, local player draws
+    const cardsDrawn = this.gameStateManager.checkStopwatchThreshold(opponentColor);
+    if (cardsDrawn > 0) {
+      this.logEvent('system', `You drew ${cardsDrawn} card(s) (opponent stopwatch threshold)`);
+      this.updateHandDisplay();
+    }
 
     // Check for king capture (Requirement 3.7)
     if (result.isKingCapture) {
@@ -306,11 +323,12 @@ export function handleOpponentMovePiece(this: GameScene, from: string, to: strin
 
 /**
  * Handles opponent performing a mulligan
- * Deducts time cost and logs event
+ * Logs event (time cost is already synced via PLAYER_STATS_SYNC)
  */
 export function handleOpponentMulligan(this: GameScene): void {
   const opponentColor = this.localColor === 'white' ? 'black' : 'white';
-  this.gameStateManager.deductMulliganTimeCost(opponentColor);
+  // Note: We don't call deductMulliganTimeCost here because the opponent's stopwatch
+  // is already synced via PLAYER_STATS_SYNC. Calling it would add time twice.
   this.logEvent(opponentColor, 'Mulligan');
   const opponentState = this.gameStateManager.getPlayer(opponentColor);
   this.opponentClockTime = opponentState.clock;

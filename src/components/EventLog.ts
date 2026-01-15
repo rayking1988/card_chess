@@ -59,18 +59,22 @@ const QUICK_CHAT_OPTION_HEIGHT = EVENT_LOG_LAYOUT.QUICK_CHAT_OPTION_HEIGHT;
 /** Quick chat option padding */
 const QUICK_CHAT_OPTION_PADDING = EVENT_LOG_LAYOUT.QUICK_CHAT_OPTION_PADDING;
 
+const ENTRY_FONT_SIZE = EVENT_LOG_LAYOUT.ENTRY_FONT_SIZE;
+
 /** Background colors for different player entries */
 const ENTRY_BACKGROUNDS = {
-  white: hex('#3b3326'),
-  black: hex('#2d2624'),
-  system: hex('#3a2e1a')
+  white: hex('#121006'),
+  black: hex('#f0eee7'),
+  system: hex('#3a2e1a'),
+  chat: hex('#3a2e1a')
 };
 
 /** Text colors for different player entries */
 const ENTRY_COLORS = {
-  white: '#f6e6b3',
-  black: '#e2d6b0',
-  system: '#ffdd88'
+  white: '#f0eee7',
+  black: '#121006',
+  system: '#dba616',
+  chat: '#28aa2a'
 };
 
 /** Panel styling colors (matched to main menu input) */
@@ -97,7 +101,7 @@ const PANEL_COLORS = {
  */
 export interface LogEntry {
   id: string;
-  player: 'white' | 'black' | 'system';
+  player: 'white' | 'black' | 'system' | 'chat';
   message: string;
   displayName?: string;
   timestamp: number;
@@ -187,6 +191,9 @@ export class EventLogComponent {
   
   /** Array of entry background graphics */
   private entryBackgrounds: Phaser.GameObjects.Graphics[] = [];
+  
+  /** Cumulative Y positions for each entry (accounts for variable heights) */
+  private entryYPositions: number[] = [];
   
   /** Current scroll offset (in entries) */
   private scrollOffset: number = 0;
@@ -496,9 +503,9 @@ export class EventLogComponent {
       });
 
       const optionText = this.scene.add.text(-QUICK_CHAT_WIDTH / 2 + 12, optionY, option, {
-        fontSize: '14px',
+        fontSize: '16px',
         fontFamily: 'BoldPixels, Arial',
-        color: '#f6e6b3'
+        color: '#dba616'
       }).setOrigin(0, 0.5);
 
       this.quickChatOptionTexts.push(optionText);
@@ -530,7 +537,7 @@ export class EventLogComponent {
    * 
    * Algorithm:
    * 1. Determine colors and prefix based on player type
-   * 2. Calculate Y position based on entry index
+   * 2. Calculate Y position based on previous entries' heights
    * 3. Create background rectangle with player color
    * 4. Create text with prefix and message
    * 5. Add to entries container
@@ -545,33 +552,50 @@ export class EventLogComponent {
     const backgroundColor = ENTRY_BACKGROUNDS[entry.player];
     
     const label = entry.displayName ? `[${entry.displayName}]: ` : '';
-    const y = -LOG_HEIGHT / 2 + HEADER_HEIGHT + 10 + (index * ENTRY_HEIGHT);
+    
+    // Calculate Y position based on previous entries
+    let y: number;
+    if (index === 0) {
+      y = -LOG_HEIGHT / 2 + HEADER_HEIGHT + 10;
+    } else {
+      // Get the previous entry's Y position and add its height
+      const prevY = this.entryYPositions[index - 1];
+      const prevText = this.entryTexts[index - 1];
+      const prevHeight = prevText ? Math.max(ENTRY_HEIGHT - 6, prevText.height + 8) : ENTRY_HEIGHT;
+      y = prevY + prevHeight;
+    }
+    
+    // Store this entry's Y position
+    this.entryYPositions[index] = y;
 
-    // Create entry background
+    // Create entry text first to measure its height
+    const text = this.scene.add.text(
+      -LOG_WIDTH / 2 + PADDING + 5,
+      y,
+      label + entry.message,
+      {
+        fontSize: ENTRY_FONT_SIZE + 'px',
+        fontFamily: 'BoldPixels, Arial',
+        color,
+        wordWrap: { width: LOG_WIDTH - PADDING * 2 - 30 }
+      }
+    ).setOrigin(0, 0);
+    
+    // Calculate actual entry height based on text
+    const entryHeight = Math.max(ENTRY_HEIGHT - 6, text.height + 8);
+
+    // Create entry background with actual height
     const bg = this.scene.add.graphics();
     bg.fillStyle(backgroundColor, 0.28);
     bg.fillRoundedRect(
       -LOG_WIDTH / 2 + PADDING,
       y - 2,
       LOG_WIDTH - PADDING * 2 - 8,
-      ENTRY_HEIGHT - 6,
+      entryHeight,
       4
     );
     this.entryBackgrounds.push(bg);
     this.entriesContainer.add(bg);
-
-    // Create entry text
-    const text = this.scene.add.text(
-      -LOG_WIDTH / 2 + PADDING + 5,
-      y,
-      label + entry.message,
-      {
-        fontSize: '18px',
-        fontFamily: 'BoldPixels, Arial',
-        color,
-        wordWrap: { width: LOG_WIDTH - PADDING * 2 - 30 }
-      }
-    ).setOrigin(0, 0);
     
     this.entryTexts.push(text);
     this.entriesContainer.add(text);
@@ -618,14 +642,16 @@ export class EventLogComponent {
    * Updates scroll position and button states
    * 
    * Algorithm:
-   * 1. Move entries container based on scroll offset
-   * 2. Update scroll button opacity based on scroll position
+   * 1. Calculate total content height from entry positions
+   * 2. Move entries container based on scroll offset
+   * 3. Update scroll button opacity based on scroll position
    * 
    * @private
    */
   private updateScroll(): void {
-    // Move entries container
-    this.entriesContainer.y = -this.scrollOffset * ENTRY_HEIGHT;
+    // Calculate scroll in pixels based on entry positions
+    const scrollPixels = this.scrollOffset * ENTRY_HEIGHT;
+    this.entriesContainer.y = -scrollPixels;
     
     // Update scroll button visibility
     this.scrollUpButton.setAlpha(this.scrollOffset > 0 ? 1 : 0.3);
@@ -654,7 +680,7 @@ export class EventLogComponent {
    * 
    * Used by: GameScene (logs all game actions)
    */
-  addEntry(player: 'white' | 'black' | 'system', message: string, displayName?: string): LogEntry {
+  addEntry(player: 'white' | 'black' | 'system' | 'chat', message: string, displayName?: string): LogEntry {
     const entry: LogEntry = {
       id: `entry_${this.entryIdCounter++}`,
       player,
@@ -683,6 +709,7 @@ export class EventLogComponent {
     this.entryBackgrounds = [];
     this.entryTexts.forEach(text => text.destroy());
     this.entryTexts = [];
+    this.entryYPositions = [];
     this.scrollOffset = 0;
     this.updateScroll();
   }

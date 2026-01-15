@@ -351,7 +351,7 @@ export function createCardHand(this: GameScene, layout: GameLayout): void {
     this, layout.cardHandX, layout.cardHandY,
     layout.previewX, layout.previewY
   );
-  this.cardHand.setDepth(20);
+  this.cardHand.setDepth(150);
   this.cardHand.setScale(1);
   this.cardHand.setHandScale(layout.handScale);
   positionCardHand.call(this, layout);
