@@ -29,6 +29,8 @@ import type { GameState, PlayerColor } from '../GameStateManager';
 import {
   DEFAULT_APP_ID,
   DEFAULT_RTC_CONFIG,
+  ICE_FETCH_TIMEOUT_MS,
+  ICE_SERVER_ENDPOINT,
   PEER_TIMEOUT_MS,
   PING_INTERVAL_MS,
   WSS_TRACKERS
@@ -158,6 +160,15 @@ export class NetworkManager {
   
   /** Number of color request attempts made */
   private colorRequestAttempts: number = 0;
+  
+  /** Cached ICE servers from Twilio */
+  private cachedIceServers: RTCIceServer[] | null = null;
+  
+  /** Timestamp when ICE servers were cached */
+  private iceServersCachedAt: number = 0;
+  
+  /** ICE servers cache duration (1 hour - well within 24h TTL) */
+  private static readonly ICE_CACHE_DURATION_MS = 60 * 60 * 1000;
 
   /**
    * Creates a new NetworkManager instance
@@ -176,6 +187,58 @@ export class NetworkManager {
 
 
   /* ============================================
+   * ICE SERVER MANAGEMENT
+   * ============================================
+   * Methods for fetching TURN credentials from Twilio via Cloudflare Worker.
+   */
+
+  /**
+   * Fetches ICE servers (STUN + TURN) from Twilio via Cloudflare Worker
+   * 
+   * Returns cached servers if still valid, otherwise fetches fresh credentials.
+   * Falls back to default STUN-only config on failure.
+   * 
+   * @returns RTCConfiguration with ICE servers
+   * @private
+   */
+  private async fetchIceServers(): Promise<RTCConfiguration> {
+    // Return cached servers if still valid
+    const now = Date.now();
+    if (this.cachedIceServers && (now - this.iceServersCachedAt) < NetworkManager.ICE_CACHE_DURATION_MS) {
+      console.log('Using cached ICE servers');
+      return { iceServers: this.cachedIceServers, iceCandidatePoolSize: 10 };
+    }
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), ICE_FETCH_TIMEOUT_MS);
+
+      const response = await fetch(ICE_SERVER_ENDPOINT, {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`ICE server fetch failed: ${response.status}`);
+      }
+
+      const iceServers: RTCIceServer[] = await response.json();
+      
+      // Cache the servers
+      this.cachedIceServers = iceServers;
+      this.iceServersCachedAt = now;
+      
+      console.log('Fetched Twilio ICE servers (STUN + TURN)');
+      return { iceServers, iceCandidatePoolSize: 10 };
+      
+    } catch (error) {
+      console.warn('Failed to fetch ICE servers, using STUN-only fallback:', error);
+      return DEFAULT_RTC_CONFIG;
+    }
+  }
+
+
+  /* ============================================
    * CONNECTION MANAGEMENT
    * ============================================
    * Methods for joining/leaving rooms and managing connection state.
@@ -187,10 +250,11 @@ export class NetworkManager {
    * Algorithm:
    * 1. Leave any existing room
    * 2. Set state to 'connecting'
-   * 3. Create Trystero room with WSS trackers
-   * 4. Set up message channel and event handlers
-   * 5. Set state to 'waiting'
-   * 6. Start peer timeout check and auto-rejoin
+   * 3. Fetch ICE servers (STUN + TURN) from Twilio
+   * 4. Create Trystero room with WSS trackers
+   * 5. Set up message channel and event handlers
+   * 6. Set state to 'waiting'
+   * 7. Start peer timeout check and auto-rejoin
    * 
    * @param roomId - The room identifier to join
    * @throws Error if connection fails
@@ -206,6 +270,9 @@ export class NetworkManager {
     this.setConnectionState('connecting');
 
     try {
+      // Fetch ICE servers (STUN + TURN) from Twilio via Cloudflare Worker
+      const rtcConfig = await this.fetchIceServers();
+      
       // Join room using Trystero's BitTorrent tracker strategy
       // Connect to all WSS trackers for HTTPS compatibility
       this.room = joinRoom(
@@ -213,7 +280,7 @@ export class NetworkManager {
           appId: this.config.appId,
           relayUrls: WSS_TRACKERS,
           relayRedundancy: WSS_TRACKERS.length,
-          rtcConfig: this.config.rtcConfig
+          rtcConfig
         }, 
         roomId
       );
@@ -875,12 +942,15 @@ export class NetworkManager {
     
     // Rejoin the room
     try {
+      // Use cached ICE servers (already fetched in initial joinRoom)
+      const rtcConfig = await this.fetchIceServers();
+      
       this.room = joinRoom(
         { 
           appId: this.config.appId,
           relayUrls: WSS_TRACKERS,
           relayRedundancy: WSS_TRACKERS.length,
-          rtcConfig: this.config.rtcConfig
+          rtcConfig
         }, 
         roomId
       );

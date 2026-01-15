@@ -32,6 +32,7 @@ export const WSS_TRACKERS = [
 /**
  * Default WebRTC configuration with public STUN servers
  * STUN servers help establish P2P connections through NAT
+ * Used as fallback when Twilio ICE servers are unavailable
  */
 export const DEFAULT_RTC_CONFIG: RTCConfiguration = {
   iceServers: [
@@ -42,3 +43,12 @@ export const DEFAULT_RTC_CONFIG: RTCConfiguration = {
   ],
   iceCandidatePoolSize: 10
 };
+
+/**
+ * Cloudflare Worker endpoint for fetching Twilio ICE servers
+ * Returns temporary TURN credentials (valid ~24 hours)
+ */
+export const ICE_SERVER_ENDPOINT = 'https://cold-scene-fe82.rayking1988.workers.dev/';
+
+/** Timeout for ICE server fetch (ms) */
+export const ICE_FETCH_TIMEOUT_MS = 5000;
