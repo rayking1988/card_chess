@@ -559,7 +559,7 @@ export const NETWORK = {
   KOFI_URL: 'https://ko-fi.com/cardchess',
   
   /** GitHub issues page for bug reports */
-  BUG_REPORT_URL: 'https://github.com/cardchess/issues',
+  BUG_REPORT_URL: 'https://discord.gg/NdcB2mZRGg',
   
   /** Maximum player name length */
   MAX_NAME_LENGTH: 20,
