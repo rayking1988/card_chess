@@ -95,12 +95,34 @@ export class CloudflareRelayManager {
   
   /** Ping interval (ms) */
   private static readonly PING_INTERVAL_MS = 30000;
+  
+  /** Bound beforeunload handler for cleanup */
+  private boundBeforeUnload: (() => void) | null = null;
 
   /**
    * Creates a new CloudflareRelayManager instance
    */
   constructor() {
     this.playerId = this.generatePlayerId();
+    
+    // Set up beforeunload handler for graceful disconnect on tab close
+    this.boundBeforeUnload = () => this.handleBeforeUnload();
+    window.addEventListener('beforeunload', this.boundBeforeUnload);
+  }
+  
+  /**
+   * Handles browser tab close/refresh for graceful disconnect
+   * @private
+   */
+  private handleBeforeUnload(): void {
+    if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+      // Send graceful close - browser may not wait for response
+      try {
+        this.websocket.close(1000, 'Page unload');
+      } catch (e) {
+        // Ignore errors during close
+      }
+    }
   }
 
   /* ============================================
@@ -140,8 +162,20 @@ export class CloudflareRelayManager {
     this.stopPolling();
     this.stopReconnectTimer();
     
+    // Remove beforeunload handler
+    if (this.boundBeforeUnload) {
+      window.removeEventListener('beforeunload', this.boundBeforeUnload);
+      this.boundBeforeUnload = null;
+    }
+    
     if (this.websocket) {
-      this.websocket.close();
+      // Send graceful close with normal closure code (1000)
+      // This prevents Cloudflare from logging "client disconnected" errors
+      try {
+        this.websocket.close(1000, 'Normal closure');
+      } catch (e) {
+        // Ignore errors during close
+      }
       this.websocket = null;
     }
     
