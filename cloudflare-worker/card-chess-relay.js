@@ -44,30 +44,190 @@ export class GameRoom {
     this.state = state;
     this.env = env;
     this.sessions = new Map(); // playerId -> WebSocket
-    this.players = new Set();
+    this.players = new Map(); // playerId -> { lastSeen, messages: [] }
   }
 
   async fetch(request) {
     const url = new URL(request.url);
+    const path = url.pathname;
+    
+    // Handle CORS preflight
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { status: 200, headers: corsHeaders });
+    }
     
     // Handle WebSocket upgrade
     if (request.headers.get('Upgrade') === 'websocket') {
       return this.handleWebSocket(request);
     }
     
-    // Handle HTTP requests
-    switch (url.pathname) {
+    // Handle HTTP requests (polling fallback)
+    switch (path) {
+      case '/join':
+        if (request.method === 'POST') return this.handleJoin(request);
+        break;
+      case '/poll':
+        if (request.method === 'POST') return this.handlePoll(request);
+        break;
+      case '/send':
+        if (request.method === 'POST') return this.handleSend(request);
+        break;
       case '/status':
         return new Response(JSON.stringify({
-          players: Array.from(this.players),
-          activeConnections: this.sessions.size
+          players: Array.from(this.players.keys()),
+          activeWebSockets: this.sessions.size
         }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
-      default:
-        return new Response('Not Found', { status: 404, headers: corsHeaders });
+    }
+    
+    return new Response('Not Found', { status: 404, headers: corsHeaders });
+  }
+
+  // ============ Polling Methods ============
+
+  async handleJoin(request) {
+    try {
+      const { playerId } = await request.json();
+      if (!playerId) {
+        return new Response(JSON.stringify({ error: 'Missing playerId' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      const isNewPlayer = !this.players.has(playerId);
+      
+      // Add or update player
+      this.players.set(playerId, {
+        lastSeen: Date.now(),
+        messages: []
+      });
+
+      // Get list of other players
+      const otherPlayers = [];
+      for (const [id] of this.players) {
+        if (id !== playerId) {
+          otherPlayers.push(id);
+          // Notify other player about this player joining (via polling queue)
+          if (isNewPlayer) {
+            const otherPlayer = this.players.get(id);
+            if (otherPlayer) {
+              otherPlayer.messages.push({ type: 'peer_joined', peerId: playerId });
+            }
+            // Also notify via WebSocket if connected
+            const ws = this.sessions.get(id);
+            if (ws) {
+              try {
+                ws.send(JSON.stringify({ type: 'peer_joined', peerId: playerId }));
+              } catch (e) {}
+            }
+          }
+        }
+      }
+
+      console.log(`Player ${playerId} joined via polling. Total: ${this.players.size}`);
+
+      return new Response(JSON.stringify({
+        success: true,
+        playerId,
+        otherPlayers,
+        playerCount: this.players.size
+      }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({ error: 'Invalid request' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
     }
   }
+
+  async handlePoll(request) {
+    try {
+      const { playerId } = await request.json();
+      if (!playerId) {
+        return new Response(JSON.stringify({ error: 'Missing playerId' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      const player = this.players.get(playerId);
+      if (!player) {
+        return new Response(JSON.stringify({ error: 'Player not in room' }), {
+          status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Update last seen
+      player.lastSeen = Date.now();
+
+      // Get and clear messages
+      const messages = player.messages;
+      player.messages = [];
+
+      return new Response(JSON.stringify({ messages }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({ error: 'Invalid request' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+  }
+
+  async handleSend(request) {
+    try {
+      const { senderId, targetId, action } = await request.json();
+      if (!senderId || !action) {
+        return new Response(JSON.stringify({ error: 'Missing required fields' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      const message = { type: 'action', senderId, action };
+
+      if (targetId) {
+        // Send to specific player
+        // Try WebSocket first
+        const ws = this.sessions.get(targetId);
+        if (ws) {
+          try {
+            ws.send(JSON.stringify(message));
+          } catch (e) {}
+        }
+        // Also queue for polling
+        const target = this.players.get(targetId);
+        if (target) {
+          target.messages.push(message);
+        }
+      } else {
+        // Broadcast to all except sender
+        for (const [id, player] of this.players) {
+          if (id !== senderId) {
+            player.messages.push(message);
+            const ws = this.sessions.get(id);
+            if (ws) {
+              try {
+                ws.send(JSON.stringify(message));
+              } catch (e) {}
+            }
+          }
+        }
+      }
+
+      console.log(`Relayed ${action.type} from ${senderId} to ${targetId || 'all'}`);
+
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({ error: 'Invalid request' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+  }
+
+  // ============ WebSocket Methods ============
 
   async handleWebSocket(request) {
     const url = new URL(request.url);
@@ -86,15 +246,19 @@ export class GameRoom {
     
     // Store the session
     this.sessions.set(playerId, server);
-    this.players.add(playerId);
     
-    console.log(`Player ${playerId} connected. Total players: ${this.players.size}`);
+    // Also add to players map for polling compatibility
+    if (!this.players.has(playerId)) {
+      this.players.set(playerId, { lastSeen: Date.now(), messages: [] });
+    }
+    
+    console.log(`Player ${playerId} connected via WebSocket. Total players: ${this.players.size}`);
 
     // Send connection confirmation
     server.send(JSON.stringify({ type: 'connected' }));
     
     // Notify new player about existing players
-    for (const existingPlayerId of this.players) {
+    for (const existingPlayerId of this.players.keys()) {
       if (existingPlayerId !== playerId) {
         server.send(JSON.stringify({ type: 'peer_joined', peerId: existingPlayerId }));
       }
@@ -138,6 +302,7 @@ export class GameRoom {
         
       case 'send_action':
         if (data.targetId && data.action) {
+          // Send via WebSocket
           const targetWs = this.sessions.get(data.targetId);
           if (targetWs) {
             targetWs.send(JSON.stringify({
@@ -145,8 +310,17 @@ export class GameRoom {
               senderId: playerId,
               action: data.action
             }));
-            console.log(`Relayed ${data.action.type} from ${playerId} to ${data.targetId}`);
           }
+          // Also queue for polling
+          const target = this.players.get(data.targetId);
+          if (target) {
+            target.messages.push({
+              type: 'action',
+              senderId: playerId,
+              action: data.action
+            });
+          }
+          console.log(`Relayed ${data.action.type} from ${playerId} to ${data.targetId}`);
         }
         break;
         
@@ -160,6 +334,13 @@ export class GameRoom {
     this.sessions.delete(playerId);
     this.players.delete(playerId);
     this.broadcast({ type: 'peer_left', peerId: playerId }, playerId);
+    
+    // Also queue peer_left for polling players
+    for (const [id, player] of this.players) {
+      if (id !== playerId) {
+        player.messages.push({ type: 'peer_left', peerId: playerId });
+      }
+    }
   }
 
   broadcast(message, excludePlayerId = null) {
@@ -181,7 +362,7 @@ export class GameRoom {
  * Routes requests to the appropriate Durable Object based on roomId
  */
 export default {
-  async fetch(request, env, ctx) {
+  async fetch(request, env) {
     // Handle CORS preflight
     const corsResponse = handleCORS(request);
     if (corsResponse) return corsResponse;
@@ -192,27 +373,38 @@ export default {
     try {
       // Root endpoint - health check
       if (path === '/' || path === '') {
-        return new Response('Card Chess Relay Server - Running (Durable Objects)', {
+        return new Response('Card Chess Relay Server - Running (Durable Objects + Polling)', {
           status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'text/plain' }
         });
       }
 
-      // Status endpoint
+      // Global status endpoint
       if (path === '/status') {
-        return new Response(JSON.stringify({ status: 'running', version: '2.0' }), {
+        return new Response(JSON.stringify({ status: 'running', version: '2.1', features: ['websocket', 'polling'] }), {
           status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }
 
-      // WebSocket endpoint - route to Durable Object
-      if (path === '/ws') {
-        const roomId = url.searchParams.get('roomId');
-        const playerId = url.searchParams.get('playerId');
+      // Get roomId from query params or body
+      let roomId = url.searchParams.get('roomId');
+      
+      // For POST requests, try to get roomId from body if not in query
+      if (!roomId && request.method === 'POST') {
+        const clonedRequest = request.clone();
+        try {
+          const body = await clonedRequest.json();
+          roomId = body.roomId;
+        } catch (e) {
+          // Body might not be JSON
+        }
+      }
 
-        if (!roomId || !playerId) {
-          return new Response(JSON.stringify({ error: 'Missing roomId or playerId' }), {
+      // Routes that need a roomId
+      if (path === '/ws' || path === '/join' || path === '/poll' || path === '/send') {
+        if (!roomId) {
+          return new Response(JSON.stringify({ error: 'Missing roomId' }), {
             status: 400,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           });
@@ -224,7 +416,7 @@ export default {
 
         // Forward the request to the Durable Object
         const newUrl = new URL(request.url);
-        newUrl.pathname = '/ws';
+        newUrl.pathname = path;
         return roomObject.fetch(new Request(newUrl, request));
       }
 
