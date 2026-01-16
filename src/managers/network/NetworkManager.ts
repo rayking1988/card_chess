@@ -494,6 +494,10 @@ export class NetworkManager {
    */
   private async fallbackToRelay(roomId: string): Promise<void> {
     try {
+      // Stop all P2P related intervals and timeouts
+      this.stopRejoinInterval();
+      this.stopPeerTimeoutCheck();
+      
       // Clean up P2P connection
       if (this.room) {
         this.room.leave();
@@ -536,6 +540,7 @@ export class NetworkManager {
       // Connect to relay
       await this.relayManager.connect(roomId);
       console.log('✅ Connected via Cloudflare Worker relay');
+      console.log('Waiting for peer to join relay room:', roomId);
       
     } catch (error) {
       this.setConnectionState('disconnected');

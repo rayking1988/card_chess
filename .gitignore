@@ -38,3 +38,6 @@ coverage/
 
 # Exclude client builds for PCs
 release/
+
+# Exclude wrangler builds for PCs
+cloudflare-worker/.wrangler/

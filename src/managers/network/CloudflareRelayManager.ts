@@ -137,6 +137,7 @@ export class CloudflareRelayManager {
    */
   disconnect(): void {
     this.stopPing();
+    this.stopPolling();
     this.stopReconnectTimer();
     
     if (this.websocket) {
@@ -148,6 +149,7 @@ export class CloudflareRelayManager {
     this.peerId = null;
     this.reconnectAttempts = 0;
     this.messageQueue = [];
+    this.usingPolling = false;
     this.setConnectionState('disconnected');
   }
 
@@ -163,25 +165,45 @@ export class CloudflareRelayManager {
       return;
     }
 
-    if (!this.websocket || this.websocket.readyState !== WebSocket.OPEN) {
-      console.warn('WebSocket not ready, queuing action');
-      this.messageQueue.push(action);
-      return;
+    // Use WebSocket if available
+    if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+      try {
+        console.log('Sending action via WebSocket:', action.type);
+        
+        const message = {
+          type: 'send_action',
+          targetId: this.peerId,
+          action
+        };
+        
+        this.websocket.send(JSON.stringify(message));
+        console.log('Action sent successfully via WebSocket');
+        return;
+      } catch (error) {
+        console.error('Failed to send action via WebSocket:', error);
+      }
     }
 
+    // Fall back to HTTP POST
     try {
-      console.log('Sending action via relay:', action.type);
-      
-      const message = {
-        type: 'send_action',
-        targetId: this.peerId,
-        action
-      };
-      
-      this.websocket.send(JSON.stringify(message));
-      console.log('Action sent successfully via relay');
+      console.log('Sending action via HTTP:', action.type);
+      const response = await fetch(`${RELAY_WORKER_ENDPOINT}/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roomId: this.roomId,
+          senderId: this.playerId,
+          targetId: this.peerId,
+          action
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to send action: ${response.status}`);
+      }
+      console.log('Action sent successfully via HTTP');
     } catch (error) {
-      console.error('Failed to send action via relay:', error);
+      console.error('Failed to send action:', error);
       this.messageQueue.push(action);
       
       // Try to reconnect if send fails
@@ -249,14 +271,31 @@ export class CloudflareRelayManager {
 
   /**
    * Establishes the WebSocket connection to the relay server
+   * Falls back to polling if WebSocket fails
    */
   private async establishConnection(): Promise<void> {
     if (!this.roomId) {
       throw new Error('No room ID set');
     }
 
+    // Try WebSocket first
+    try {
+      await this.establishWebSocketConnection();
+      return;
+    } catch (wsError) {
+      console.warn('WebSocket connection failed, falling back to polling:', wsError);
+    }
+
+    // Fall back to polling
+    await this.establishPollingConnection();
+  }
+
+  /**
+   * Establishes WebSocket connection
+   */
+  private async establishWebSocketConnection(): Promise<void> {
     // Create WebSocket URL
-    const wsUrl = `${RELAY_WORKER_ENDPOINT.replace('https://', 'wss://').replace('http://', 'ws://')}/ws?roomId=${encodeURIComponent(this.roomId)}&playerId=${encodeURIComponent(this.playerId)}`;
+    const wsUrl = `${RELAY_WORKER_ENDPOINT.replace('https://', 'wss://').replace('http://', 'ws://')}/ws?roomId=${encodeURIComponent(this.roomId!)}&playerId=${encodeURIComponent(this.playerId)}`;
     
     console.log('Establishing WebSocket connection to:', wsUrl);
     this.websocket = new WebSocket(wsUrl);
@@ -321,6 +360,93 @@ export class CloudflareRelayManager {
       // Start checking after a small delay
       setTimeout(checkConnection, 100);
     });
+  }
+
+  /**
+   * Establishes polling-based connection (fallback)
+   */
+  private async establishPollingConnection(): Promise<void> {
+    console.log('Establishing polling connection...');
+    
+    // Join the room
+    const joinResponse = await fetch(`${RELAY_WORKER_ENDPOINT}/join`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        roomId: this.roomId,
+        playerId: this.playerId
+      })
+    });
+
+    if (!joinResponse.ok) {
+      throw new Error(`Failed to join room: ${joinResponse.status}`);
+    }
+
+    const joinData = await joinResponse.json();
+    console.log('Joined room via polling:', joinData);
+
+    // Check if there are other players
+    if (joinData.otherPlayers && joinData.otherPlayers.length > 0) {
+      this.peerId = joinData.otherPlayers[0];
+      this.setConnectionState('connected');
+      this.callbacks.onPeerJoined?.(this.peerId!);
+    }
+
+    // Start polling for messages
+    this.startPolling();
+  }
+
+  /** Polling interval */
+  private pollingInterval: ReturnType<typeof setInterval> | null = null;
+  
+  /** Whether using polling mode */
+  private usingPolling: boolean = false;
+
+  /**
+   * Starts polling for messages
+   */
+  private startPolling(): void {
+    this.usingPolling = true;
+    this.stopPolling();
+    
+    this.pollingInterval = setInterval(async () => {
+      if (!this.roomId || this.connectionState === 'disconnected') {
+        this.stopPolling();
+        return;
+      }
+
+      try {
+        const response = await fetch(`${RELAY_WORKER_ENDPOINT}/poll`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            roomId: this.roomId,
+            playerId: this.playerId
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.messages) {
+            for (const message of data.messages) {
+              this.handleServerMessage(message);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Polling error:', error);
+      }
+    }, 1000); // Poll every second
+  }
+
+  /**
+   * Stops polling
+   */
+  private stopPolling(): void {
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+      this.pollingInterval = null;
+    }
   }
 
   /**

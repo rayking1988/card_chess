@@ -1,0 +1,29 @@
+# Cloudflare Worker configuration for Card Chess Relay
+# 
+# To deploy:
+# 1. Install wrangler: npm install -g wrangler
+# 2. Login: wrangler login
+# 3. Deploy: wrangler deploy
+#
+# Or deploy via Cloudflare Dashboard:
+# 1. Go to workers.cloudflare.com
+# 2. Create a new worker
+# 3. Copy the code from card-chess-relay.js
+# 4. Add Durable Object binding in Settings > Variables > Durable Object Bindings
+#    - Variable name: ROOMS
+#    - Class name: GameRoom
+
+name = "morning-queen-5cf3"
+main = "card-chess-relay.js"
+compatibility_date = "2024-01-01"
+
+# Durable Objects configuration
+[durable_objects]
+bindings = [
+  { name = "ROOMS", class_name = "GameRoom" }
+]
+
+# Migrations for Durable Objects - use new_sqlite_classes for free plan
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["GameRoom"]
