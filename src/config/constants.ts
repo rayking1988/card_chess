@@ -562,7 +562,7 @@ export const NETWORK = {
   BUG_REPORT_URL: 'https://discord.gg/NdcB2mZRGg',
   
   /** Maximum player name length */
-  MAX_NAME_LENGTH: 20,
+  MAX_NAME_LENGTH: 10,
 } as const;
 
 /* ============================================

@@ -613,10 +613,11 @@ export function positionTurnOverlay(this: GameScene, layout: GameLayout): void {
 export function positionOverlays(this: GameScene, layout: GameLayout): void {
   const { width, height } = layout;
 
-  const overlayWidth = layout.boardSize;
-  const overlayHeight = this.boardSquareSize * 2;
-  const overlayX = this.boardTopLeft.x + overlayWidth / 2;
-  const overlayY = this.boardTopLeft.y + this.boardSquareSize * 3 + overlayHeight / 2;
+  const previewArea = layout.sections.eventLogPreview;
+  const overlayWidth = previewArea.width * 0.9;
+  const overlayHeight = Math.min(previewArea.height * 0.7, 220 * layout.panelScale);
+  const overlayX = previewArea.centerX;
+  const overlayY = previewArea.y + previewArea.height * 0.08 + overlayHeight / 2;
 
   if (this.mulliganBannerRect) {
     this.mulliganBannerRect.setPosition(overlayX, overlayY);
@@ -626,13 +627,14 @@ export function positionOverlays(this: GameScene, layout: GameLayout): void {
     this.mulliganTitleText.setPosition(overlayX, overlayY - overlayHeight * 0.18);
     this.mulliganTitleText.setFontSize(28 * layout.panelScale);
   }
+  const mulliganButtonOffset = Math.min(OVERLAY_LAYOUT.BUTTON_X_OFFSET * layout.panelScale, overlayWidth * 0.25);
   if (this.mulliganButton) {
-    this.mulliganButton.setPosition(overlayX - 160 * layout.panelScale, overlayY + overlayHeight * 0.18);
+    this.mulliganButton.setPosition(overlayX - mulliganButtonOffset, overlayY + overlayHeight * 0.18);
     this.mulliganButton.setData('baseScale', layout.panelScale * 0.8);
     this.mulliganButton.setScale(layout.panelScale * 0.8);
   }
   if (this.readyButton) {
-    this.readyButton.setPosition(overlayX + 160 * layout.panelScale, overlayY + overlayHeight * 0.18);
+    this.readyButton.setPosition(overlayX + mulliganButtonOffset, overlayY + overlayHeight * 0.18);
     this.readyButton.setData('baseScale', layout.panelScale * 0.8);
     this.readyButton.setScale(layout.panelScale * 0.8);
   }
@@ -645,13 +647,14 @@ export function positionOverlays(this: GameScene, layout: GameLayout): void {
     this.gameEndBannerText.setPosition(overlayX, overlayY - overlayHeight * 0.18);
     this.gameEndBannerText.setFontSize(30 * layout.panelScale);
   }
+  const gameEndButtonOffset = Math.min(OVERLAY_LAYOUT.GAME_END_BUTTON_X_OFFSET * layout.panelScale, overlayWidth * 0.3);
   if (this.gameEndRematchButton) {
-    this.gameEndRematchButton.setPosition(overlayX - 180 * layout.panelScale, overlayY + overlayHeight * 0.18);
+    this.gameEndRematchButton.setPosition(overlayX - gameEndButtonOffset, overlayY + overlayHeight * 0.18);
     this.gameEndRematchButton.setData('baseScale', layout.panelScale * 0.8);
     this.gameEndRematchButton.setScale(layout.panelScale * 0.8);
   }
   if (this.gameEndMenuButton) {
-    this.gameEndMenuButton.setPosition(overlayX + 180 * layout.panelScale, overlayY + overlayHeight * 0.18);
+    this.gameEndMenuButton.setPosition(overlayX + gameEndButtonOffset, overlayY + overlayHeight * 0.18);
     this.gameEndMenuButton.setData('baseScale', layout.panelScale * 0.8);
     this.gameEndMenuButton.setScale(layout.panelScale * 0.8);
   }

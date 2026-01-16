@@ -100,16 +100,17 @@ export function setupCardHandCallbacks(this: GameScene): void {
 
   // Handle non-targeted card play
   this.cardHand.onCardPlayed = (card: Card) => {
-    this.handleLocalCardPlay(card);
+    return this.handleLocalCardPlay(card);
   };
 
   // Handle targeted card play
   this.cardHand.onCardTargeted = (card: Card, target: Square) => {
-    this.handleLocalCardPlay(card, target);
+    return this.handleLocalCardPlay(card, target);
   };
   
   // Handle targeting start - highlight legal squares
   this.cardHand.onTargetingStart = (card: Card) => {
+    if (this.isDiscardMode) return;
     this.highlightLegalTargets(card);
   };
   
@@ -232,7 +233,7 @@ export function handleLocalCardPlay(this: GameScene, card: Card, target?: Square
     this.networkManager?.sendPlayCard(card.id, card.name, target, pieceType, card.effect.action);
 
     // Check for checkmate/stalemate after card play (Requirement 3.8)
-    this.checkGameEndConditions();
+    this.checkCardPlayEndConditions();
   } else {
     // Release lock if card play failed
     this.releaseDiscardTop('local');

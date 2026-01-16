@@ -181,7 +181,7 @@ export class ChessBoardComponent {
   public onMoveAttempt?: (from: Square, to: Square) => void;
   
   /** Called when a move is attempted via drag (should not be animated) */
-  public onDragMove?: (from: Square, to: Square) => void;
+  public onDragMove?: (from: Square, to: Square) => boolean | void;
   
   /** Called when a piece is selected */
   public onPieceSelect?: (square: Square) => void;
@@ -741,32 +741,25 @@ export class ChessBoardComponent {
       }
       
       // Check if dropped on a valid move square
+      let moveAccepted = false;
       if (targetSquare && this.validMoveSquares.includes(targetSquare)) {
-        // Valid drop - position piece at target square immediately
-        const { col: targetCol, row: targetRow } = this.squareToCoords(targetSquare);
-        const targetX = targetCol * size + size / 2;
-        const targetY = targetRow * size + size / 2;
-        sprite.setPosition(targetX, targetY);
-        
-        // Reset visual state
-        sprite.setDepth(0);
-        sprite.setAlpha(1);
-        
-        // Attempt the move - this will trigger renderPieces() which will clean up properly
+        // Attempt the move - onDragMove should return true if it was applied
         if (this.onDragMove) {
-          this.onDragMove(this.draggedFromSquare, targetSquare);
+          moveAccepted = this.onDragMove(this.draggedFromSquare, targetSquare) === true;
         }
-      } else {
-        // Invalid drop - reset piece position to original square
+      }
+
+      if (!moveAccepted) {
+        // Invalid drop or rejected move - reset piece position to original square
         const { col: origCol, row: origRow } = this.squareToCoords(this.draggedFromSquare);
         const origX = origCol * size + size / 2;
         const origY = origRow * size + size / 2;
         sprite.setPosition(origX, origY);
-        
-        // Reset visual state
-        sprite.setDepth(0);
-        sprite.setAlpha(1);
       }
+
+      // Reset visual state
+      sprite.setDepth(0);
+      sprite.setAlpha(1);
       
       // Reset drag state
       this.draggedPiece = null;

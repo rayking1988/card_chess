@@ -101,6 +101,9 @@ export class MenuScene extends Phaser.Scene {
   /** Cancel queue button (shown while waiting) */
   private cancelButton!: Phaser.GameObjects.Container;
 
+  /** Whether the client is waiting for a match */
+  private isWaitingForMatch: boolean = false;
+
   constructor() {
     super({ key: 'MenuScene' });
   }
@@ -206,8 +209,9 @@ export class MenuScene extends Phaser.Scene {
    * @private
    */
   private savePlayerName(name: string): void {
-    this.playerName = name;
-    localStorage.setItem(STORAGE_KEY, name);
+    const trimmed = name.slice(0, NETWORK.MAX_NAME_LENGTH);
+    this.playerName = trimmed;
+    localStorage.setItem(STORAGE_KEY, trimmed);
   }
 
   /**
@@ -281,9 +285,19 @@ export class MenuScene extends Phaser.Scene {
     `;
     
     this.nameInput.addEventListener('input', () => {
-      if (this.nameInput) {
-        this.savePlayerName(this.nameInput.value);
+      if (!this.nameInput) return;
+      const trimmed = this.nameInput.value.slice(0, NETWORK.MAX_NAME_LENGTH);
+      if (this.nameInput.value !== trimmed) {
+        this.nameInput.value = trimmed;
       }
+      this.savePlayerName(trimmed);
+    });
+
+    this.nameInput.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      if (this.isWaitingForMatch) return;
+      event.preventDefault();
+      this.onJoinQueue();
     });
     
     document.body.appendChild(this.nameInput);
@@ -518,14 +532,19 @@ export class MenuScene extends Phaser.Scene {
    * @private
    */
   private async onJoinQueue(): Promise<void> {
+    if (this.isWaitingForMatch) return;
     const name = this.nameInput?.value.trim() || '';
     if (name.length < 1) {
       this.statusText.setText('Please enter a name!');
       this.statusText.setColor('#ff6666');
       return;
     }
-    
-    this.savePlayerName(name);
+
+    const trimmed = name.slice(0, NETWORK.MAX_NAME_LENGTH);
+    if (this.nameInput) {
+      this.nameInput.value = trimmed;
+    }
+    this.savePlayerName(trimmed);
     this.setWaitingState(true);
     this.statusText.setText('Connecting...');
     this.statusText.setColor('#ffcc00');
@@ -558,6 +577,7 @@ export class MenuScene extends Phaser.Scene {
    * @private
    */
   private setWaitingState(waiting: boolean): void {
+    this.isWaitingForMatch = waiting;
     this.joinButton.setVisible(!waiting);
     this.cancelButton.setVisible(waiting);
     

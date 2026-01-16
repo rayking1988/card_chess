@@ -4,6 +4,7 @@
  * @module scenes/game/GameSceneFlow
  */
 
+import { Chess } from 'chess.js';
 import type { Card, PlayerColor } from '../../managers/GameStateManager';
 import { DECK_SIZE, INITIAL_DRAW_COUNT } from '../../managers/DeckManager';
 import { MAX_HAND_SIZE } from './GameConstants';
@@ -12,6 +13,54 @@ import { createImageButton } from './GameUIHelpers';
 import { hex } from '../../utils/colors';
 import type { GameScene } from '../GameScene';
 import { INTERACTION_BLOCKER, OVERLAY_LAYOUT, CLOCK } from '../../config';
+
+function getPreviewOverlayMetrics(scene: GameScene, layout = scene.currentLayout ?? calculateLayout(scene.scale.width, scene.scale.height)): {
+  overlayX: number;
+  overlayY: number;
+  overlayWidth: number;
+  overlayHeight: number;
+} {
+  const previewArea = layout.sections.eventLogPreview;
+  const overlayWidth = previewArea.width * 0.9;
+  const overlayHeight = Math.min(previewArea.height * 0.7, 220 * layout.panelScale);
+  const overlayX = previewArea.centerX;
+  const overlayY = previewArea.y + previewArea.height * 0.08 + overlayHeight / 2;
+  return { overlayX, overlayY, overlayWidth, overlayHeight };
+}
+
+function showMulliganWaitingState(scene: GameScene, layout = scene.currentLayout ?? calculateLayout(scene.scale.width, scene.scale.height)): void {
+  const { overlayWidth, overlayHeight, overlayX, overlayY } = getPreviewOverlayMetrics(scene, layout);
+
+  if (!scene.mulliganBannerRect) {
+    scene.mulliganBannerRect = scene.add.rectangle(overlayX, overlayY, overlayWidth, overlayHeight, hex('#ff9a2a'), 0.9);
+    scene.mulliganBannerRect.setDepth(120);
+  } else {
+    scene.mulliganBannerRect.setPosition(overlayX, overlayY);
+    scene.mulliganBannerRect.setSize(overlayWidth, overlayHeight);
+  }
+
+  const scale = layout.panelScale;
+  if (!scene.mulliganTitleText) {
+    scene.mulliganTitleText = scene.add.text(overlayX, overlayY - overlayHeight * OVERLAY_LAYOUT.TITLE_Y_OFFSET_FACTOR, 'Waiting for opponent...', {
+      fontSize: `${OVERLAY_LAYOUT.MULLIGAN_TITLE_FONT_SIZE * scale}px`,
+      fontFamily: 'BoldPixels, Arial',
+      color: '#ffffff'
+    }).setOrigin(0.5).setDepth(121);
+  } else {
+    scene.mulliganTitleText.setPosition(overlayX, overlayY - overlayHeight * OVERLAY_LAYOUT.TITLE_Y_OFFSET_FACTOR);
+    scene.mulliganTitleText.setFontSize(OVERLAY_LAYOUT.MULLIGAN_TITLE_FONT_SIZE * scale);
+    scene.mulliganTitleText.setText('Waiting for opponent...');
+  }
+
+  if (scene.mulliganButton) {
+    scene.mulliganButton.destroy();
+    scene.mulliganButton = null;
+  }
+  if (scene.readyButton) {
+    scene.readyButton.destroy();
+    scene.readyButton = null;
+  }
+}
 
 /**
  * Initializes the game state
@@ -90,10 +139,25 @@ export function refreshInteractionBlockers(this: GameScene): void {
 
   const { width, height } = this.scale;
   const bounds = this.eventLog.getContainer().getBounds();
-  const left = Math.max(0, Math.min(width, bounds.x));
-  const right = Math.max(0, Math.min(width, bounds.x + bounds.width));
-  const top = Math.max(0, Math.min(height, bounds.y));
-  const bottom = Math.max(0, Math.min(height, bounds.y + bounds.height));
+  let left = bounds.x;
+  let right = bounds.x + bounds.width;
+  let top = bounds.y;
+  let bottom = bounds.y + bounds.height;
+
+  if (this.interactionBlockersAllowPreview) {
+    const layout = this.currentLayout ?? calculateLayout(width, height);
+    this.currentLayout = layout;
+    const preview = layout.sections.eventLogPreview;
+    left = Math.min(left, preview.x);
+    right = Math.max(right, preview.x + preview.width);
+    top = Math.min(top, preview.y);
+    bottom = Math.max(bottom, preview.y + preview.height);
+  }
+
+  left = Math.max(0, Math.min(width, left));
+  right = Math.max(0, Math.min(width, right));
+  top = Math.max(0, Math.min(height, top));
+  bottom = Math.max(0, Math.min(height, bottom));
   const middleHeight = Math.max(0, bottom - top);
 
   this.interactionBlockers.forEach(rect => rect.destroy());
@@ -122,6 +186,7 @@ export function clearInteractionBlockers(this: GameScene): void {
   this.interactionBlockers.forEach(rect => rect.destroy());
   this.interactionBlockers = [];
   this.interactionBlockersActive = false;
+  this.interactionBlockersAllowPreview = false;
 }
 
 /**
@@ -132,17 +197,21 @@ export function showMulliganUI(this: GameScene): void {
   const { width, height } = this.scale;
   const layout = this.currentLayout ?? calculateLayout(width, height);
   const scale = layout.panelScale;
+  this.cardHand.setExtraPlayZone({
+    x: layout.sections.leftPanel.x,
+    y: layout.sections.leftPanel.y,
+    width: layout.sections.leftPanel.width,
+    height: layout.sections.leftPanel.height
+  });
 
   this.isMobileEventLogVisible = true;
   this.positionEventLog(layout);
   this.interactionBlockersActive = true;
+  this.interactionBlockersAllowPreview = true;
   this.refreshInteractionBlockers();
   this.cardHand.disableInteraction();
 
-  const overlayWidth = layout.boardSize;
-  const overlayHeight = this.boardSquareSize * 2;
-  const overlayX = this.boardTopLeft.x + overlayWidth / 2;
-  const overlayY = this.boardTopLeft.y + this.boardSquareSize * 3 + overlayHeight / 2;
+  const { overlayWidth, overlayHeight, overlayX, overlayY } = getPreviewOverlayMetrics(this, layout);
 
   if (!this.mulliganBannerRect) {
     this.mulliganBannerRect = this.add.rectangle(overlayX, overlayY, overlayWidth, overlayHeight, hex('#ff9a2a'), 0.9);
@@ -166,7 +235,7 @@ export function showMulliganUI(this: GameScene): void {
 
   const buttonScale = scale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR;
   const buttonY = overlayY + overlayHeight * OVERLAY_LAYOUT.BUTTON_Y_OFFSET_FACTOR;
-  const buttonOffset = OVERLAY_LAYOUT.BUTTON_X_OFFSET * scale;
+  const buttonOffset = Math.min(OVERLAY_LAYOUT.BUTTON_X_OFFSET * scale, overlayWidth * 0.25);
 
   if (!this.mulliganButton) {
     this.mulliganButton = createImageButton(
@@ -248,10 +317,10 @@ export function handleReady(this: GameScene): void {
   // Mark local player as ready
   this.localPlayerReady = true;
 
-  // Hide mulligan UI
-  this.hideMulliganUI();
+  // Swap to waiting state (keep blockers until both ready)
+  showMulliganWaitingState(this);
 
-  this.logEvent('system', 'Ready to play');
+  this.logEvent(this.localColor, 'Finished mulligan');
 
   // Send to network
   this.networkManager?.sendReady();
@@ -265,7 +334,7 @@ export function handleReady(this: GameScene): void {
 /**
  * Hides the mulligan UI elements
  */
-export function hideMulliganUI(this: GameScene): void {
+export function hideMulliganUI(this: GameScene, options: { keepBlockers?: boolean } = {}): void {
   if (this.mulliganButton) {
     this.mulliganButton.destroy();
     this.mulliganButton = null;
@@ -286,8 +355,10 @@ export function hideMulliganUI(this: GameScene): void {
     this.mulliganInstructionText.destroy();
     this.mulliganInstructionText = null;
   }
-  this.clearInteractionBlockers();
-  this.cardHand.enableInteraction();
+  if (!options.keepBlockers) {
+    this.clearInteractionBlockers();
+    this.cardHand.enableInteraction();
+  }
 }
 
 /**
@@ -301,6 +372,7 @@ export function checkGameStart(this: GameScene): void {
     this.logEvent('system', 'Game started!');
     // Reset lastTurnOverlayTurn to force the turn overlay to show
     this.lastTurnOverlayTurn = undefined;
+    this.hideMulliganUI();
     this.updateUIFromState();
     return;
   }
@@ -311,6 +383,7 @@ export function checkGameStart(this: GameScene): void {
     this.logEvent('system', 'Both players ready - Game started!');
     // Reset lastTurnOverlayTurn to force the turn overlay to show
     this.lastTurnOverlayTurn = undefined;
+    this.hideMulliganUI();
     this.updateUIFromState();
   }
 }
@@ -321,6 +394,8 @@ export function checkGameStart(this: GameScene): void {
  */
 export function enterDiscardMode(this: GameScene): void {
   this.isDiscardMode = true;
+  this.cardHand.setForceDragMode(true);
+  this.cardHand.cancelTargeting();
   const { width, height } = this.scale;
   const layout = this.currentLayout ?? calculateLayout(width, height);
   const scale = layout.panelScale;
@@ -365,6 +440,7 @@ export function discardCard(this: GameScene, card: Card): void {
 
     this.logEvent(this.localColor, `Discarded ${card.name}`);
     this.animateCardDiscard('local', 1);
+    this.networkManager?.sendDiscardCards(1);
 
     // Update hand display
     this.updateHandDisplay();
@@ -405,6 +481,8 @@ export function discardCard(this: GameScene, card: Card): void {
  */
 export function exitDiscardMode(this: GameScene): void {
   this.isDiscardMode = false;
+  this.cardHand.setForceDragMode(false);
+  this.cardHand.setExtraPlayZone(null);
 
   if (this.discardOverlay) {
     this.discardOverlay.destroy();
@@ -468,6 +546,51 @@ export function checkGameEndConditions(this: GameScene): void {
   }
 }
 
+function getMoveAvailability(
+  fen: string,
+  turn: 'w' | 'b',
+  blockedSquares: string[]
+): { hasMoves: boolean; inCheck: boolean } {
+  const parts = fen.split(' ');
+  if (parts.length >= 2) {
+    parts[1] = turn;
+  }
+  const chess = new Chess(parts.join(' '));
+  const blocked = new Set(blockedSquares);
+  const moves = chess.moves({ verbose: true }) as Array<{ from: string; flags?: string }>;
+  const hasMoves = moves.some(move => !blocked.has(move.from) && !move.flags?.includes('k') && !move.flags?.includes('q'));
+  return { hasMoves, inCheck: chess.isCheck() };
+}
+
+/**
+ * Checks for checkmate/stalemate after a card play
+ * Considers deployed pieces as immobile for the current turn.
+ */
+export function checkCardPlayEndConditions(this: GameScene): void {
+  if (this.gameStateManager.getPhase() === 'ended') return;
+
+  const fen = this.chessBoard.getPosition();
+  const whiteBlocks = this.gameStateManager.getDeployedPiecesThisTurn('white');
+  const blackBlocks = this.gameStateManager.getDeployedPiecesThisTurn('black');
+
+  const whiteState = getMoveAvailability(fen, 'w', whiteBlocks);
+  const blackState = getMoveAvailability(fen, 'b', blackBlocks);
+
+  if (!whiteState.hasMoves && whiteState.inCheck) {
+    this.handleGameEnd('black', 'Checkmate!');
+    return;
+  }
+
+  if (!blackState.hasMoves && blackState.inCheck) {
+    this.handleGameEnd('white', 'Checkmate!');
+    return;
+  }
+
+  if (!whiteState.hasMoves || !blackState.hasMoves) {
+    this.handleGameEnd(null, 'Stalemate - Draw!');
+  }
+}
+
 /**
  * Handles game end
  * Logs result and shows end-game overlay
@@ -491,13 +614,11 @@ export function handleGameEnd(this: GameScene, winner: PlayerColor | null, reaso
   this.isMobileEventLogVisible = true;
   this.positionEventLog(layout);
   this.interactionBlockersActive = true;
+  this.interactionBlockersAllowPreview = true;
   this.refreshInteractionBlockers();
   this.cardHand.disableInteraction();
 
-  const overlayWidth = layout.boardSize;
-  const overlayHeight = this.boardSquareSize * 2;
-  const overlayX = this.boardTopLeft.x + overlayWidth / 2;
-  const overlayY = this.boardTopLeft.y + this.boardSquareSize * 3 + overlayHeight / 2;
+  const { overlayWidth, overlayHeight, overlayX, overlayY } = getPreviewOverlayMetrics(this, layout);
 
   const isLocalWin = winner === this.localColor;
   const bannerText = winner === null ? 'Draw' : isLocalWin ? 'You win!' : 'You lose';
@@ -529,7 +650,7 @@ export function handleGameEnd(this: GameScene, winner: PlayerColor | null, reaso
 
   const buttonScale = layout.panelScale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR;
   const buttonY = overlayY + overlayHeight * OVERLAY_LAYOUT.BUTTON_Y_OFFSET_FACTOR;
-  const buttonOffset = OVERLAY_LAYOUT.GAME_END_BUTTON_X_OFFSET * layout.panelScale;
+  const buttonOffset = Math.min(OVERLAY_LAYOUT.GAME_END_BUTTON_X_OFFSET * layout.panelScale, overlayWidth * 0.3);
 
   if (!this.gameEndRematchButton) {
     this.gameEndRematchButton = createImageButton(

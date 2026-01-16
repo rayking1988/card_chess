@@ -138,6 +138,9 @@ export class CardTargetingComponent {
   
   /** Whether drag-to-play mode is active */
   private isDragging: boolean = false;
+
+  /** Force drag mode (used for discard-only interactions) */
+  private forceDragMode: boolean = false;
   
   /** The card currently being targeted/dragged */
   private activeCard: CardData | null = null;
@@ -177,6 +180,9 @@ export class CardTargetingComponent {
   
   /** Play zone bounds for non-targeted cards */
   private playZone: PlayZoneBounds | null = null;
+
+  /** Optional extra play zone (e.g., discard area) */
+  private extraPlayZone: PlayZoneBounds | null = null;
   
   /** Board bounds for targeted cards */
   private boardBounds: PlayZoneBounds | null = null;
@@ -312,6 +318,27 @@ export class CardTargetingComponent {
     this.targetValidator = validator;
   }
 
+  /**
+   * Sets an additional play zone for drag-to-play checks
+   *
+   * @param bounds - Additional play zone bounds or null to clear
+   */
+  setExtraPlayZone(bounds: PlayZoneBounds | null): void {
+    this.extraPlayZone = bounds;
+  }
+
+  /**
+   * Forces drag-only mode for all cards (disables arrow targeting)
+   *
+   * @param force - Whether to force drag mode
+   */
+  setForceDragMode(force: boolean): void {
+    this.forceDragMode = force;
+    if (force && this.isTargeting) {
+      this.handleCancelRequest();
+    }
+  }
+
   /* ============================================
    * TARGETING LIFECYCLE METHODS
    * ============================================
@@ -359,7 +386,7 @@ export class CardTargetingComponent {
     this.lastUpdateY = null;
     this.lastPlayZoneInBounds = null;
     
-    const requiresTarget = cardRequiresTarget(card);
+    const requiresTarget = this.forceDragMode ? false : cardRequiresTarget(card);
     
     if (requiresTarget) {
       // Arrow targeting mode - card stays in place, arrow follows cursor
@@ -452,7 +479,7 @@ export class CardTargetingComponent {
    * 
    * Used by: CardHandComponent.handleCardDragEnd()
    */
-  endTargeting(x: number, y: number): 'played' | 'cancelled' | 'armed' {
+  endTargeting(x: number, y: number): 'played' | 'cancelled' {
     if (!this.activeCard) return 'cancelled';
     
     const card = this.activeCard;
@@ -468,21 +495,6 @@ export class CardTargetingComponent {
         }
         this.cancelTargeting();
         return 'played';
-      }
-
-      // Tap-to-target: keep targeting active when releasing on the card
-      if (this.isPointerOnActiveCard(x, y)) {
-        if (this.activeCardComponent) {
-          const pos = this.activeCardComponent.getPosition();
-          this.startX = pos.x;
-          this.startY = pos.y;
-        }
-        this.currentX = x;
-        this.currentY = y;
-        this.lastUpdateX = null;
-        this.lastUpdateY = null;
-        this.arrowGraphics.clear();
-        return 'armed';
       }
 
       // Requirement 9.6: Invalid target - cancel
@@ -813,12 +825,15 @@ export class CardTargetingComponent {
    * @private
    */
   private isInPlayZone(x: number, y: number): boolean {
-    if (!this.playZone) return false;
-    
-    return x >= this.playZone.x &&
-           x <= this.playZone.x + this.playZone.width &&
-           y >= this.playZone.y &&
-           y <= this.playZone.y + this.playZone.height;
+    const inZone = (zone: PlayZoneBounds | null): boolean => {
+      if (!zone) return false;
+      return x >= zone.x &&
+        x <= zone.x + zone.width &&
+        y >= zone.y &&
+        y <= zone.y + zone.height;
+    };
+
+    return inZone(this.playZone) || inZone(this.extraPlayZone);
   }
 
   /**
@@ -854,12 +869,6 @@ export class CardTargetingComponent {
    * @returns True if pointer is over the active card
    * @private
    */
-  private isPointerOnActiveCard(x: number, y: number): boolean {
-    if (!this.activeCardComponent) return false;
-    const bounds = this.activeCardComponent.getContainer().getBounds();
-    return Phaser.Geom.Rectangle.Contains(bounds, x, y);
-  }
-
   /**
    * Converts board coordinates to square notation
    * 

@@ -11,10 +11,10 @@ export const DEFAULT_APP_ID = 'card-chess-game-v1';
 export const RECONNECT_TIMEOUT_MS = 30000;
 
 /** Timeout for peer inactivity before considering disconnected (ms) */
-export const PEER_TIMEOUT_MS = 60000;
+export const PEER_TIMEOUT_MS = 120000;
 
-/** Interval between keep-alive pings (ms) - 10s for turn-based game */
-export const PING_INTERVAL_MS = 10000;
+/** Interval between keep-alive pings (ms) - 15s for turn-based game */
+export const PING_INTERVAL_MS = 15000;
 
 /**
  * WebSocket Secure (wss://) BitTorrent trackers for HTTPS compatibility

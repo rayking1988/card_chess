@@ -167,6 +167,7 @@ import {
   discardCard,
   exitDiscardMode,
   checkGameEndConditions,
+  checkCardPlayEndConditions,
   handleGameEnd,
   handleRematchRequest,
   handleRematchReceived,
@@ -605,6 +606,9 @@ export class GameScene extends Phaser.Scene {
 
   /** Whether interaction blockers are active */
   public interactionBlockersActive: boolean = false;
+
+  /** Whether interaction blockers should also allow preview area */
+  public interactionBlockersAllowPreview: boolean = false;
 
   /** Game end banner strip */
   public gameEndBannerRect: Phaser.GameObjects.Rectangle | null = null;
@@ -1181,6 +1185,10 @@ export class GameScene extends Phaser.Scene {
 
   public checkGameEndConditions(): void {
     checkGameEndConditions.call(this);
+  }
+
+  public checkCardPlayEndConditions(): void {
+    checkCardPlayEndConditions.call(this);
   }
 
   public handleGameEnd(winner: PlayerColor | null, reason: string): void {

@@ -20,7 +20,7 @@ export function setupChessBoardCallbacks(this: GameScene): void {
   
   // Handle drag-and-drop (without animation)
   this.chessBoard.onDragMove = (from: Square, to: Square) => {
-    this.handleLocalMove(from, to, undefined, false); // false = no animation
+    return this.handleLocalMove(from, to, undefined, false); // false = no animation
   };
 }
 
@@ -39,61 +39,62 @@ export function setupChessBoardCallbacks(this: GameScene): void {
  * @param to - Destination square
  * @param promotion - Promotion piece (for pawn promotion)
  * @param animate - Whether to animate the move (true for click, false for drag)
+ * @returns True if the move was applied
  */
-export function handleLocalMove(this: GameScene, from: Square, to: Square, promotion?: PieceSymbol, animate: boolean = true): void {
+export function handleLocalMove(this: GameScene, from: Square, to: Square, promotion?: PieceSymbol, animate: boolean = true): boolean {
   // In single-player mode (no network), allow controlling both sides
   const isSinglePlayer = !this.networkManager;
 
   if (this.isConnectionPaused) {
     this.logEvent('system', 'Connection paused. Waiting for opponent.');
-    return;
+    return false;
   }
 
   // Check if it's our turn (skip in single-player hotseat mode)
   if (!isSinglePlayer && !this.gameStateManager.isLocalPlayerTurn()) {
     this.logEvent('system', 'Not your turn!');
-    return;
+    return false;
   }
 
   // Check if in discard mode
   if (this.isDiscardMode) {
     this.logEvent('system', 'Discard cards first!');
-    return;
+    return false;
   }
 
   // Check game phase
   if (this.gameStateManager.getPhase() !== 'playing') {
     this.logEvent('system', 'Game not started yet!');
-    return;
+    return false;
   }
 
   // Determine which color is moving based on the piece
   const piece = this.chessBoard.getWrapper().getPiece(from);
-  if (!piece) return;
+  if (!piece) return false;
 
   const movingColor: PlayerColor = piece.color === 'w' ? 'white' : 'black';
 
   // In multiplayer, verify it's the correct player's turn
   if (!isSinglePlayer && movingColor !== this.localColor) {
     this.logEvent('system', 'Not your piece!');
-    return;
+    return false;
   }
 
   // Verify it's this color's turn
   if (this.gameStateManager.getCurrentTurn() !== movingColor) {
     this.logEvent('system', `It's ${this.gameStateManager.getCurrentTurn()}'s turn!`);
-    return;
+    return false;
   }
 
   // Check if piece was deployed this turn (cannot move)
   const moveCheck = this.gameStateManager.canMovePiece(movingColor, from);
   if (!moveCheck.canMove) {
     this.logEvent('system', moveCheck.reason);
-    return;
+    return false;
   }
 
   if (this.pendingPromotion && !promotion) {
-    return;
+    return false;
   }
 
   // Attempt the move
@@ -102,7 +103,7 @@ export function handleLocalMove(this: GameScene, from: Square, to: Square, promo
   const needsPromotion = this.chessBoard.getWrapper().isPromotionMove(from, to);
   if (needsPromotion && !promotion) {
     this.showPromotionPicker(from, to, movingColor);
-    return;
+    return false;
   }
 
   const result = this.chessBoard.makeMove(from, to, promotion);
@@ -129,7 +130,7 @@ export function handleLocalMove(this: GameScene, from: Square, to: Square, promo
     // Check for king capture (Requirement 3.7)
     if (result.isKingCapture) {
       this.handleGameEnd(movingColor, 'King captured!');
-      return;
+      return true;
     }
 
     // Check for checkmate/stalemate (Requirement 3.8)
@@ -167,10 +168,13 @@ export function handleLocalMove(this: GameScene, from: Square, to: Square, promo
         this.networkManager?.sendEndTurn(disturbToAdd);
       }
     }
+    this.updateUIFromState();
+    return true;
   } else if (result.needsPromotion) {
     this.showPromotionPicker(from, to, movingColor);
-    return;
+    return false;
   }
 
   this.updateUIFromState();
+  return false;
 }

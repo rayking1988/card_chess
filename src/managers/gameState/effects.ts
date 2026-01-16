@@ -14,7 +14,7 @@ export interface CardEffectContext {
   shuffleDeck(player: PlayerColor): void;
   drawCards(player: PlayerColor, count: number, respectCap: boolean): number;
   discardToHandSize(player: PlayerColor): Card[];
-  trackDeployedPiece(player: PlayerColor, square: string): void;
+  trackDeployedPiece(player: PlayerColor, square: string, notify?: boolean): void;
   modifyTime(player: PlayerColor, amount: number): void;
   modifyEnergy(player: PlayerColor, amount: number): boolean;
   modifyEnergyCap(player: PlayerColor, amount: number): void;

@@ -139,7 +139,7 @@ export class NetworkManager {
   private rejoinAttempts: number = 0;
   
   /** Rejoin interval in milliseconds */
-  private static readonly REJOIN_INTERVAL_MS = 8000;
+  private static readonly REJOIN_INTERVAL_MS = 12000;
   
   /** Maximum rejoin attempts before giving up */
   private static readonly MAX_REJOIN_ATTEMPTS = 10;
@@ -853,6 +853,15 @@ export class NetworkManager {
   }
 
   /**
+   * Sends a discard action (for event log visibility only)
+   *
+   * @param count - Number of cards discarded
+   */
+  sendDiscardCards(count: number): void {
+    this.sendGameAction({ type: 'DISCARD_CARDS', count });
+  }
+
+  /**
    * Sends player name to peer
    * 
    * @param name - The player's display name
@@ -1017,6 +1026,9 @@ export class NetworkManager {
     this.stopPingInterval();
     this.stopColorRequestLoop();
     this.setConnectionState('waiting');
+    if (!this.usingRelay && this.currentRoomId) {
+      this.startRejoinInterval(this.currentRoomId);
+    }
     this.callbacks.onPeerLeft?.(peerId);
   }
 

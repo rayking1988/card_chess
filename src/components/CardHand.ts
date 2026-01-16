@@ -399,6 +399,17 @@ export class CardHandComponent {
     }
   }
 
+  /**
+   * Sets an additional play zone (e.g., discard area)
+   *
+   * @param bounds - Extra play zone bounds or null to clear
+   */
+  setExtraPlayZone(bounds: PlayZoneBounds | null): void {
+    if (this.targeting) {
+      this.targeting.setExtraPlayZone(bounds);
+    }
+  }
+
   /* ============================================
    * CARD MANAGEMENT
    * ============================================
@@ -1084,11 +1095,7 @@ export class CardHandComponent {
   ): void {
     // The targeting component handles the actual resolution
     if (this.targeting && this.targeting.isActive()) {
-      const result = this.targeting.endTargeting(pointer.x, pointer.y);
-      if (result === 'armed') {
-        this.resetCardPosition(card);
-        this.draggingCard = null;
-      }
+      this.targeting.endTargeting(pointer.x, pointer.y);
     } else {
       // Fallback: reset card position if targeting wasn't active
       this.resetCardPosition(card);
@@ -1167,6 +1174,15 @@ export class CardHandComponent {
    */
   getTargeting(): CardTargetingComponent | null {
     return this.targeting;
+  }
+
+  /**
+   * Forces drag-only targeting (used for discard mode)
+   *
+   * @param force - Whether to force drag-to-play behavior
+   */
+  setForceDragMode(force: boolean): void {
+    this.targeting?.setForceDragMode(force);
   }
 
   /**

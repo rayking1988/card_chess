@@ -91,10 +91,13 @@ export class CloudflareRelayManager {
   private static readonly MAX_RECONNECT_ATTEMPTS = 10;
   
   /** Reconnection delay (ms) */
-  private static readonly RECONNECT_DELAY_MS = 3000;
+  private static readonly RECONNECT_DELAY_MS = 5000;
+
+  /** Maximum reconnection delay (ms) */
+  private static readonly MAX_RECONNECT_DELAY_MS = 20000;
   
   /** Ping interval (ms) */
-  private static readonly PING_INTERVAL_MS = 30000;
+  private static readonly PING_INTERVAL_MS = 60000;
   
   /** Bound beforeunload handler for cleanup */
   private boundBeforeUnload: (() => void) | null = null;
@@ -465,7 +468,7 @@ export class CloudflareRelayManager {
       } catch (error) {
         console.error('Polling error:', error);
       }
-    }, 1000); // Poll every second
+    }, 3000); // Poll every 3 seconds
   }
 
   /**
@@ -562,6 +565,10 @@ export class CloudflareRelayManager {
     this.reconnectAttempts++;
     console.log(`Reconnection attempt ${this.reconnectAttempts}/${CloudflareRelayManager.MAX_RECONNECT_ATTEMPTS}`);
 
+    const delay = Math.min(
+      CloudflareRelayManager.RECONNECT_DELAY_MS * this.reconnectAttempts,
+      CloudflareRelayManager.MAX_RECONNECT_DELAY_MS
+    );
     this.reconnectTimer = setTimeout(async () => {
       try {
         if (this.roomId && this.connectionState !== 'disconnected') {
@@ -577,7 +584,7 @@ export class CloudflareRelayManager {
           this.handleConnectionLoss();
         }
       }
-    }, CloudflareRelayManager.RECONNECT_DELAY_MS);
+    }, delay);
   }
 
   /**

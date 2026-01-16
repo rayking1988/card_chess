@@ -7,6 +7,7 @@
 import { Square, Color, PieceSymbol } from 'chess.js';
 import type { GameAction } from '../../managers/NetworkManager';
 import { DECK_SIZE } from '../../managers/DeckManager';
+import { mergeEventLogs } from '../../managers/network/stateSync';
 import type { GameScene } from '../GameScene';
 
 /**
@@ -25,9 +26,21 @@ export function setupNetworkCallbacks(this: GameScene): void {
     this.updateUIFromState({ sendStats: false });
   });
 
+  this.networkManager.onEventLogSync((entries) => {
+    if (!this.eventLog) return;
+    const merged = mergeEventLogs(this.eventLog.getEntries(), entries);
+    this.eventLog.importEntries(merged);
+  });
+
   this.networkManager.onPeerJoined((_peerId) => {
     this.hideConnectionOverlay();
     this.networkManager?.sendPlayerName(this.playerName);
+    if (this.networkManager?.getIsHost()) {
+      this.networkManager.sendStateSync(this.gameStateManager.getState());
+      if (this.eventLog) {
+        this.networkManager.sendEventLogSync(this.eventLog.getEntries());
+      }
+    }
   });
 
   this.networkManager.onPeerLeft((_peerId) => {
@@ -51,6 +64,12 @@ export function setupNetworkCallbacks(this: GameScene): void {
 
   if (this.networkManager.getPeerId()) {
     this.networkManager.sendPlayerName(this.playerName);
+    if (this.networkManager.getIsHost()) {
+      this.networkManager.sendStateSync(this.gameStateManager.getState());
+      if (this.eventLog) {
+        this.networkManager.sendEventLogSync(this.eventLog.getEntries());
+      }
+    }
   }
 }
 
@@ -85,8 +104,19 @@ export function handleNetworkAction(this: GameScene, action: GameAction): void {
       }
       // Skip mode processing since we just handled it above
       this.gameStateManager.endTurn(true);
+      const opponentColor = this.localColor === 'white' ? 'black' : 'white';
+      const newTurn = this.gameStateManager.getCurrentTurn();
+      this.logEvent('system', `Ending ${opponentColor}'s turn...`);
+      this.logEvent('system', `Now ${newTurn}'s turn`);
       this.updateUIFromState();
       break;
+    case 'DISCARD_CARDS': {
+      const opponentColor = this.localColor === 'white' ? 'black' : 'white';
+      const count = Math.max(1, action.count);
+      const label = count === 1 ? 'card' : 'cards';
+      this.logEvent(opponentColor, `Discarded ${count} ${label}`);
+      break;
+    }
     case 'PLAYER_NAME':
       this.opponentName = action.name || 'Opponent';
       this.refreshNameDisplays();
@@ -263,6 +293,7 @@ export function handleOpponentPlayCard(
     const color: Color = opponentColor === 'white' ? 'w' : 'b';
     this.chessBoard.placePiece(target as Square, pieceType as PieceSymbol, color);
     this.gameStateManager.setBoardFEN(this.chessBoard.getPosition());
+    this.gameStateManager.trackDeployedPiece(opponentColor, target, false);
     this.animatePieceDeploy(target as Square);
   } else if (effectAction === 'DESTROY_PIECE' && target) {
     const targetPiece = this.chessBoard.getWrapper().getPiece(target as Square);
@@ -297,7 +328,7 @@ export function handleOpponentPlayCard(
     this.updateHandDisplay();
   }
 
-  this.checkGameEndConditions();
+  this.checkCardPlayEndConditions();
   // Don't call updateUIFromState here - let the animation callback handle it
 }
 
@@ -362,7 +393,7 @@ export function handleOpponentMulligan(this: GameScene): void {
   const opponentColor = this.localColor === 'white' ? 'black' : 'white';
   // Note: We don't call deductMulliganTimeCost here because the opponent's stopwatch
   // is already synced via PLAYER_STATS_SYNC. Calling it would add time twice.
-  this.logEvent(opponentColor, 'Mulligan');
+  this.logEvent(opponentColor, 'Mulligan (-10s)');
   const opponentState = this.gameStateManager.getPlayer(opponentColor);
   this.opponentClockTime = opponentState.clock;
   this.opponentStopwatchTime = opponentState.stopwatch;
@@ -375,7 +406,8 @@ export function handleOpponentMulligan(this: GameScene): void {
  */
 export function handleOpponentReady(this: GameScene): void {
   this.opponentPlayerReady = true;
-  this.logEvent('system', 'Opponent is ready');
+  const opponentColor = this.localColor === 'white' ? 'black' : 'white';
+  this.logEvent(opponentColor, 'Finished mulligan');
   // Check if both players are ready to start
   this.checkGameStart();
 }

@@ -42,6 +42,7 @@ export type GameAction =
   | { type: 'MULLIGAN' }
   | { type: 'READY' }
   | { type: 'END_TURN'; disturbAmount?: number }
+  | { type: 'DISCARD_CARDS'; count: number }
   | { type: 'PLAYER_NAME'; name: string }
   | { type: 'COLOR_REQUEST' }
   | { type: 'CHAT_MESSAGE'; message: string; senderColor: PlayerColor; senderName: string }
@@ -71,6 +72,7 @@ export interface EventLogEntry {
   timestamp: number;
   player: PlayerColor | 'system';
   message: string;
+  displayName?: string;
 }
 
 /**

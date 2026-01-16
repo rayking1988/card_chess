@@ -643,9 +643,11 @@ export class GameStateManager {
    * @param player - Player color
    * @param square - Square where piece was deployed
    */
-  trackDeployedPiece(player: PlayerColor, square: string): void {
+  trackDeployedPiece(player: PlayerColor, square: string, notify: boolean = true): void {
     this.state.players[player].deployedPiecesThisTurn.push(square);
-    this.notifyStateChange();
+    if (notify) {
+      this.notifyStateChange();
+    }
   }
 
   /**

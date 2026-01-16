@@ -39,12 +39,12 @@ export function createImageButton(
   const bgPressed = scene.add.image(0, 0, pressedTexture);
   bgPressed.setVisible(false);
   
-  const buttonText = scene.add.text(0, -2, text, {
+  const buttonText = scene.add.text(0, -5, text.toUpperCase(), {
     fontFamily: 'BoldPixels, Arial',
-    fontSize: '20px',
+    fontSize: '30px',
     color: '#ffffff',
-    stroke: '#000000',
-    strokeThickness: 2
+    stroke: '#000000ff',
+    strokeThickness: 8
   }).setOrigin(0.5);
   
   container.add([bgNormal, bgPressed, buttonText]);

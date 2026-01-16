@@ -681,12 +681,13 @@ export class EventLogComponent {
    * Used by: GameScene (logs all game actions)
    */
   addEntry(player: 'white' | 'black' | 'system' | 'chat', message: string, displayName?: string): LogEntry {
+    const timestamp = Date.now();
     const entry: LogEntry = {
-      id: `entry_${this.entryIdCounter++}`,
+      id: `entry_${timestamp}_${this.entryIdCounter++}`,
       player,
       message,
       displayName,
-      timestamp: Date.now()
+      timestamp
     };
     
     this.entries.push(entry);
