@@ -201,6 +201,12 @@ export function handleLocalCardPlay(this: GameScene, card: Card, target?: Square
     return false;
   }
 
+  // Validate target for targeted cards (deployment check, etc.)
+  if (target && !this.validateCardTarget(card, target)) {
+    this.logEvent('system', 'Invalid target!');
+    return false;
+  }
+
   // Lock discard display BEFORE playing card to prevent UI update during animation
   this.lockDiscardTop('local');
 

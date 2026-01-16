@@ -606,6 +606,10 @@ export class ChessBoardComponent {
    * @private
    */
   private squareToCoords(square: Square): { col: number; row: number } {
+    if (!square) {
+      console.warn('squareToCoords called with null/undefined square');
+      return { col: 0, row: 0 };
+    }
     const file = square.charCodeAt(0) - 'a'.charCodeAt(0);
     const rank = 8 - parseInt(square[1]);
     
@@ -751,10 +755,12 @@ export class ChessBoardComponent {
 
       if (!moveAccepted) {
         // Invalid drop or rejected move - reset piece position to original square
-        const { col: origCol, row: origRow } = this.squareToCoords(this.draggedFromSquare);
-        const origX = origCol * size + size / 2;
-        const origY = origRow * size + size / 2;
-        sprite.setPosition(origX, origY);
+        if (this.draggedFromSquare) {
+          const { col: origCol, row: origRow } = this.squareToCoords(this.draggedFromSquare);
+          const origX = origCol * size + size / 2;
+          const origY = origRow * size + size / 2;
+          sprite.setPosition(origX, origY);
+        }
       }
 
       // Reset visual state

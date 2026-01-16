@@ -22,7 +22,28 @@ export function setupNetworkCallbacks(this: GameScene): void {
   });
 
   this.networkManager.onStateSync((state) => {
+    // Preserve local player's deck/hand/discard when importing state from network
+    // Each player manages their own cards locally, so we shouldn't overwrite them
+    const localPlayerState = this.gameStateManager.getPlayer(this.localColor);
+    const preservedLocalState = {
+      deck: [...localPlayerState.deck],
+      hand: [...localPlayerState.hand],
+      discard: [...localPlayerState.discard]
+    };
+    
+    // Also preserve the localPlayer field - it should always be this client's color
+    const preservedLocalPlayer = this.gameStateManager.getState().localPlayer;
+    
     this.gameStateManager.importState(state);
+    
+    // Restore local player's deck/hand/discard and localPlayer field
+    const importedState = this.gameStateManager.getState();
+    importedState.localPlayer = preservedLocalPlayer;
+    importedState.players[this.localColor].deck = preservedLocalState.deck;
+    importedState.players[this.localColor].hand = preservedLocalState.hand;
+    importedState.players[this.localColor].discard = preservedLocalState.discard;
+    this.gameStateManager.importState(importedState);
+    
     this.updateUIFromState({ sendStats: false });
   });
 
@@ -140,6 +161,7 @@ export function handleNetworkAction(this: GameScene, action: GameAction): void {
         action.mode,
         action.deckCount,
         action.discardCount,
+        action.handCount,
         action.energy,
         action.energyCap,
         action.disturb
@@ -158,6 +180,7 @@ export function handleOpponentStatsSync(
   mode: 'focus' | 'disturb',
   deckCount: number,
   discardCount: number,
+  handCount: number,
   energy: number,
   energyCap: number,
   disturb: number
@@ -187,7 +210,9 @@ export function handleOpponentStatsSync(
     this.opponentDiscardCount = discardCount;
   }
 
-  this.opponentHandCount = Math.max(0, DECK_SIZE - deckCount - discardCount);
+  // Use the received handCount directly instead of calculating it
+  // This prevents false draw animations when stats sync arrives with stale deck/discard counts
+  this.opponentHandCount = Math.max(0, handCount);
   // Don't add null values for unknown cards - only track cards we've seen via PLAY_CARD
   // If we have more cards than the sync says, trim the array
   if (this.opponentDiscardCards.length > discardCount) {
@@ -218,6 +243,7 @@ export function sendLocalPlayerStats(this: GameScene): void {
         lastStats.mode === localPlayer.mode &&
         lastStats.deckCount === localPlayer.deck.length &&
         lastStats.discardCount === localPlayer.discard.length &&
+        lastStats.handCount === localPlayer.hand.length &&
         lastStats.energy === localPlayer.energy &&
         lastStats.energyCap === localPlayer.energyCap &&
         lastStats.disturb === localPlayer.disturbTags) {
@@ -232,6 +258,7 @@ export function sendLocalPlayerStats(this: GameScene): void {
     mode: localPlayer.mode,
     deckCount: localPlayer.deck.length,
     discardCount: localPlayer.discard.length,
+    handCount: localPlayer.hand.length,
     energy: localPlayer.energy,
     energyCap: localPlayer.energyCap,
     disturb: localPlayer.disturbTags
@@ -243,6 +270,7 @@ export function sendLocalPlayerStats(this: GameScene): void {
     localPlayer.mode,
     localPlayer.deck.length,
     localPlayer.discard.length,
+    localPlayer.hand.length,
     localPlayer.energy,
     localPlayer.energyCap,
     localPlayer.disturbTags

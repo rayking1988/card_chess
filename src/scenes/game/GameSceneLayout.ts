@@ -12,17 +12,21 @@ import type { GameLayout } from './GameTypes';
 import { layoutPileStack } from './GameUIHelpers';
 import { scaleBackgroundToCover } from './GameSceneBackground';
 import { updateDebugOverlays } from './GameSceneDebug';
-import { buildDiscardViewerCards, layoutDiscardViewer } from './GameSceneDiscardViewer';
+import {
+  positionTurnBanner,
+  positionTurnOverlay,
+  positionOverlays
+} from './GameSceneLayoutOverlays';
 import {
   LEFT_PANEL_LAYOUT,
   RIGHT_PANEL_LAYOUT,
   MOBILE_BAR_LAYOUT,
   OPPONENT_HAND_LAYOUT,
   CARD_HAND_LAYOUT,
-  OVERLAY_LAYOUT,
-  TURN_OVERLAY,
   NAMEPLATE
 } from '../../config';
+
+export { positionTurnBanner, positionTurnOverlay, positionOverlays } from './GameSceneLayoutOverlays';
 
 /**
  * Handles window resize - repositions all UI elements
@@ -391,7 +395,7 @@ export function positionLeftPanel(this: GameScene, layout: GameLayout): void {
     this.opponentDiscardTopCard.setScale(topCardScale);
   }
   if (this.opponentDiscardLabelText) {
-    this.opponentDiscardLabelText.setPosition(leftX, layout.opponentDiscardY);
+    this.opponentDiscardLabelText.setPosition(leftX, layout.opponentDiscardY - LEFT_PANEL_LAYOUT.LABEL_Y_OFFSET * scale);
     this.opponentDiscardLabelText.setFontSize(labelSize);
   }
   if (this.opponentDiscardCountText) {
@@ -406,7 +410,7 @@ export function positionLeftPanel(this: GameScene, layout: GameLayout): void {
     this.playerDiscardTopCard.setScale(topCardScale);
   }
   if (this.playerDiscardLabelText) {
-    this.playerDiscardLabelText.setPosition(leftX, layout.playerDiscardY - 0 * scale);
+    this.playerDiscardLabelText.setPosition(leftX, layout.playerDiscardY - LEFT_PANEL_LAYOUT.LABEL_Y_OFFSET * scale);
     this.playerDiscardLabelText.setFontSize(labelSize);
   }
   if (this.playerDiscardCountText) {
@@ -575,126 +579,4 @@ export function positionCardCount(this: GameScene, layout: GameLayout): void {
   if (!this.cardCountText) return;
   this.cardCountText.setPosition(layout.boardX, layout.boardY + layout.boardSize / 2 + CARD_HAND_LAYOUT.COUNT_Y_OFFSET * layout.panelScale);
   this.cardCountText.setFontSize(CARD_HAND_LAYOUT.COUNT_FONT_SIZE * layout.panelScale);
-}
-
-/**
- * Updates turn banner position
- *
- * @param layout - Current layout calculations
- */
-export function positionTurnBanner(this: GameScene, layout: GameLayout): void {
-  if (!this.turnBanner) return;
-  this.turnBanner.setPosition(layout.turnBannerX, layout.turnBannerY);
-  this.turnBanner.setScale(layout.panelScale);
-}
-
-/**
- * Updates the persistent turn overlay across the board
- *
- * @param layout - Current layout calculations
- */
-export function positionTurnOverlay(this: GameScene, layout: GameLayout): void {
-  if (!this.turnOverlayRect || !this.turnOverlayText) return;
-  const overlayY = this.boardTopLeft.y + this.boardSquareSize * OVERLAY_LAYOUT.Y_OFFSET_IN_SQUARES;
-  const overlayHeight = this.boardSquareSize * OVERLAY_LAYOUT.HEIGHT_IN_SQUARES;
-  const overlayWidth = layout.boardSize;
-
-  this.turnOverlayRect.setPosition(this.boardTopLeft.x, overlayY);
-  this.turnOverlayRect.setSize(overlayWidth, overlayHeight);
-  this.turnOverlayText.setPosition(this.boardTopLeft.x + overlayWidth / 2, overlayY + overlayHeight / 2);
-  this.turnOverlayText.setFontSize(TURN_OVERLAY.OVERLAY_FONT_SIZE * layout.panelScale);
-}
-
-/**
- * Updates all overlay positions (mulligan, discard, connection, viewer)
- *
- * @param layout - Current layout calculations
- */
-export function positionOverlays(this: GameScene, layout: GameLayout): void {
-  const { width, height } = layout;
-
-  const previewArea = layout.sections.eventLogPreview;
-  const overlayWidth = previewArea.width * 0.9;
-  const overlayHeight = Math.min(previewArea.height * 0.7, 220 * layout.panelScale);
-  const overlayX = previewArea.centerX;
-  const overlayY = previewArea.y + previewArea.height * 0.08 + overlayHeight / 2;
-
-  if (this.mulliganBannerRect) {
-    this.mulliganBannerRect.setPosition(overlayX, overlayY);
-    this.mulliganBannerRect.setSize(overlayWidth, overlayHeight);
-  }
-  if (this.mulliganTitleText) {
-    this.mulliganTitleText.setPosition(overlayX, overlayY - overlayHeight * 0.18);
-    this.mulliganTitleText.setFontSize(28 * layout.panelScale);
-  }
-  const mulliganButtonOffset = Math.min(OVERLAY_LAYOUT.BUTTON_X_OFFSET * layout.panelScale, overlayWidth * 0.25);
-  if (this.mulliganButton) {
-    this.mulliganButton.setPosition(overlayX - mulliganButtonOffset, overlayY + overlayHeight * 0.18);
-    this.mulliganButton.setData('baseScale', layout.panelScale * 0.8);
-    this.mulliganButton.setScale(layout.panelScale * 0.8);
-  }
-  if (this.readyButton) {
-    this.readyButton.setPosition(overlayX + mulliganButtonOffset, overlayY + overlayHeight * 0.18);
-    this.readyButton.setData('baseScale', layout.panelScale * 0.8);
-    this.readyButton.setScale(layout.panelScale * 0.8);
-  }
-
-  if (this.gameEndBannerRect) {
-    this.gameEndBannerRect.setPosition(overlayX, overlayY);
-    this.gameEndBannerRect.setSize(overlayWidth, overlayHeight);
-  }
-  if (this.gameEndBannerText) {
-    this.gameEndBannerText.setPosition(overlayX, overlayY - overlayHeight * 0.18);
-    this.gameEndBannerText.setFontSize(30 * layout.panelScale);
-  }
-  const gameEndButtonOffset = Math.min(OVERLAY_LAYOUT.GAME_END_BUTTON_X_OFFSET * layout.panelScale, overlayWidth * 0.3);
-  if (this.gameEndRematchButton) {
-    this.gameEndRematchButton.setPosition(overlayX - gameEndButtonOffset, overlayY + overlayHeight * 0.18);
-    this.gameEndRematchButton.setData('baseScale', layout.panelScale * 0.8);
-    this.gameEndRematchButton.setScale(layout.panelScale * 0.8);
-  }
-  if (this.gameEndMenuButton) {
-    this.gameEndMenuButton.setPosition(overlayX + gameEndButtonOffset, overlayY + overlayHeight * 0.18);
-    this.gameEndMenuButton.setData('baseScale', layout.panelScale * 0.8);
-    this.gameEndMenuButton.setScale(layout.panelScale * 0.8);
-  }
-
-  if (this.discardOverlay) {
-    // Rectangle uses center origin, so position at center and set size
-    this.discardOverlay.setPosition(width / 2, height / 2);
-    this.discardOverlay.setSize(width, height);
-  }
-  if (this.discardPromptText) {
-    this.discardPromptText.setPosition(width / 2, height / 2 - 150 * layout.panelScale);
-    this.discardPromptText.setFontSize(24 * layout.panelScale);
-  }
-
-  if (this.connectionOverlay && this.connectionOverlayBackground) {
-    // Rectangle uses center origin, so position at center and set size
-    this.connectionOverlayBackground.setPosition(width / 2, height / 2);
-    this.connectionOverlayBackground.setSize(width, height);
-    this.connectionOverlay.setPosition(0, 0);
-  }
-  if (this.connectionOverlayText) {
-    this.connectionOverlayText.setPosition(width / 2, height / 2 - 40 * layout.panelScale);
-    this.connectionOverlayText.setFontSize(24 * layout.panelScale);
-  }
-  if (this.connectionOverlayButton) {
-    this.connectionOverlayButton.setPosition(width / 2, height / 2 + 40 * layout.panelScale);
-    this.connectionOverlayButton.setData('baseScale', layout.panelScale);
-    this.connectionOverlayButton.setScale(layout.panelScale);
-  }
-
-  if (this.discardViewer) {
-    layoutDiscardViewer.call(this, layout);
-    buildDiscardViewerCards.call(this, layout);
-  }
-
-  if (this.promotionOverlay && this.pendingPromotion) {
-    this.showPromotionPicker(this.pendingPromotion.from, this.pendingPromotion.to, this.pendingPromotion.color);
-  }
-
-  if (this.interactionBlockersActive) {
-    this.refreshInteractionBlockers();
-  }
 }

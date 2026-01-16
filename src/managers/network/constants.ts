@@ -17,6 +17,12 @@ export const PEER_TIMEOUT_MS = 120000;
 export const PING_INTERVAL_MS = 15000;
 
 /**
+ * Enable verbose network debug logging
+ * Set to true to see detailed connection logs in console
+ */
+export const NETWORK_DEBUG = false;
+
+/**
  * WebSocket Secure (wss://) BitTorrent trackers for HTTPS compatibility
  *
  * Using multiple trackers increases connection speed and reliability.
@@ -64,4 +70,4 @@ export const RELAY_WORKER_ENDPOINT = 'https://morning-queen-5cf3.rayking1988.wor
  * When true, skips P2P connection attempts and goes directly to Cloudflare Worker relay
  * Set to false for production to prefer P2P connections
  */
-export const FORCE_RELAY_ONLY = false;
+export const FORCE_RELAY_ONLY = true;

@@ -517,6 +517,7 @@ export class GameScene extends Phaser.Scene {
     mode: 'focus' | 'disturb';
     deckCount: number;
     discardCount: number;
+    handCount: number;
     energy: number;
     energyCap: number;
     disturb: number;
@@ -1066,11 +1067,12 @@ export class GameScene extends Phaser.Scene {
     mode: 'focus' | 'disturb',
     deckCount: number,
     discardCount: number,
+    handCount: number,
     energy: number,
     energyCap: number,
     disturb: number
   ): void {
-    handleOpponentStatsSync.call(this, clock, stopwatch, mode, deckCount, discardCount, energy, energyCap, disturb);
+    handleOpponentStatsSync.call(this, clock, stopwatch, mode, deckCount, discardCount, handCount, energy, energyCap, disturb);
   }
 
   public sendLocalPlayerStats(): void {

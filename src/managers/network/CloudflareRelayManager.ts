@@ -15,8 +15,15 @@
  * @module managers/network/CloudflareRelayManager
  */
 
-import { RELAY_WORKER_ENDPOINT } from './constants';
+import { RELAY_WORKER_ENDPOINT, NETWORK_DEBUG } from './constants';
 import type { GameAction, ConnectionState } from './types';
+
+/** Debug logging helper - only logs when NETWORK_DEBUG is enabled */
+const debugLog = (...args: unknown[]) => {
+  if (NETWORK_DEBUG) {
+    console.log(...args);
+  }
+};
 
 /**
  * Callback interface for relay events
@@ -204,7 +211,7 @@ export class CloudflareRelayManager {
     // Use WebSocket if available
     if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
       try {
-        console.log('Sending action via WebSocket:', action.type);
+        debugLog('Sending action via WebSocket:', action.type);
         
         const message = {
           type: 'send_action',
@@ -213,7 +220,7 @@ export class CloudflareRelayManager {
         };
         
         this.websocket.send(JSON.stringify(message));
-        console.log('Action sent successfully via WebSocket');
+        debugLog('Action sent successfully via WebSocket');
         return;
       } catch (error) {
         console.error('Failed to send action via WebSocket:', error);
@@ -222,7 +229,7 @@ export class CloudflareRelayManager {
 
     // Fall back to HTTP POST
     try {
-      console.log('Sending action via HTTP:', action.type);
+      debugLog('Sending action via HTTP:', action.type);
       const response = await fetch(`${RELAY_WORKER_ENDPOINT}/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -237,7 +244,7 @@ export class CloudflareRelayManager {
       if (!response.ok) {
         throw new Error(`Failed to send action: ${response.status}`);
       }
-      console.log('Action sent successfully via HTTP');
+      debugLog('Action sent successfully via HTTP');
     } catch (error) {
       console.error('Failed to send action:', error);
       this.messageQueue.push(action);
@@ -333,12 +340,12 @@ export class CloudflareRelayManager {
     // Create WebSocket URL
     const wsUrl = `${RELAY_WORKER_ENDPOINT.replace('https://', 'wss://').replace('http://', 'ws://')}/ws?roomId=${encodeURIComponent(this.roomId!)}&playerId=${encodeURIComponent(this.playerId)}`;
     
-    console.log('Establishing WebSocket connection to:', wsUrl);
+    debugLog('Establishing WebSocket connection to:', wsUrl);
     this.websocket = new WebSocket(wsUrl);
 
     // Set up event handlers
     this.websocket.onopen = () => {
-      console.log('WebSocket connection opened successfully');
+      debugLog('WebSocket connection opened successfully');
       this.reconnectAttempts = 0;
     };
 
@@ -352,7 +359,7 @@ export class CloudflareRelayManager {
     };
 
     this.websocket.onclose = (event) => {
-      console.log('WebSocket connection closed:', event.code, event.reason);
+      debugLog('WebSocket connection closed:', event.code, event.reason);
       
       // Only handle connection loss if we're not already disconnecting
       if (this.connectionState !== 'disconnected') {
@@ -402,7 +409,7 @@ export class CloudflareRelayManager {
    * Establishes polling-based connection (fallback)
    */
   private async establishPollingConnection(): Promise<void> {
-    console.log('Establishing polling connection...');
+    debugLog('Establishing polling connection...');
     
     // Join the room
     const joinResponse = await fetch(`${RELAY_WORKER_ENDPOINT}/join`, {
@@ -419,7 +426,7 @@ export class CloudflareRelayManager {
     }
 
     const joinData = await joinResponse.json();
-    console.log('Joined room via polling:', joinData);
+    debugLog('Joined room via polling:', joinData);
 
     // Check if there are other players
     if (joinData.otherPlayers && joinData.otherPlayers.length > 0) {
@@ -487,7 +494,7 @@ export class CloudflareRelayManager {
   private handleServerMessage(data: any): void {
     switch (data.type) {
       case 'connected':
-        console.log('Relay connection confirmed');
+        debugLog('Relay connection confirmed');
         break;
 
       case 'peer_joined':
@@ -522,7 +529,7 @@ export class CloudflareRelayManager {
         break;
 
       default:
-        console.log('Unknown message type:', data.type);
+        debugLog('Unknown message type:', data.type);
     }
   }
 
@@ -534,7 +541,7 @@ export class CloudflareRelayManager {
       return; // Already handling disconnection
     }
 
-    console.log('Relay connection lost, attempting to reconnect...');
+    debugLog('Relay connection lost, attempting to reconnect...');
     
     // Close existing connection
     if (this.websocket) {
@@ -563,7 +570,7 @@ export class CloudflareRelayManager {
     this.stopReconnectTimer();
     
     this.reconnectAttempts++;
-    console.log(`Reconnection attempt ${this.reconnectAttempts}/${CloudflareRelayManager.MAX_RECONNECT_ATTEMPTS}`);
+    debugLog(`Reconnection attempt ${this.reconnectAttempts}/${CloudflareRelayManager.MAX_RECONNECT_ATTEMPTS}`);
 
     const delay = Math.min(
       CloudflareRelayManager.RECONNECT_DELAY_MS * this.reconnectAttempts,
@@ -595,7 +602,7 @@ export class CloudflareRelayManager {
       return;
     }
 
-    console.log(`Flushing ${this.messageQueue.length} queued messages`);
+    debugLog(`Flushing ${this.messageQueue.length} queued messages`);
     const messages = [...this.messageQueue];
     this.messageQueue = [];
 

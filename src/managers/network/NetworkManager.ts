@@ -40,7 +40,8 @@ import {
   WSS_TRACKERS,
   STUN_SERVER_ENDPOINT,
   STUN_FETCH_TIMEOUT_MS,
-  FORCE_RELAY_ONLY
+  FORCE_RELAY_ONLY,
+  NETWORK_DEBUG
 } from './constants';
 import { deserializeAction, serializeAction } from './serialization';
 import {
@@ -59,6 +60,13 @@ import type {
   TrysteroConfig
 } from './types';
 import { CloudflareRelayManager } from './CloudflareRelayManager';
+
+/** Debug logging helper - only logs when NETWORK_DEBUG is enabled */
+const debugLog = (...args: unknown[]) => {
+  if (NETWORK_DEBUG) {
+    console.log(...args);
+  }
+};
 
 
 /* ============================================
@@ -225,7 +233,7 @@ export class NetworkManager {
     // Return cached servers if still valid
     const now = Date.now();
     if (this.cachedStunServers && (now - this.stunServersCachedAt) < NetworkManager.STUN_CACHE_DURATION_MS) {
-      console.log('Using cached STUN servers');
+      debugLog('Using cached STUN servers');
       return this.buildStunOnlyConfig(this.cachedStunServers);
     }
 
@@ -262,7 +270,7 @@ export class NetworkManager {
       this.cachedStunServers = stunServers;
       this.stunServersCachedAt = now;
       
-      console.log(`Fetched ${stunServers.length} STUN servers from Twilio (TURN servers filtered out)`);
+      debugLog(`Fetched ${stunServers.length} STUN servers from Twilio (TURN servers filtered out)`);
       return this.buildStunOnlyConfig(stunServers);
       
     } catch (error) {
@@ -293,7 +301,7 @@ export class NetworkManager {
       ...twilioStunServers
     ];
     
-    console.log(`Using ${allStunServers.length} STUN servers for P2P connection`);
+    debugLog(`Using ${allStunServers.length} STUN servers for P2P connection`);
     
     return {
       iceServers: allStunServers,
@@ -312,7 +320,7 @@ export class NetworkManager {
    * @private
    */
   private getDefaultStunConfig(): RTCConfiguration {
-    console.log('Using default STUN-only configuration for direct P2P');
+    debugLog('Using default STUN-only configuration for direct P2P');
     
     return {
       iceServers: [
@@ -338,7 +346,7 @@ export class NetworkManager {
     setTimeout(() => {
       try {
         if (!this.room) {
-          console.log('📡 Direct P2P connection established');
+          debugLog('📡 Direct P2P connection established');
           return;
         }
         
@@ -347,13 +355,13 @@ export class NetworkManager {
         const peerIds = Object.keys(peers);
         
         if (peerIds.length === 0) {
-          console.log('📡 Direct P2P connection established (no peers found)');
+          debugLog('📡 Direct P2P connection established (no peers found)');
           return;
         }
         
         const pc = peers[peerIds[0]];
         if (!pc) {
-          console.log('📡 Direct P2P connection established (peer connection not available)');
+          debugLog('📡 Direct P2P connection established (peer connection not available)');
           return;
         }
         
@@ -365,18 +373,18 @@ export class NetworkManager {
               const localType = report.localCandidateType;
               const remoteType = report.remoteCandidateType;
               
-              console.log('✅ Direct P2P connection established');
-              console.log(`   Connection: local=${localType}, remote=${remoteType}`);
+              debugLog('✅ Direct P2P connection established');
+              debugLog(`   Connection: local=${localType}, remote=${remoteType}`);
             }
           });
           if (!found) {
-            console.log('📡 Direct P2P connection established (ICE negotiation in progress)');
+            debugLog('📡 Direct P2P connection established (ICE negotiation in progress)');
           }
         }).catch((e) => {
-          console.log('📡 Direct P2P connection established (stats error)', e);
+          debugLog('📡 Direct P2P connection established (stats error)', e);
         });
       } catch (e) {
-        console.log('📡 Direct P2P connection established (error checking type)', e);
+        debugLog('📡 Direct P2P connection established (error checking type)', e);
       }
     }, 5000);
   }
@@ -415,7 +423,7 @@ export class NetworkManager {
 
     // If FORCE_RELAY_ONLY is enabled, skip P2P and go directly to relay
     if (FORCE_RELAY_ONLY) {
-      console.log('FORCE_RELAY_ONLY enabled, using Cloudflare Worker relay directly');
+      debugLog('FORCE_RELAY_ONLY enabled, using Cloudflare Worker relay directly');
       await this.fallbackToRelay(roomId);
       return;
     }
@@ -427,7 +435,7 @@ export class NetworkManager {
       // Set timeout for P2P connection - if no peer joins, fallback to relay
       this.p2pTimeout = setTimeout(() => {
         if (this.connectionState === 'waiting' && !this.peerId) {
-          console.log('P2P connection timeout, falling back to Cloudflare Worker relay');
+          debugLog('P2P connection timeout, falling back to Cloudflare Worker relay');
           this.fallbackToRelay(roomId);
         }
       }, NetworkManager.P2P_TIMEOUT_MS);
@@ -551,8 +559,8 @@ export class NetworkManager {
       
       // Connect to relay
       await this.relayManager.connect(roomId);
-      console.log('✅ Connected via Cloudflare Worker relay');
-      console.log('Waiting for peer to join relay room:', roomId);
+      debugLog('✅ Connected via Cloudflare Worker relay');
+      debugLog('Waiting for peer to join relay room:', roomId);
       
     } catch (error) {
       this.setConnectionState('disconnected');
@@ -891,6 +899,7 @@ export class NetworkManager {
    * @param mode - Current focus/disturb mode
    * @param deckCount - Number of cards in deck
    * @param discardCount - Number of cards in discard
+   * @param handCount - Number of cards in hand
    * 
    * Used by: GameScene.updateUI()
    */
@@ -900,6 +909,7 @@ export class NetworkManager {
     mode: 'focus' | 'disturb',
     deckCount: number,
     discardCount: number,
+    handCount: number,
     energy: number,
     energyCap: number,
     disturb: number
@@ -911,6 +921,7 @@ export class NetworkManager {
       mode,
       deckCount,
       discardCount,
+      handCount,
       energy,
       energyCap,
       disturb
@@ -1190,12 +1201,12 @@ export class NetworkManager {
         this.rejoinAttempts++;
         
         if (this.rejoinAttempts >= NetworkManager.MAX_REJOIN_ATTEMPTS) {
-          console.log('Max rejoin attempts reached, stopping auto-rejoin');
+          debugLog('Max rejoin attempts reached, stopping auto-rejoin');
           this.stopRejoinInterval();
           return;
         }
         
-        console.log(`Auto-rejoin attempt ${this.rejoinAttempts}/${NetworkManager.MAX_REJOIN_ATTEMPTS}`);
+        debugLog(`Auto-rejoin attempt ${this.rejoinAttempts}/${NetworkManager.MAX_REJOIN_ATTEMPTS}`);
         this.performRejoin();
       } else if (this.peerId) {
         // Peer found, stop rejoining

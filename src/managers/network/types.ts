@@ -50,7 +50,7 @@ export type GameAction =
   | { type: 'REMATCH_ACCEPT' }
   | { type: 'REMATCH_DECLINE' }
   | { type: 'STATE_SYNC'; state: GameState }
-  | { type: 'PLAYER_STATS_SYNC'; clock: number; stopwatch: number; mode: 'focus' | 'disturb'; deckCount: number; discardCount: number; energy: number; energyCap: number; disturb: number }
+  | { type: 'PLAYER_STATS_SYNC'; clock: number; stopwatch: number; mode: 'focus' | 'disturb'; deckCount: number; discardCount: number; handCount: number; energy: number; energyCap: number; disturb: number }
   | { type: 'EVENT_LOG'; entries: EventLogEntry[] }
   | { type: 'PING'; timestamp: number }
   | { type: 'PONG'; timestamp: number }

@@ -273,6 +273,7 @@ export class CardHandComponent {
         if (accepted === false) {
           this.resetCardPosition(draggedCard);
           draggedCard.enableInteraction(true);
+          draggedCard.setVisible(true); // Ensure card is visible when rejected
         } else {
           draggedCard.setVisible(false);
         }
@@ -300,6 +301,7 @@ export class CardHandComponent {
         if (accepted === false) {
           this.resetCardPosition(draggedCard);
           draggedCard.enableInteraction(true);
+          draggedCard.setVisible(true); // Ensure card is visible when rejected
         } else {
           draggedCard.setVisible(false);
         }
@@ -330,6 +332,7 @@ export class CardHandComponent {
   private resetDraggingCard(): void {
     if (this.draggingCard) {
       this.resetCardPosition(this.draggingCard);
+      this.draggingCard.setVisible(true); // Ensure card is visible after reset
       this.draggingCard = null;
     }
   }
@@ -486,6 +489,13 @@ export class CardHandComponent {
       return;
     }
     
+    // Ensure all existing cards are visible before update (fix for hidden cards)
+    for (const card of this.cards) {
+      if (!card.getContainer().visible) {
+        card.setVisible(true);
+      }
+    }
+    
     const diff = this.findCardDifferences(cards);
     
     // If only additions or removals (no reordering), use incremental update
@@ -503,7 +513,10 @@ export class CardHandComponent {
           this.addCardIncremental(card);
         }
         this.cardData = [...cards];
-        this.repositionCards();
+        // Delay repositioning to allow removal animations to complete
+        this.scene.time.delayedCall(160, () => {
+          this.repositionCards();
+        });
         return;
       }
     }
@@ -564,6 +577,9 @@ export class CardHandComponent {
       this.hidePreview();
     }
     
+    // Remove from array immediately to prevent duplicate operations
+    this.cards.splice(index, 1);
+    
     // Animate card disappearing then destroy
     this.scene.tweens.add({
       targets: card.getContainer(),
@@ -577,9 +593,6 @@ export class CardHandComponent {
         card.destroy();
       }
     });
-    
-    // Remove from arrays immediately (position will be updated)
-    this.cards.splice(index, 1);
   }
 
   /**

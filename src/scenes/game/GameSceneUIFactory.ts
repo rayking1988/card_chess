@@ -12,7 +12,7 @@ import { EnergyBarComponent } from '../../components/EnergyBar';
 import { EventLogComponent } from '../../components/EventLog';
 import { FocusDisturbToggleComponent } from '../../components/FocusDisturbToggle';
 import { StopwatchComponent } from '../../components/Stopwatch';
-import { MAX_PILE_LAYERS } from './GameConstants';
+import { MAX_HAND_SIZE, MAX_PILE_LAYERS } from './GameConstants';
 import type { GameLayout } from './GameTypes';
 import { createImageButton, createPileStack } from './GameUIHelpers';
 import { hex } from '../../utils/colors';
@@ -237,17 +237,18 @@ export function createLeftPanel(this: GameScene, layout: GameLayout): void {
   const x = layout.leftPanelX;
   const deckScale = LEFT_PANEL_LAYOUT.DECK_SCALE * scale;
   const stackDepth = MAX_PILE_LAYERS;
+  const textDepth = stackDepth + 10;
 
   // === OPPONENT'S DECK (top) ===
   this.opponentDeckStack = createPileStack(this, x, layout.opponentDeckY, deckScale, stackDepth, 1);
 
   this.opponentDeckLabelText = this.add.text(x, layout.opponentDeckY - LEFT_PANEL_LAYOUT.LABEL_Y_OFFSET * scale, 'Opp Deck', {
     fontSize: `${UI_FACTORY.DECK_LABEL_FONT_SIZE * scale}px`, fontFamily: 'BoldPixels, Arial', color: '#cccccc'
-  }).setOrigin(0.5).setDepth(10);
+  }).setOrigin(0.5).setDepth(textDepth);
 
   this.opponentDeckCountText = this.add.text(x, layout.opponentDeckY + LEFT_PANEL_LAYOUT.COUNT_Y_OFFSET * scale, '60', {
     fontSize: `${UI_FACTORY.DECK_COUNT_FONT_SIZE * scale}px`, fontFamily: 'BoldPixels, Arial', color: '#ffffff'
-  }).setOrigin(0.5).setDepth(10);
+  }).setOrigin(0.5).setDepth(textDepth);
 
   // === OPPONENT'S DISCARD (below deck) ===
   // No pile stack needed - only the top card is displayed
@@ -255,11 +256,11 @@ export function createLeftPanel(this: GameScene, layout: GameLayout): void {
 
   this.opponentDiscardLabelText = this.add.text(x, layout.opponentDiscardY - LEFT_PANEL_LAYOUT.LABEL_Y_OFFSET * scale, 'Opp Discard', {
     fontSize: `${UI_FACTORY.DECK_LABEL_FONT_SIZE * scale}px`, fontFamily: 'BoldPixels, Arial', color: '#888888'
-  }).setOrigin(0.5).setDepth(10);
+  }).setOrigin(0.5).setDepth(textDepth);
 
   this.opponentDiscardCountText = this.add.text(x, layout.opponentDiscardY + LEFT_PANEL_LAYOUT.COUNT_Y_OFFSET * scale, '0', {
     fontSize: `${UI_FACTORY.DECK_COUNT_FONT_SIZE * scale}px`, fontFamily: 'BoldPixels, Arial', color: '#888888'
-  }).setOrigin(0.5).setDepth(10);
+  }).setOrigin(0.5).setDepth(textDepth);
 
   // === PLAYER'S DISCARD (above player deck) ===
   // No pile stack needed - only the top card is displayed
@@ -267,22 +268,22 @@ export function createLeftPanel(this: GameScene, layout: GameLayout): void {
 
   this.playerDiscardLabelText = this.add.text(x, layout.playerDiscardY - LEFT_PANEL_LAYOUT.LABEL_Y_OFFSET * scale, 'Your Discard', {
     fontSize: `${UI_FACTORY.DECK_LABEL_FONT_SIZE * scale}px`, fontFamily: 'BoldPixels, Arial', color: '#888888'
-  }).setOrigin(0.5).setDepth(10);
+  }).setOrigin(0.5).setDepth(textDepth);
 
   this.playerDiscardCountText = this.add.text(x, layout.playerDiscardY + LEFT_PANEL_LAYOUT.COUNT_Y_OFFSET * scale, '0', {
     fontSize: `${UI_FACTORY.DECK_COUNT_FONT_SIZE * scale}px`, fontFamily: 'BoldPixels, Arial', color: '#888888'
-  }).setOrigin(0.5).setDepth(10);
+  }).setOrigin(0.5).setDepth(textDepth);
 
   // === PLAYER'S DECK (bottom) ===
   this.playerDeckStack = createPileStack(this, x, layout.playerDeckY, deckScale, stackDepth, 1);
 
   this.playerDeckLabelText = this.add.text(x, layout.playerDeckY - LEFT_PANEL_LAYOUT.LABEL_Y_OFFSET * scale, 'Your Deck', {
     fontSize: `${UI_FACTORY.DECK_LABEL_FONT_SIZE * scale}px`, fontFamily: 'BoldPixels, Arial', color: '#cccccc'
-  }).setOrigin(0.5).setDepth(10);
+  }).setOrigin(0.5).setDepth(textDepth);
 
   this.playerDeckCountText = this.add.text(x, layout.playerDeckY + LEFT_PANEL_LAYOUT.COUNT_Y_OFFSET * scale, '60', {
     fontSize: `${UI_FACTORY.DECK_COUNT_FONT_SIZE * scale}px`, fontFamily: 'BoldPixels, Arial', color: '#ffffff'
-  }).setOrigin(0.5).setDepth(10);
+  }).setOrigin(0.5).setDepth(textDepth);
 
   positionLeftPanel.call(this, layout);
 }
@@ -296,20 +297,21 @@ export function createLeftPanel(this: GameScene, layout: GameLayout): void {
 export function createOpponentHand(this: GameScene, layout: GameLayout): void {
   this.opponentHandContainer = this.add.container(layout.opponentHandX, layout.opponentHandY);
   this.opponentHandContainer.setDepth(12);
+  const textDepth = 20 + MAX_HAND_SIZE;
 
   this.opponentHandLabelText = this.add.text(
     layout.opponentHandX,
     layout.opponentHandLabelY,
     'Opponent Hand',
     { fontSize: `${UI_FACTORY.HAND_LABEL_FONT_SIZE * layout.panelScale}px`, fontFamily: 'BoldPixels, Arial', color: '#cccccc' }
-  ).setOrigin(0.5).setDepth(12);
+  ).setOrigin(0.5).setDepth(textDepth);
 
   this.opponentHandCountText = this.add.text(
     layout.opponentHandX,
     layout.opponentHandCountY,
     '0',
     { fontSize: `${UI_FACTORY.HAND_LABEL_FONT_SIZE * layout.panelScale}px`, fontFamily: 'BoldPixels, Arial', color: '#ffffff' }
-  ).setOrigin(0.5).setDepth(12);
+  ).setOrigin(0.5).setDepth(textDepth);
 
   updateOpponentHandDisplay.call(this, this.opponentHandCount);
   positionOpponentHand.call(this, layout);
