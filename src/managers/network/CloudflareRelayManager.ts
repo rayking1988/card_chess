@@ -149,7 +149,6 @@ export class CloudflareRelayManager {
     this.peerId = null;
     this.reconnectAttempts = 0;
     this.messageQueue = [];
-    this.usingPolling = false;
     this.setConnectionState('disconnected');
   }
 
@@ -398,15 +397,11 @@ export class CloudflareRelayManager {
 
   /** Polling interval */
   private pollingInterval: ReturnType<typeof setInterval> | null = null;
-  
-  /** Whether using polling mode */
-  private usingPolling: boolean = false;
 
   /**
    * Starts polling for messages
    */
   private startPolling(): void {
-    this.usingPolling = true;
     this.stopPolling();
     
     this.pollingInterval = setInterval(async () => {
