@@ -39,7 +39,8 @@ import {
   PING_INTERVAL_MS,
   WSS_TRACKERS,
   STUN_SERVER_ENDPOINT,
-  STUN_FETCH_TIMEOUT_MS
+  STUN_FETCH_TIMEOUT_MS,
+  FORCE_RELAY_ONLY
 } from './constants';
 import { deserializeAction, serializeAction } from './serialization';
 import {
@@ -412,6 +413,13 @@ export class NetworkManager {
 
     this.setConnectionState('connecting');
 
+    // If FORCE_RELAY_ONLY is enabled, skip P2P and go directly to relay
+    if (FORCE_RELAY_ONLY) {
+      console.log('FORCE_RELAY_ONLY enabled, using Cloudflare Worker relay directly');
+      await this.fallbackToRelay(roomId);
+      return;
+    }
+
     try {
       // First, try direct P2P connection
       await this.tryP2PConnection(roomId);
@@ -514,6 +522,10 @@ export class NetworkManager {
       // Initialize relay manager
       this.relayManager = new CloudflareRelayManager();
       this.usingRelay = true;
+      
+      // IMPORTANT: Update localPlayerId to match the relay's player ID
+      // This ensures COLOR_ASSIGNMENT messages use consistent IDs
+      this.localPlayerId = this.relayManager.getPlayerId();
       
       // Set up relay callbacks
       this.relayManager.onConnectionStateChange((state) => {

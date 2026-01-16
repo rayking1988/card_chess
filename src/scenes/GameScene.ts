@@ -270,8 +270,8 @@ export class GameScene extends Phaser.Scene {
   public rightPanelBottomTint!: Phaser.GameObjects.Rectangle;
 
   /** Preview panel background for card preview */
-  public previewPanelBackground!: Phaser.GameObjects.Rectangle;
-  public previewPanelLabel!: Phaser.GameObjects.Text;
+  public previewPanelBackground: Phaser.GameObjects.Rectangle | null = null;
+  public previewPanelLabel: Phaser.GameObjects.Text | null = null;
   
   /* ----------------------------------------
    * Opponent Deck/Discard Display

@@ -58,3 +58,10 @@ export const STUN_FETCH_TIMEOUT_MS = 5000;
  * Used as fallback when direct P2P and STUN cannot establish connection
  */
 export const RELAY_WORKER_ENDPOINT = 'https://morning-queen-5cf3.rayking1988.workers.dev';
+
+/**
+ * Force relay-only mode for testing
+ * When true, skips P2P connection attempts and goes directly to Cloudflare Worker relay
+ * Set to false for production to prefer P2P connections
+ */
+export const FORCE_RELAY_ONLY = false;
