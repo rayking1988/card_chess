@@ -2,11 +2,11 @@
  * @fileoverview CloudflareRelayManager - Fallback communication via Cloudflare Worker
  * 
  * This module provides a fallback communication mechanism when direct P2P
- * connections fail. It uses a Cloudflare Worker as a relay server to
+ * connections fail. It uses a Cloudflare Worker with WebSockets to
  * transmit game actions between players.
  * 
  * Key Features:
- * - WebSocket-like communication via Server-Sent Events (SSE) and fetch
+ * - WebSocket-based real-time communication
  * - Room-based message routing
  * - Automatic reconnection on connection loss
  * - Message queuing during disconnections
@@ -33,13 +33,14 @@ interface RelayCallbacks {
  * CloudflareRelayManager - Fallback communication via Cloudflare Worker
  * 
  * When direct P2P connections fail, this manager provides reliable
- * communication through a Cloudflare Worker relay server.
+ * communication through a Cloudflare Worker relay server using WebSockets.
  * 
  * Connection Flow:
  * 1. Call connect(roomId) to join a relay room
- * 2. Listen for onPeerJoined when another player connects
- * 3. Use sendAction() to send game actions
- * 4. Receive actions via onAction callback
+ * 2. Establish WebSocket connection to the worker
+ * 3. Listen for onPeerJoined when another player connects
+ * 4. Use sendAction() to send game actions
+ * 5. Receive actions via onAction callback
  * 
  * @example
  * const relay = new CloudflareRelayManager();
@@ -71,8 +72,8 @@ export class CloudflareRelayManager {
   /** Event callbacks */
   private callbacks: RelayCallbacks = {};
   
-  /** Server-Sent Events connection for receiving messages */
-  private eventSource: EventSource | null = null;
+  /** WebSocket connection for real-time communication */
+  private websocket: WebSocket | null = null;
   
   /** Message queue for when disconnected */
   private messageQueue: GameAction[] = [];
@@ -80,8 +81,8 @@ export class CloudflareRelayManager {
   /** Reconnection timer */
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   
-  /** Heartbeat interval */
-  private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+  /** Ping interval for connection health */
+  private pingInterval: ReturnType<typeof setInterval> | null = null;
   
   /** Reconnection attempt count */
   private reconnectAttempts: number = 0;
@@ -92,8 +93,8 @@ export class CloudflareRelayManager {
   /** Reconnection delay (ms) */
   private static readonly RECONNECT_DELAY_MS = 3000;
   
-  /** Heartbeat interval (ms) */
-  private static readonly HEARTBEAT_INTERVAL_MS = 30000;
+  /** Ping interval (ms) */
+  private static readonly PING_INTERVAL_MS = 30000;
 
   /**
    * Creates a new CloudflareRelayManager instance
@@ -123,7 +124,7 @@ export class CloudflareRelayManager {
     try {
       await this.establishConnection();
       this.setConnectionState('waiting');
-      this.startHeartbeat();
+      this.startPing();
     } catch (error) {
       this.setConnectionState('disconnected');
       this.callbacks.onError?.(error instanceof Error ? error : new Error(String(error)));
@@ -135,12 +136,12 @@ export class CloudflareRelayManager {
    * Disconnects from the relay room
    */
   disconnect(): void {
-    this.stopHeartbeat();
+    this.stopPing();
     this.stopReconnectTimer();
     
-    if (this.eventSource) {
-      this.eventSource.close();
-      this.eventSource = null;
+    if (this.websocket) {
+      this.websocket.close();
+      this.websocket = null;
     }
     
     this.roomId = null;
@@ -162,25 +163,25 @@ export class CloudflareRelayManager {
       return;
     }
 
-    try {
-      const response = await fetch(`${RELAY_WORKER_ENDPOINT}/send`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          roomId: this.roomId,
-          senderId: this.playerId,
-          targetId: this.peerId,
-          action
-        })
-      });
+    if (!this.websocket || this.websocket.readyState !== WebSocket.OPEN) {
+      console.warn('WebSocket not ready, queuing action');
+      this.messageQueue.push(action);
+      return;
+    }
 
-      if (!response.ok) {
-        throw new Error(`Failed to send action: ${response.status}`);
-      }
+    try {
+      console.log('Sending action via relay:', action.type);
+      
+      const message = {
+        type: 'send_action',
+        targetId: this.peerId,
+        action
+      };
+      
+      this.websocket.send(JSON.stringify(message));
+      console.log('Action sent successfully via relay');
     } catch (error) {
-      console.error('Failed to send action:', error);
+      console.error('Failed to send action via relay:', error);
       this.messageQueue.push(action);
       
       // Try to reconnect if send fails
@@ -247,71 +248,78 @@ export class CloudflareRelayManager {
   }
 
   /**
-   * Establishes the SSE connection to the relay server
+   * Establishes the WebSocket connection to the relay server
    */
   private async establishConnection(): Promise<void> {
     if (!this.roomId) {
       throw new Error('No room ID set');
     }
 
-    // First, join the room
-    const joinResponse = await fetch(`${RELAY_WORKER_ENDPOINT}/join`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        roomId: this.roomId,
-        playerId: this.playerId
-      })
-    });
+    // Create WebSocket URL
+    const wsUrl = `${RELAY_WORKER_ENDPOINT.replace('https://', 'wss://').replace('http://', 'ws://')}/ws?roomId=${encodeURIComponent(this.roomId)}&playerId=${encodeURIComponent(this.playerId)}`;
+    
+    console.log('Establishing WebSocket connection to:', wsUrl);
+    this.websocket = new WebSocket(wsUrl);
 
-    if (!joinResponse.ok) {
-      throw new Error(`Failed to join room: ${joinResponse.status}`);
-    }
-
-    // Then establish SSE connection for receiving messages
-    const sseUrl = `${RELAY_WORKER_ENDPOINT}/listen?roomId=${encodeURIComponent(this.roomId)}&playerId=${encodeURIComponent(this.playerId)}`;
-    this.eventSource = new EventSource(sseUrl);
-
-    this.eventSource.onopen = () => {
-      console.log('Relay connection established');
+    // Set up event handlers
+    this.websocket.onopen = () => {
+      console.log('WebSocket connection opened successfully');
       this.reconnectAttempts = 0;
     };
 
-    this.eventSource.onmessage = (event) => {
+    this.websocket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         this.handleServerMessage(data);
       } catch (error) {
-        console.error('Failed to parse server message:', error);
+        console.error('Failed to parse server message:', error, 'Raw data:', event.data);
       }
     };
 
-    this.eventSource.onerror = () => {
-      console.error('Relay connection error');
-      this.handleConnectionLoss();
+    this.websocket.onclose = (event) => {
+      console.log('WebSocket connection closed:', event.code, event.reason);
+      
+      // Only handle connection loss if we're not already disconnecting
+      if (this.connectionState !== 'disconnected') {
+        this.handleConnectionLoss();
+      }
     };
 
-    // Wait for connection to be established
-    await new Promise<void>((resolve, reject) => {
+    this.websocket.onerror = (error) => {
+      console.error('WebSocket connection error:', error);
+    };
+
+    // Wait for connection to be established with timeout
+    return new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => {
-        reject(new Error('Connection timeout'));
+        if (this.websocket) {
+          this.websocket.close();
+          this.websocket = null;
+        }
+        reject(new Error('WebSocket connection timeout'));
       }, 10000);
 
       const checkConnection = () => {
-        if (this.eventSource?.readyState === EventSource.OPEN) {
+        if (!this.websocket) {
+          clearTimeout(timeout);
+          reject(new Error('WebSocket was closed'));
+          return;
+        }
+
+        if (this.websocket.readyState === WebSocket.OPEN) {
           clearTimeout(timeout);
           resolve();
-        } else if (this.eventSource?.readyState === EventSource.CLOSED) {
+        } else if (this.websocket.readyState === WebSocket.CLOSED) {
           clearTimeout(timeout);
-          reject(new Error('Connection failed'));
+          reject(new Error('WebSocket connection failed to open'));
         } else {
+          // Still connecting, check again
           setTimeout(checkConnection, 100);
         }
       };
 
-      checkConnection();
+      // Start checking after a small delay
+      setTimeout(checkConnection, 100);
     });
   }
 
@@ -320,6 +328,10 @@ export class CloudflareRelayManager {
    */
   private handleServerMessage(data: any): void {
     switch (data.type) {
+      case 'connected':
+        console.log('Relay connection confirmed');
+        break;
+
       case 'peer_joined':
         if (data.peerId !== this.playerId) {
           this.peerId = data.peerId;
@@ -343,9 +355,16 @@ export class CloudflareRelayManager {
         }
         break;
 
+      case 'pong':
+        // Ping response received - connection is alive
+        break;
+
       case 'error':
         this.callbacks.onError?.(new Error(data.message));
         break;
+
+      default:
+        console.log('Unknown message type:', data.type);
     }
   }
 
@@ -358,11 +377,21 @@ export class CloudflareRelayManager {
     }
 
     console.log('Relay connection lost, attempting to reconnect...');
+    
+    // Close existing connection
+    if (this.websocket) {
+      this.websocket.close();
+      this.websocket = null;
+    }
+    
     this.setConnectionState('connecting');
 
-    if (this.eventSource) {
-      this.eventSource.close();
-      this.eventSource = null;
+    // Don't attempt reconnection if we've exceeded max attempts
+    if (this.reconnectAttempts >= CloudflareRelayManager.MAX_RECONNECT_ATTEMPTS) {
+      console.error('Max reconnection attempts reached, giving up');
+      this.setConnectionState('disconnected');
+      this.callbacks.onError?.(new Error('Connection lost and could not reconnect'));
+      return;
     }
 
     this.attemptReconnection();
@@ -372,26 +401,26 @@ export class CloudflareRelayManager {
    * Attempts to reconnect to the relay server
    */
   private attemptReconnection(): void {
-    if (this.reconnectAttempts >= CloudflareRelayManager.MAX_RECONNECT_ATTEMPTS) {
-      console.error('Max reconnection attempts reached');
-      this.setConnectionState('disconnected');
-      this.callbacks.onError?.(new Error('Connection lost and could not reconnect'));
-      return;
-    }
-
+    // Clear any existing reconnect timer
+    this.stopReconnectTimer();
+    
     this.reconnectAttempts++;
     console.log(`Reconnection attempt ${this.reconnectAttempts}/${CloudflareRelayManager.MAX_RECONNECT_ATTEMPTS}`);
 
     this.reconnectTimer = setTimeout(async () => {
       try {
-        if (this.roomId) {
+        if (this.roomId && this.connectionState !== 'disconnected') {
           await this.establishConnection();
           this.setConnectionState(this.peerId ? 'connected' : 'waiting');
           this.flushMessageQueue();
         }
       } catch (error) {
         console.error('Reconnection failed:', error);
-        this.attemptReconnection();
+        
+        // Only attempt another reconnection if we haven't been disconnected
+        if (this.connectionState !== 'disconnected') {
+          this.handleConnectionLoss();
+        }
       }
     }, CloudflareRelayManager.RECONNECT_DELAY_MS);
   }
@@ -430,37 +459,28 @@ export class CloudflareRelayManager {
   }
 
   /**
-   * Starts the heartbeat to keep connection alive
+   * Starts the ping to keep connection alive
    */
-  private startHeartbeat(): void {
-    this.stopHeartbeat();
-    this.heartbeatInterval = setInterval(async () => {
-      if (this.roomId) {
+  private startPing(): void {
+    this.stopPing();
+    this.pingInterval = setInterval(() => {
+      if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
         try {
-          await fetch(`${RELAY_WORKER_ENDPOINT}/heartbeat`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              roomId: this.roomId,
-              playerId: this.playerId
-            })
-          });
+          this.websocket.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
         } catch (error) {
-          console.error('Heartbeat failed:', error);
+          console.error('Failed to send ping:', error);
         }
       }
-    }, CloudflareRelayManager.HEARTBEAT_INTERVAL_MS);
+    }, CloudflareRelayManager.PING_INTERVAL_MS);
   }
 
   /**
-   * Stops the heartbeat interval
+   * Stops the ping interval
    */
-  private stopHeartbeat(): void {
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-      this.heartbeatInterval = null;
+  private stopPing(): void {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
     }
   }
 

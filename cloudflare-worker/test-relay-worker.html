@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Relay Worker (WebSocket)</title>
+</head>
+<body>
+    <h1>Relay Worker Test (WebSocket)</h1>
+    <div id="status">Testing...</div>
+    <div id="log"></div>
+
+    <script>
+        const WORKER_URL = 'https://morning-queen-5cf3.rayking1988.workers.dev'; // Replace with your worker URL
+        const log = document.getElementById('log');
+        const status = document.getElementById('status');
+
+        function addLog(message) {
+            const div = document.createElement('div');
+            div.textContent = `${new Date().toISOString()}: ${message}`;
+            log.appendChild(div);
+            console.log(message);
+        }
+
+        async function testWorker() {
+            try {
+                // Test 1: Basic connectivity
+                addLog('Testing basic connectivity...');
+                const response = await fetch(WORKER_URL);
+                if (response.ok) {
+                    const text = await response.text();
+                    addLog(`✅ Basic connectivity: ${text}`);
+                } else {
+                    addLog(`❌ Basic connectivity failed: ${response.status}`);
+                    return;
+                }
+
+                // Test 2: WebSocket connection
+                addLog('Testing WebSocket connection...');
+                const wsUrl = `${WORKER_URL.replace('https://', 'wss://').replace('http://', 'ws://')}/ws?roomId=test-room&playerId=test-player-1`;
+                addLog(`WebSocket URL: ${wsUrl}`);
+                
+                const websocket = new WebSocket(wsUrl);
+
+                websocket.onopen = () => {
+                    addLog('✅ WebSocket connection opened');
+                    status.textContent = 'Connected';
+                    
+                    // Send a ping message
+                    websocket.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
+                };
+
+                websocket.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        addLog(`📨 WebSocket message: ${JSON.stringify(data)}`);
+                    } catch (error) {
+                        addLog(`📨 WebSocket raw message: ${event.data}`);
+                    }
+                };
+
+                websocket.onclose = (event) => {
+                    addLog(`🔌 WebSocket connection closed: ${event.code} - ${event.reason}`);
+                    status.textContent = 'Disconnected';
+                };
+
+                websocket.onerror = (error) => {
+                    addLog(`❌ WebSocket error: ${error}`);
+                    status.textContent = 'WebSocket Error';
+                };
+
+                // Close after 10 seconds
+                setTimeout(() => {
+                    if (websocket.readyState === WebSocket.OPEN) {
+                        websocket.close();
+                        addLog('🔌 WebSocket connection closed by test');
+                    }
+                    status.textContent = 'Test completed';
+                }, 10000);
+
+            } catch (error) {
+                addLog(`❌ Test failed: ${error.message}`);
+                status.textContent = 'Test failed';
+            }
+        }
+
+        // Start test
+        testWorker();
+    </script>
+</body>
+</html>

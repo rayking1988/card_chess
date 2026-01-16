@@ -2,27 +2,27 @@
  * Cloudflare Worker for Card Chess P2P Relay
  * 
  * This worker provides a fallback communication mechanism when direct P2P
- * connections fail. It acts as a relay server to transmit game actions
- * between players using Server-Sent Events (SSE) and HTTP POST requests.
+ * connections fail. It uses WebSockets for real-time bidirectional communication
+ * between players.
  * 
  * Features:
  * - Room-based message routing
- * - Server-Sent Events for real-time message delivery
+ * - WebSocket connections for real-time message delivery
  * - Automatic cleanup of inactive rooms
  * - CORS support for web applications
  * - Message queuing for offline players
+ * - Rate limiting to prevent abuse
  * 
  * Endpoints:
- * - POST /join - Join a room
- * - GET /listen - SSE endpoint for receiving messages
- * - POST /send - Send a message to a peer
+ * - GET /ws - WebSocket endpoint for real-time communication
+ * - POST /send - HTTP fallback for sending messages
  * - POST /heartbeat - Keep connection alive
+ * - GET /status - Server status
  * 
  * Deploy to Cloudflare Workers:
  * 1. Create a new worker at workers.cloudflare.com
  * 2. Replace the default code with this script
  * 3. Deploy and note the worker URL
- * 4. Update RELAY_WORKER_ENDPOINT in constants.ts
  */
 
 // Room data structure
@@ -30,7 +30,7 @@ class Room {
   constructor(roomId) {
     this.roomId = roomId;
     this.players = new Map(); // playerId -> { lastSeen, messageQueue }
-    this.connections = new Map(); // playerId -> WritableStream for SSE
+    this.connections = new Map(); // playerId -> WebSocket
     this.createdAt = Date.now();
   }
 
@@ -69,8 +69,8 @@ class Room {
     }
   }
 
-  addConnection(playerId, stream) {
-    this.connections.set(playerId, stream);
+  addConnection(playerId, websocket) {
+    this.connections.set(playerId, websocket);
     
     // Send queued messages
     const player = this.players.get(playerId);
@@ -80,22 +80,32 @@ class Room {
       }
       player.messageQueue = [];
     }
+
+    // Send connection confirmation
+    this.sendToPlayer(playerId, { type: 'connected' });
   }
 
   removeConnection(playerId) {
-    this.connections.delete(playerId);
+    const ws = this.connections.get(playerId);
+    if (ws) {
+      try {
+        ws.close();
+      } catch (e) {
+        // WebSocket might already be closed
+      }
+      this.connections.delete(playerId);
+    }
   }
 
   sendToPlayer(playerId, message) {
-    const stream = this.connections.get(playerId);
-    if (stream) {
+    const ws = this.connections.get(playerId);
+    if (ws) {
       try {
-        const encoder = new TextEncoder();
-        const data = `data: ${JSON.stringify(message)}\n\n`;
-        stream.write(encoder.encode(data));
+        ws.send(JSON.stringify(message));
         return true;
       } catch (error) {
-        console.error('Failed to send message to player:', error);
+        console.error(`Failed to send message to player ${playerId}:`, error);
+        // Remove the failed connection
         this.connections.delete(playerId);
         return false;
       }
@@ -104,7 +114,7 @@ class Room {
       const player = this.players.get(playerId);
       if (player) {
         player.messageQueue.push(message);
-        // Limit queue size
+        // Limit queue size to prevent memory issues
         if (player.messageQueue.length > 50) {
           player.messageQueue.shift();
         }
@@ -162,6 +172,46 @@ class Room {
   }
 }
 
+// Rate limiting to prevent abuse
+const rateLimits = new Map(); // IP -> { count, resetTime }
+const RATE_LIMIT_WINDOW = 60000; // 1 minute
+const RATE_LIMIT_MAX_REQUESTS = 100; // Max requests per minute per IP
+
+function checkRateLimit(request) {
+  const clientIP = request.headers.get('CF-Connecting-IP') || 
+                   request.headers.get('X-Forwarded-For') || 
+                   'unknown';
+  
+  const now = Date.now();
+  const limit = rateLimits.get(clientIP);
+  
+  if (!limit || now > limit.resetTime) {
+    // Reset or create new limit
+    rateLimits.set(clientIP, {
+      count: 1,
+      resetTime: now + RATE_LIMIT_WINDOW
+    });
+    return true;
+  }
+  
+  if (limit.count >= RATE_LIMIT_MAX_REQUESTS) {
+    return false; // Rate limited
+  }
+  
+  limit.count++;
+  return true;
+}
+
+// Clean up old rate limit entries periodically
+function cleanupRateLimits() {
+  const now = Date.now();
+  for (const [ip, limit] of rateLimits) {
+    if (now > limit.resetTime) {
+      rateLimits.delete(ip);
+    }
+  }
+}
+
 // Global room storage
 const rooms = new Map();
 
@@ -202,39 +252,8 @@ function cleanupRooms() {
   }
 }
 
-// Handle join room request
-async function handleJoin(request) {
-  try {
-    const { roomId, playerId } = await request.json();
-    
-    if (!roomId || !playerId) {
-      return new Response(JSON.stringify({ error: 'Missing roomId or playerId' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
-
-    const room = getRoom(roomId);
-    room.addPlayer(playerId);
-    room.updatePlayerActivity(playerId);
-
-    return new Response(JSON.stringify({ 
-      success: true,
-      playerCount: room.getPlayerCount()
-    }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
-  } catch (error) {
-    return new Response(JSON.stringify({ error: 'Invalid request' }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
-  }
-}
-
-// Handle SSE listen request
-async function handleListen(request) {
+// Handle WebSocket upgrade
+function handleWebSocket(request) {
   const url = new URL(request.url);
   const roomId = url.searchParams.get('roomId');
   const playerId = url.searchParams.get('playerId');
@@ -246,42 +265,69 @@ async function handleListen(request) {
     });
   }
 
+  // Create WebSocket pair
+  const webSocketPair = new WebSocketPair();
+  const [client, server] = Object.values(webSocketPair);
+
+  // Accept the WebSocket connection
+  server.accept();
+
   const room = getRoom(roomId);
   room.addPlayer(playerId);
   room.updatePlayerActivity(playerId);
+  room.addConnection(playerId, server);
 
-  // Create SSE stream
-  const { readable, writable } = new TransformStream();
-  const writer = writable.getWriter();
-  const encoder = new TextEncoder();
+  console.log(`Player ${playerId} connected to room ${roomId} via WebSocket`);
 
-  // Set up SSE headers
-  const headers = {
-    ...corsHeaders,
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive',
-  };
-
-  // Send initial connection message
-  writer.write(encoder.encode('data: {"type":"connected"}\n\n'));
-
-  // Add connection to room
-  room.addConnection(playerId, writer);
-
-  // Handle client disconnect
-  request.signal?.addEventListener('abort', () => {
-    room.removeConnection(playerId);
-    writer.close();
+  // Handle WebSocket messages
+  server.addEventListener('message', (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      
+      // Update player activity
+      room.updatePlayerActivity(playerId);
+      
+      // Handle different message types
+      switch (data.type) {
+        case 'ping':
+          server.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
+          break;
+          
+        case 'send_action':
+          if (data.targetId && data.action) {
+            room.sendMessage(playerId, data.targetId, data.action);
+          }
+          break;
+          
+        default:
+          console.log(`Unknown message type from ${playerId}:`, data.type);
+      }
+    } catch (error) {
+      console.error(`Error handling WebSocket message from ${playerId}:`, error);
+    }
   });
 
-  return new Response(readable, {
-    status: 200,
-    headers
+  // Handle WebSocket close
+  server.addEventListener('close', () => {
+    console.log(`Player ${playerId} disconnected from room ${roomId}`);
+    room.removeConnection(playerId);
+    room.removePlayer(playerId);
+  });
+
+  // Handle WebSocket error
+  server.addEventListener('error', (error) => {
+    console.error(`WebSocket error for player ${playerId}:`, error);
+    room.removeConnection(playerId);
+    room.removePlayer(playerId);
+  });
+
+  return new Response(null, {
+    status: 101,
+    webSocket: client,
   });
 }
 
-// Handle send message request
+// Handle send message request (HTTP fallback)
 async function handleSend(request) {
   try {
     const { roomId, senderId, targetId, action } = await request.json();
@@ -370,6 +416,14 @@ function handleStatus() {
 // Main request handler
 export default {
   async fetch(request, env, ctx) {
+    // Check rate limiting first
+    if (!checkRateLimit(request)) {
+      return new Response(JSON.stringify({ error: 'Rate limit exceeded' }), {
+        status: 429,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
     // Handle CORS preflight
     const corsResponse = handleCORS(request);
     if (corsResponse) return corsResponse;
@@ -377,22 +431,17 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    // Clean up rooms periodically
-    if (Math.random() < 0.01) { // 1% chance per request
+    // Clean up rooms and rate limits periodically (1% chance per request)
+    if (Math.random() < 0.01) {
       cleanupRooms();
+      cleanupRateLimits();
     }
 
     try {
       switch (path) {
-        case '/join':
-          if (request.method === 'POST') {
-            return await handleJoin(request);
-          }
-          break;
-
-        case '/listen':
-          if (request.method === 'GET') {
-            return await handleListen(request);
+        case '/ws':
+          if (request.headers.get('Upgrade') === 'websocket') {
+            return handleWebSocket(request);
           }
           break;
 
@@ -415,7 +464,7 @@ export default {
           break;
 
         case '/':
-          return new Response('Card Chess Relay Server - Running', {
+          return new Response('Card Chess Relay Server - Running (WebSocket)', {
             status: 200,
             headers: { ...corsHeaders, 'Content-Type': 'text/plain' }
           });

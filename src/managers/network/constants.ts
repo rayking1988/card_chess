@@ -56,5 +56,7 @@ export const STUN_FETCH_TIMEOUT_MS = 5000;
 /**
  * Cloudflare Worker endpoint for data relay when P2P fails
  * Used as fallback when direct P2P and STUN cannot establish connection
+ * 
+ * IMPORTANT: Replace this with your actual deployed worker URL
  */
-export const RELAY_WORKER_ENDPOINT = 'https://morning-queen-5cf3.rayking1988.workers.dev';
+export const RELAY_WORKER_ENDPOINT = 'https://your-relay-worker.your-subdomain.workers.dev';
