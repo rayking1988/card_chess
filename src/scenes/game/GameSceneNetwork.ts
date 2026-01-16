@@ -168,12 +168,45 @@ export function handleOpponentStatsSync(
 }
 
 /**
- * Send local player stats to opponent
+ * Send local player stats to opponent (throttled to reduce bandwidth)
+ * Only sends if values changed or 500ms elapsed since last send
  */
 export function sendLocalPlayerStats(this: GameScene): void {
   if (!this.networkManager) return;
 
   const localPlayer = this.gameStateManager.getPlayer(this.localColor);
+  const now = Date.now();
+  
+  // Throttle: only send if 500ms elapsed since last send
+  const STATS_THROTTLE_MS = 500;
+  if (this.lastStatsSendTime && (now - this.lastStatsSendTime) < STATS_THROTTLE_MS) {
+    // Check if any values actually changed
+    const lastStats = this.lastSentStats;
+    if (lastStats &&
+        lastStats.clock === localPlayer.clock &&
+        lastStats.stopwatch === localPlayer.stopwatch &&
+        lastStats.mode === localPlayer.mode &&
+        lastStats.deckCount === localPlayer.deck.length &&
+        lastStats.discardCount === localPlayer.discard.length &&
+        lastStats.energy === localPlayer.energy &&
+        lastStats.energyCap === localPlayer.energyCap &&
+        lastStats.disturb === localPlayer.disturbTags) {
+      return; // No changes, skip send
+    }
+  }
+  
+  this.lastStatsSendTime = now;
+  this.lastSentStats = {
+    clock: localPlayer.clock,
+    stopwatch: localPlayer.stopwatch,
+    mode: localPlayer.mode,
+    deckCount: localPlayer.deck.length,
+    discardCount: localPlayer.discard.length,
+    energy: localPlayer.energy,
+    energyCap: localPlayer.energyCap,
+    disturb: localPlayer.disturbTags
+  };
+  
   this.networkManager.sendPlayerStats(
     localPlayer.clock,
     localPlayer.stopwatch,

@@ -13,8 +13,8 @@ export const RECONNECT_TIMEOUT_MS = 30000;
 /** Timeout for peer inactivity before considering disconnected (ms) */
 export const PEER_TIMEOUT_MS = 60000;
 
-/** Interval between keep-alive pings (ms) */
-export const PING_INTERVAL_MS = 5000;
+/** Interval between keep-alive pings (ms) - 10s for turn-based game */
+export const PING_INTERVAL_MS = 10000;
 
 /**
  * WebSocket Secure (wss://) BitTorrent trackers for HTTPS compatibility
@@ -30,9 +30,9 @@ export const WSS_TRACKERS = [
 ];
 
 /**
- * Default WebRTC configuration with public STUN servers
- * STUN servers help establish P2P connections through NAT
- * Used as fallback when Twilio ICE servers are unavailable
+ * Default WebRTC configuration with public STUN servers only
+ * STUN servers help establish direct P2P connections through NAT
+ * No TURN servers are used - fallback to Cloudflare Worker if P2P fails
  */
 export const DEFAULT_RTC_CONFIG: RTCConfiguration = {
   iceServers: [
@@ -45,10 +45,16 @@ export const DEFAULT_RTC_CONFIG: RTCConfiguration = {
 };
 
 /**
- * Cloudflare Worker endpoint for fetching Twilio ICE servers
- * Returns temporary TURN credentials (valid ~24 hours)
+ * Cloudflare Worker endpoint for fetching STUN server info
+ * Returns STUN servers from Twilio (TURN servers will be filtered out)
  */
-export const ICE_SERVER_ENDPOINT = 'https://cold-scene-fe82.rayking1988.workers.dev/';
+export const STUN_SERVER_ENDPOINT = 'https://cold-scene-fe82.rayking1988.workers.dev';
 
-/** Timeout for ICE server fetch (ms) */
-export const ICE_FETCH_TIMEOUT_MS = 5000;
+/** Timeout for STUN server fetch (ms) */
+export const STUN_FETCH_TIMEOUT_MS = 5000;
+
+/**
+ * Cloudflare Worker endpoint for data relay when P2P fails
+ * Used as fallback when direct P2P and STUN cannot establish connection
+ */
+export const RELAY_WORKER_ENDPOINT = 'https://morning-queen-5cf3.rayking1988.workers.dev';

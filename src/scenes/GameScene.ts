@@ -505,6 +505,21 @@ export class GameScene extends Phaser.Scene {
   
   /** Pending opponent discard count from stats sync (applied when animation ends) */
   public pendingOpponentDiscardCount: number | null = null;
+  
+  /** Timestamp of last stats send (for throttling) */
+  public lastStatsSendTime: number = 0;
+  
+  /** Last sent stats values (for change detection) */
+  public lastSentStats: {
+    clock: number;
+    stopwatch: number;
+    mode: 'focus' | 'disturb';
+    deckCount: number;
+    discardCount: number;
+    energy: number;
+    energyCap: number;
+    disturb: number;
+  } | null = null;
 
   /* ----------------------------------------
    * Debug Overlay

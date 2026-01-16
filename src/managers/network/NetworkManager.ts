@@ -1,27 +1,33 @@
 /**
- * @fileoverview NetworkManager - P2P networking using Trystero
+ * @fileoverview NetworkManager - P2P networking with Cloudflare Worker fallback
  * 
- * This module handles all peer-to-peer networking for Card Chess using
- * the Trystero library. It manages room joining, peer connections,
- * color assignment, and game action messaging.
+ * This module handles all peer-to-peer networking for Card Chess with
+ * automatic fallback to Cloudflare Worker relay when P2P fails.
  * 
  * Key Features:
- * - WebRTC-based P2P connections via BitTorrent trackers
+ * - Primary: Direct P2P connections via WebRTC with STUN servers only
+ * - Fallback: Cloudflare Worker relay when P2P connection fails
  * - Automatic host determination (lower peer ID is host)
  * - Random color assignment by host
- * - Keep-alive pings to detect disconnections
+ * - Keep-alive pings for P2P, heartbeat for relay
  * - Auto-rejoin for faster peer discovery
  * - State synchronization for desync recovery
  * 
+ * Connection Strategy:
+ * 1. Attempt direct P2P connection using STUN servers only
+ * 2. If no peer found within 15 seconds, fallback to Cloudflare Worker relay
+ * 3. Relay provides reliable communication when P2P is blocked
+ * 
  * Requirements addressed:
- * - 1.3: Connect to Trystero P2P network
- * - 1.4: Establish direct WebRTC connection
+ * - 1.3: Connect to P2P network (Trystero) or relay fallback
+ * - 1.4: Establish direct WebRTC connection or relay connection
  * - 1.5: Start new game with random color assignment
  * - 12.4: Sync event log between players
  * 
  * @module managers/network/NetworkManager
  * @requires trystero
  * @requires ../GameStateManager
+ * @requires ./CloudflareRelayManager
  */
 
 import { joinRoom, Room, selfId } from 'trystero';
@@ -29,11 +35,12 @@ import type { GameState, PlayerColor } from '../GameStateManager';
 import {
   DEFAULT_APP_ID,
   DEFAULT_RTC_CONFIG,
-  ICE_FETCH_TIMEOUT_MS,
-  ICE_SERVER_ENDPOINT,
   PEER_TIMEOUT_MS,
   PING_INTERVAL_MS,
-  WSS_TRACKERS
+  WSS_TRACKERS,
+  RELAY_WORKER_ENDPOINT,
+  STUN_SERVER_ENDPOINT,
+  STUN_FETCH_TIMEOUT_MS
 } from './constants';
 import { deserializeAction, serializeAction } from './serialization';
 import {
@@ -51,6 +58,7 @@ import type {
   NetworkMessage,
   TrysteroConfig
 } from './types';
+import { CloudflareRelayManager } from './CloudflareRelayManager';
 
 
 /* ============================================
@@ -59,21 +67,20 @@ import type {
  */
 
 /**
- * NetworkManager - Manages P2P connections via Trystero
+ * NetworkManager - Manages P2P connections with Cloudflare Worker fallback
  * 
- * This class handles all networking for the game:
- * - Joining/leaving matchmaking rooms
- * - Establishing WebRTC connections with peers
- * - Sending and receiving game actions
- * - Managing connection state and timeouts
- * - Synchronizing game state between players
+ * This class handles all networking for the game with a two-tier approach:
+ * 1. Primary: Direct P2P connections via Trystero (WebRTC + STUN)
+ * 2. Fallback: Cloudflare Worker relay when P2P fails
  * 
  * Connection Flow:
  * 1. Call joinRoom(roomId) to join a matchmaking room
- * 2. Wait for onPeerJoined callback when another player joins
- * 3. Host (lower peer ID) assigns colors randomly
- * 4. onColorAssigned callback fires with local player's color
- * 5. Game can begin - use send* methods to communicate
+ * 2. First attempts direct P2P connection using STUN servers
+ * 3. If no peer found within 15 seconds, falls back to Cloudflare Worker relay
+ * 4. Wait for onPeerJoined callback when another player joins
+ * 5. Host (lower peer ID) assigns colors randomly
+ * 6. onColorAssigned callback fires with local player's color
+ * 7. Game can begin - use send* methods to communicate
  * 
  * @example
  * const network = new NetworkManager();
@@ -161,14 +168,26 @@ export class NetworkManager {
   /** Number of color request attempts made */
   private colorRequestAttempts: number = 0;
   
-  /** Cached ICE servers from Twilio */
-  private cachedIceServers: RTCIceServer[] | null = null;
+  /** Cloudflare Worker relay manager for fallback communication */
+  private relayManager: CloudflareRelayManager | null = null;
   
-  /** Timestamp when ICE servers were cached */
-  private iceServersCachedAt: number = 0;
+  /** Whether currently using relay fallback */
+  private usingRelay: boolean = false;
   
-  /** ICE servers cache duration (1 hour - well within 24h TTL) */
-  private static readonly ICE_CACHE_DURATION_MS = 60 * 60 * 1000;
+  /** P2P connection timeout for fallback trigger */
+  private p2pTimeout: ReturnType<typeof setTimeout> | null = null;
+  
+  /** P2P connection timeout duration (ms) */
+  private static readonly P2P_TIMEOUT_MS = 15000;
+  
+  /** Cached STUN servers from Twilio */
+  private cachedStunServers: RTCIceServer[] | null = null;
+  
+  /** Timestamp when STUN servers were cached */
+  private stunServersCachedAt: number = 0;
+  
+  /** STUN servers cache duration (6 hours - well within 24h TTL) */
+  private static readonly STUN_CACHE_DURATION_MS = 6 * 60 * 60 * 1000;
 
   /**
    * Creates a new NetworkManager instance
@@ -187,54 +206,179 @@ export class NetworkManager {
 
 
   /* ============================================
-   * ICE SERVER MANAGEMENT
+   * STUN SERVER MANAGEMENT
    * ============================================
-   * Methods for fetching TURN credentials from Twilio via Cloudflare Worker.
+   * Methods for fetching STUN servers from Twilio while filtering out TURN servers.
    */
 
   /**
-   * Fetches ICE servers (STUN + TURN) from Twilio via Cloudflare Worker
+   * Fetches STUN servers from Twilio via Cloudflare Worker
    * 
-   * Returns cached servers if still valid, otherwise fetches fresh credentials.
+   * Returns cached servers if still valid, otherwise fetches fresh STUN servers.
+   * Filters out TURN servers to avoid bandwidth costs.
    * Falls back to default STUN-only config on failure.
    * 
-   * @returns RTCConfiguration with ICE servers
+   * @returns RTCConfiguration with STUN servers only
    * @private
    */
-  private async fetchIceServers(): Promise<RTCConfiguration> {
+  private async fetchStunServers(): Promise<RTCConfiguration> {
     // Return cached servers if still valid
     const now = Date.now();
-    if (this.cachedIceServers && (now - this.iceServersCachedAt) < NetworkManager.ICE_CACHE_DURATION_MS) {
-      console.log('Using cached ICE servers');
-      return { iceServers: this.cachedIceServers, iceCandidatePoolSize: 10 };
+    if (this.cachedStunServers && (now - this.stunServersCachedAt) < NetworkManager.STUN_CACHE_DURATION_MS) {
+      console.log('Using cached STUN servers');
+      return this.buildStunOnlyConfig(this.cachedStunServers);
     }
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), ICE_FETCH_TIMEOUT_MS);
+      const timeoutId = setTimeout(() => controller.abort(), STUN_FETCH_TIMEOUT_MS);
 
-      const response = await fetch(ICE_SERVER_ENDPOINT, {
+      const response = await fetch(STUN_SERVER_ENDPOINT, {
         signal: controller.signal
       });
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        throw new Error(`ICE server fetch failed: ${response.status}`);
+        throw new Error(`STUN server fetch failed: ${response.status}`);
       }
 
-      const iceServers: RTCIceServer[] = await response.json();
+      const data = await response.json();
       
-      // Cache the servers
-      this.cachedIceServers = iceServers;
-      this.iceServersCachedAt = now;
+      // Extract servers from the response (handles both turnServers and rawServers arrays)
+      const rawServers = data.turnServers || data.rawServers || [];
       
-      console.log('Fetched Twilio ICE servers (STUN + TURN)');
-      return { iceServers, iceCandidatePoolSize: 10 };
+      // Filter to only STUN servers (exclude TURN servers)
+      const stunServers: RTCIceServer[] = rawServers
+        .filter((server: any) => {
+          const urls = server.urls || server.url || '';
+          const urlStr = Array.isArray(urls) ? urls[0] : urls;
+          return urlStr?.startsWith('stun:');
+        })
+        .map((server: any) => ({
+          urls: server.urls || server.url || ''
+        }));
+      
+      // Cache the STUN servers
+      this.cachedStunServers = stunServers;
+      this.stunServersCachedAt = now;
+      
+      console.log(`Fetched ${stunServers.length} STUN servers from Twilio (TURN servers filtered out)`);
+      return this.buildStunOnlyConfig(stunServers);
       
     } catch (error) {
-      console.warn('Failed to fetch ICE servers, using STUN-only fallback:', error);
+      console.warn('Failed to fetch STUN servers, using default fallback:', error);
       return DEFAULT_RTC_CONFIG;
     }
+  }
+
+  /**
+   * Builds RTCConfiguration with STUN servers only
+   * 
+   * Combines public STUN servers with Twilio STUN servers for optimal connectivity.
+   * No TURN servers are included to avoid bandwidth costs.
+   * 
+   * @param twilioStunServers - Array of STUN servers from Twilio
+   * @returns RTCConfiguration with STUN servers only
+   * @private
+   */
+  private buildStunOnlyConfig(twilioStunServers: RTCIceServer[]): RTCConfiguration {
+    // Combine public STUN servers with Twilio STUN servers
+    const allStunServers: RTCIceServer[] = [
+      // Fast public STUN servers (free, reliable)
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun.stunprotocol.org:3478' },
+      // Twilio STUN servers (additional options)
+      ...twilioStunServers
+    ];
+    
+    console.log(`Using ${allStunServers.length} STUN servers for P2P connection`);
+    
+    return {
+      iceServers: allStunServers,
+      iceTransportPolicy: 'all',      // Try all candidates, prefer direct
+      bundlePolicy: 'max-bundle',     // Multiplex all streams on one connection
+      iceCandidatePoolSize: 10        // Pre-gather candidates for faster connection
+    };
+  }
+
+  /**
+   * Gets STUN-only RTCConfiguration for direct P2P connections
+   * 
+   * Uses default STUN servers as immediate fallback.
+   * 
+   * @returns RTCConfiguration with default STUN servers
+   * @private
+   */
+  private getDefaultStunConfig(): RTCConfiguration {
+    console.log('Using default STUN-only configuration for direct P2P');
+    
+    return {
+      iceServers: [
+        // Public STUN servers for NAT traversal
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun.stunprotocol.org:3478' }
+      ],
+      iceTransportPolicy: 'all',      // Try all candidates, prefer direct
+      bundlePolicy: 'max-bundle',     // Multiplex all streams on one connection
+      iceCandidatePoolSize: 10        // Pre-gather candidates for faster connection
+    };
+  }
+
+  /**
+   * Logs the connection type (direct P2P only)
+   * 
+   * @private
+   */
+  private logConnectionType(): void {
+    // Delay to allow ICE negotiation to complete
+    setTimeout(() => {
+      try {
+        if (!this.room) {
+          console.log('📡 Direct P2P connection established');
+          return;
+        }
+        
+        // Use Trystero's official getPeers() API
+        const peers = this.room.getPeers();
+        const peerIds = Object.keys(peers);
+        
+        if (peerIds.length === 0) {
+          console.log('📡 Direct P2P connection established (no peers found)');
+          return;
+        }
+        
+        const pc = peers[peerIds[0]];
+        if (!pc) {
+          console.log('📡 Direct P2P connection established (peer connection not available)');
+          return;
+        }
+        
+        pc.getStats().then((stats: RTCStatsReport) => {
+          let found = false;
+          stats.forEach(report => {
+            if (report.type === 'candidate-pair' && report.state === 'succeeded' && !found) {
+              found = true;
+              const localType = report.localCandidateType;
+              const remoteType = report.remoteCandidateType;
+              
+              console.log('✅ Direct P2P connection established');
+              console.log(`   Connection: local=${localType}, remote=${remoteType}`);
+            }
+          });
+          if (!found) {
+            console.log('📡 Direct P2P connection established (ICE negotiation in progress)');
+          }
+        }).catch((e) => {
+          console.log('📡 Direct P2P connection established (stats error)', e);
+        });
+      } catch (e) {
+        console.log('📡 Direct P2P connection established (error checking type)', e);
+      }
+    }, 5000);
   }
 
 
@@ -250,8 +394,8 @@ export class NetworkManager {
    * Algorithm:
    * 1. Leave any existing room
    * 2. Set state to 'connecting'
-   * 3. Fetch ICE servers (STUN + TURN) from Twilio
-   * 4. Create Trystero room with WSS trackers
+   * 3. Try direct P2P connection with STUN-only configuration
+   * 4. If P2P fails after timeout, fallback to Cloudflare Worker relay
    * 5. Set up message channel and event handlers
    * 6. Set state to 'waiting'
    * 7. Start peer timeout check and auto-rejoin
@@ -270,48 +414,130 @@ export class NetworkManager {
     this.setConnectionState('connecting');
 
     try {
-      // Fetch ICE servers (STUN + TURN) from Twilio via Cloudflare Worker
-      const rtcConfig = await this.fetchIceServers();
+      // First, try direct P2P connection
+      await this.tryP2PConnection(roomId);
       
-      // Join room using Trystero's BitTorrent tracker strategy
-      // Connect to all WSS trackers for HTTPS compatibility
-      this.room = joinRoom(
-        { 
-          appId: this.config.appId,
-          relayUrls: WSS_TRACKERS,
-          relayRedundancy: WSS_TRACKERS.length,
-          rtcConfig
-        }, 
-        roomId
-      );
-      
-      // Set up action channel with NetworkMessage wrapper
-      const [sendMessage, onMessage] = this.room.makeAction<NetworkMessage>('action');
-      this.sendMessage = sendMessage;
-      
-      // Handle incoming messages
-      onMessage((message, peerId) => {
-        this.lastPeerActivity = Date.now();
-        const action = deserializeAction(message);
-        if (action) {
-          this.handleIncomingAction(action, peerId);
+      // Set timeout for P2P connection - if no peer joins, fallback to relay
+      this.p2pTimeout = setTimeout(() => {
+        if (this.connectionState === 'waiting' && !this.peerId) {
+          console.log('P2P connection timeout, falling back to Cloudflare Worker relay');
+          this.fallbackToRelay(roomId);
         }
-      });
-
-      // Handle peer joining
-      this.room.onPeerJoin((peerId) => {
-        this.handlePeerJoin(peerId);
-      });
-
-      // Handle peer leaving
-      this.room.onPeerLeave((peerId) => {
-        this.handlePeerLeave(peerId);
-      });
+      }, NetworkManager.P2P_TIMEOUT_MS);
 
       this.setConnectionState('waiting');
       this.startPeerTimeoutCheck();
       this.startRejoinInterval(roomId);
 
+    } catch (error) {
+      console.warn('P2P connection failed, trying Cloudflare Worker relay:', error);
+      await this.fallbackToRelay(roomId);
+    }
+  }
+
+  /**
+   * Attempts to establish a direct P2P connection
+   * 
+   * @param roomId - The room identifier to join
+   * @private
+   */
+  private async tryP2PConnection(roomId: string): Promise<void> {
+    // Try to fetch STUN servers from Twilio, fallback to default if it fails
+    let rtcConfig: RTCConfiguration;
+    try {
+      rtcConfig = await this.fetchStunServers();
+    } catch (error) {
+      console.warn('Failed to fetch STUN servers, using default config:', error);
+      rtcConfig = this.getDefaultStunConfig();
+    }
+    
+    // Join room using Trystero's BitTorrent tracker strategy
+    // Connect to all WSS trackers for HTTPS compatibility
+    this.room = joinRoom(
+      { 
+        appId: this.config.appId,
+        relayUrls: WSS_TRACKERS,
+        relayRedundancy: WSS_TRACKERS.length,
+        rtcConfig
+      }, 
+      roomId
+    );
+    
+    // Set up action channel with NetworkMessage wrapper
+    const [sendMessage, onMessage] = this.room.makeAction<NetworkMessage>('action');
+    this.sendMessage = sendMessage;
+    
+    // Handle incoming messages
+    onMessage((message, peerId) => {
+      this.lastPeerActivity = Date.now();
+      const action = deserializeAction(message);
+      if (action) {
+        this.handleIncomingAction(action, peerId);
+      }
+    });
+
+    // Handle peer joining
+    this.room.onPeerJoin((peerId) => {
+      this.handlePeerJoin(peerId);
+    });
+
+    // Handle peer leaving
+    this.room.onPeerLeave((peerId) => {
+      this.handlePeerLeave(peerId);
+    });
+  }
+
+  /**
+   * Falls back to Cloudflare Worker relay when P2P fails
+   * 
+   * @param roomId - The room identifier to join
+   * @private
+   */
+  private async fallbackToRelay(roomId: string): Promise<void> {
+    try {
+      // Clean up P2P connection
+      if (this.room) {
+        this.room.leave();
+        this.room = null;
+      }
+      this.sendMessage = null;
+      
+      // Clear P2P timeout
+      if (this.p2pTimeout) {
+        clearTimeout(this.p2pTimeout);
+        this.p2pTimeout = null;
+      }
+      
+      // Initialize relay manager
+      this.relayManager = new CloudflareRelayManager();
+      this.usingRelay = true;
+      
+      // Set up relay callbacks
+      this.relayManager.onConnectionStateChange((state) => {
+        this.setConnectionState(state);
+      });
+      
+      this.relayManager.onPeerJoined((peerId) => {
+        this.handlePeerJoin(peerId);
+      });
+      
+      this.relayManager.onPeerLeft((peerId) => {
+        this.handlePeerLeave(peerId);
+      });
+      
+      this.relayManager.onAction((action, peerId) => {
+        this.lastPeerActivity = Date.now();
+        this.handleIncomingAction(action, peerId);
+      });
+      
+      this.relayManager.onError((error) => {
+        this.callbacks.onError?.(error);
+      });
+      
+      // Connect to relay
+      await this.relayManager.connect(roomId);
+      console.log('✅ Connected via Cloudflare Worker relay');
+      
     } catch (error) {
       this.setConnectionState('disconnected');
       this.callbacks.onError?.(error instanceof Error ? error : new Error(String(error)));
@@ -330,9 +556,22 @@ export class NetworkManager {
     this.stopRejoinInterval();
     this.stopColorRequestLoop();
     
+    // Clear P2P timeout
+    if (this.p2pTimeout) {
+      clearTimeout(this.p2pTimeout);
+      this.p2pTimeout = null;
+    }
+    
+    // Clean up P2P connection
     if (this.room) {
       this.room.leave();
       this.room = null;
+    }
+    
+    // Clean up relay connection
+    if (this.relayManager) {
+      this.relayManager.disconnect();
+      this.relayManager = null;
     }
     
     this.sendMessage = null;
@@ -342,6 +581,7 @@ export class NetworkManager {
     this.currentRoomId = '';
     this.rejoinAttempts = 0;
     this.lastColorAssignment = null;
+    this.usingRelay = false;
     this.setConnectionState('disconnected');
   }
 
@@ -508,13 +748,16 @@ export class NetworkManager {
    * Used by: All send* methods below
    */
   sendGameAction(action: GameAction): void {
-    if (!this.sendMessage || !this.peerId) {
+    if (this.usingRelay && this.relayManager) {
+      // Use relay manager for sending
+      this.relayManager.sendAction(action);
+    } else if (this.sendMessage && this.peerId) {
+      // Use P2P for sending
+      const message = serializeAction(action);
+      this.sendMessage(message, this.peerId);
+    } else {
       console.warn('Cannot send action: not connected to peer');
-      return;
     }
-    
-    const message = serializeAction(action);
-    this.sendMessage(message, this.peerId);
   }
 
   /**
@@ -689,10 +932,11 @@ export class NetworkManager {
    * Algorithm:
    * 1. Ignore if already connected to a peer (1v1 game)
    * 2. Store peer ID and update state
-   * 3. Determine host (lower ID is host)
-   * 4. If host: assign colors randomly and send assignment
-   * 5. If not host: start requesting color assignment
-   * 6. Notify callback and start keep-alive pings
+   * 3. Clear P2P timeout (connection successful)
+   * 4. Determine host (lower ID is host)
+   * 5. If host: assign colors randomly and send assignment
+   * 6. If not host: start requesting color assignment
+   * 7. Notify callback and start keep-alive pings
    * 
    * @param peerId - The joining peer's ID
    * @private
@@ -707,6 +951,12 @@ export class NetworkManager {
     this.peerId = peerId;
     this.lastPeerActivity = Date.now();
     this.setConnectionState('connected');
+    
+    // Clear P2P timeout since we found a peer
+    if (this.p2pTimeout) {
+      clearTimeout(this.p2pTimeout);
+      this.p2pTimeout = null;
+    }
     
     // Determine host: lower ID is host
     // Host is responsible for assigning colors
@@ -735,6 +985,7 @@ export class NetworkManager {
     
     this.callbacks.onPeerJoined?.(peerId);
     this.startPingInterval();
+    this.logConnectionType();
   }
 
   /**
@@ -833,10 +1084,15 @@ export class NetworkManager {
    * Starts the ping interval for keep-alive
    * 
    * Sends periodic pings to detect disconnections.
+   * Only used for P2P connections - relay has its own heartbeat.
    * 
    * @private
    */
   private startPingInterval(): void {
+    if (this.usingRelay) {
+      return; // Relay manager handles its own heartbeat
+    }
+    
     this.stopPingInterval();
     this.pingInterval = setInterval(() => {
       if (this.peerId) {
@@ -942,38 +1198,50 @@ export class NetworkManager {
     
     // Rejoin the room
     try {
-      // Use cached ICE servers (already fetched in initial joinRoom)
-      const rtcConfig = await this.fetchIceServers();
-      
-      this.room = joinRoom(
-        { 
-          appId: this.config.appId,
-          relayUrls: WSS_TRACKERS,
-          relayRedundancy: WSS_TRACKERS.length,
-          rtcConfig
-        }, 
-        roomId
-      );
-      
-      // Re-setup action channel
-      const [sendMessage, onMessage] = this.room.makeAction<NetworkMessage>('action');
-      this.sendMessage = sendMessage;
-      
-      onMessage((message, peerId) => {
-        this.lastPeerActivity = Date.now();
-        const action = deserializeAction(message);
-        if (action) {
-          this.handleIncomingAction(action, peerId);
+      if (this.usingRelay && this.relayManager) {
+        // For relay connections, just reconnect
+        await this.relayManager.connect(roomId);
+      } else {
+        // For P2P connections, rejoin the room
+        // Try to fetch STUN servers from Twilio, fallback to default if it fails
+        let rtcConfig: RTCConfiguration;
+        try {
+          rtcConfig = await this.fetchStunServers();
+        } catch (error) {
+          console.warn('Failed to fetch STUN servers during rejoin, using default config:', error);
+          rtcConfig = this.getDefaultStunConfig();
         }
-      });
+        
+        this.room = joinRoom(
+          { 
+            appId: this.config.appId,
+            relayUrls: WSS_TRACKERS,
+            relayRedundancy: WSS_TRACKERS.length,
+            rtcConfig
+          }, 
+          roomId
+        );
+        
+        // Re-setup action channel
+        const [sendMessage, onMessage] = this.room.makeAction<NetworkMessage>('action');
+        this.sendMessage = sendMessage;
+        
+        onMessage((message, peerId) => {
+          this.lastPeerActivity = Date.now();
+          const action = deserializeAction(message);
+          if (action) {
+            this.handleIncomingAction(action, peerId);
+          }
+        });
 
-      this.room.onPeerJoin((peerId) => {
-        this.handlePeerJoin(peerId);
-      });
+        this.room.onPeerJoin((peerId) => {
+          this.handlePeerJoin(peerId);
+        });
 
-      this.room.onPeerLeave((peerId) => {
-        this.handlePeerLeave(peerId);
-      });
+        this.room.onPeerLeave((peerId) => {
+          this.handlePeerLeave(peerId);
+        });
+      }
       
     } catch (error) {
       console.error('Rejoin failed:', error);
