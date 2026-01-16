@@ -169,6 +169,9 @@ export class ChessBoardComponent {
   /** Whether piece dragging is enabled */
   private dragEnabled: boolean;
   
+  /** Squares that are blocked from being selected/moved (e.g., deployed pieces this turn) */
+  private blockedSquares: Set<string>;
+  
   /* ============================================
    * EVENT CALLBACKS
    * ============================================
@@ -222,6 +225,7 @@ export class ChessBoardComponent {
     this.draggedFromSquare = null;
     this.dragEnabled = true;
     this.pieceSprites = new Map();
+    this.blockedSquares = new Set();
     
     // Initialize chess logic
     this.wrapper = new ChessBoardWrapper();
@@ -345,6 +349,33 @@ export class ChessBoardComponent {
    */
   isDragEnabled(): boolean {
     return this.dragEnabled;
+  }
+
+  /**
+   * Sets squares that are blocked from being selected/moved
+   * Used for deployed pieces that can't move on the turn they were deployed
+   * 
+   * @param squares - Array of square notations to block
+   */
+  setBlockedSquares(squares: string[]): void {
+    this.blockedSquares = new Set(squares);
+  }
+
+  /**
+   * Clears all blocked squares
+   */
+  clearBlockedSquares(): void {
+    this.blockedSquares.clear();
+  }
+
+  /**
+   * Checks if a square is blocked
+   * 
+   * @param square - Square to check
+   * @returns True if the square is blocked
+   */
+  isSquareBlocked(square: string): boolean {
+    return this.blockedSquares.has(square);
   }
 
   /* ============================================
@@ -701,6 +732,9 @@ export class ChessBoardComponent {
       const currentTurn = this.wrapper.getTurn();
       if (color !== currentTurn) return;
       
+      // Don't allow dragging blocked squares (e.g., deployed pieces this turn)
+      if (this.blockedSquares.has(square)) return;
+      
       // Get valid moves for this piece
       const validMoves = this.wrapper.getValidMoves(square);
       if (validMoves.length === 0) return;
@@ -854,6 +888,12 @@ export class ChessBoardComponent {
       // Only select pieces of the current turn when drag is enabled
       const currentTurn = this.wrapper.getTurn();
       if (this.dragEnabled && piece.color !== currentTurn) {
+        this.clearSelection();
+        return;
+      }
+      
+      // Don't allow selecting blocked squares (e.g., deployed pieces this turn)
+      if (this.blockedSquares.has(square)) {
         this.clearSelection();
         return;
       }

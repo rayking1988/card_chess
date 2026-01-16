@@ -70,15 +70,21 @@ function getMoveAvailability(
   turn: 'w' | 'b',
   blockedSquares: string[]
 ): { hasMoves: boolean; inCheck: boolean } {
-  const parts = fen.split(' ');
-  if (parts.length >= 2) {
-    parts[1] = turn;
+  try {
+    const parts = fen.split(' ');
+    if (parts.length >= 2) {
+      parts[1] = turn;
+    }
+    const chess = new Chess(parts.join(' '));
+    const blocked = new Set(blockedSquares);
+    const moves = chess.moves({ verbose: true }) as Array<{ from: string; flags?: string }>;
+    const hasMoves = moves.some(move => !blocked.has(move.from) && !move.flags?.includes('k') && !move.flags?.includes('q'));
+    return { hasMoves, inCheck: chess.isCheck() };
+  } catch {
+    // FEN validation can fail for edge cases (e.g., pawns on edge rows after deployment)
+    // In these cases, assume moves are available to avoid false game-end triggers
+    return { hasMoves: true, inCheck: false };
   }
-  const chess = new Chess(parts.join(' '));
-  const blocked = new Set(blockedSquares);
-  const moves = chess.moves({ verbose: true }) as Array<{ from: string; flags?: string }>;
-  const hasMoves = moves.some(move => !blocked.has(move.from) && !move.flags?.includes('k') && !move.flags?.includes('q'));
-  return { hasMoves, inCheck: chess.isCheck() };
 }
 
 /**

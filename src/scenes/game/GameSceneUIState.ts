@@ -141,6 +141,11 @@ export function updateUIFromState(this: GameScene, options: { sendStats?: boolea
     this.chessBoard.setPosition(state.boardFEN);
   }
 
+  // Update blocked squares for deployed pieces this turn
+  // Deployed pieces cannot be moved on the turn they were deployed
+  const deployedPieces = this.gameStateManager.getDeployedPiecesThisTurn(this.localColor);
+  this.chessBoard.setBlockedSquares(deployedPieces);
+
   const snapshot: UISnapshot = {
     localClock: localPlayer.clock,
     opponentClock,

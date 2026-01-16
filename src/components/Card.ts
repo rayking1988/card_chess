@@ -494,6 +494,10 @@ export class CardComponent {
    */
   enableInteraction(useExternalDragHandler: boolean = false): void {
     if (this.isInteractive) return;
+    
+    // Check if container and scene still exist
+    if (!this.container || !this.container.scene || !this.scene || !this.scene.input) return;
+    
     this.isInteractive = true;
     this.useExternalDragHandler = useExternalDragHandler;
     
@@ -577,6 +581,10 @@ export class CardComponent {
   disableInteraction(): void {
     if (!this.isInteractive) return;
     this.isInteractive = false;
+    
+    // Check if container still exists
+    if (!this.container || !this.container.scene) return;
+    
     this.container.disableInteractive();
     
     if (this.boundPointerOver) {
@@ -589,13 +597,16 @@ export class CardComponent {
       this.container.off('pointerdown', this.boundPointerDown);
     }
     
-    if (this.boundPointerMove) {
-      this.scene.input.off('pointermove', this.boundPointerMove);
-      this.boundPointerMove = undefined;
-    }
-    if (this.boundPointerUp) {
-      this.scene.input.off('pointerup', this.boundPointerUp);
-      this.boundPointerUp = undefined;
+    // Check if scene still exists before removing input listeners
+    if (this.scene && this.scene.input) {
+      if (this.boundPointerMove) {
+        this.scene.input.off('pointermove', this.boundPointerMove);
+        this.boundPointerMove = undefined;
+      }
+      if (this.boundPointerUp) {
+        this.scene.input.off('pointerup', this.boundPointerUp);
+        this.boundPointerUp = undefined;
+      }
     }
   }
 
