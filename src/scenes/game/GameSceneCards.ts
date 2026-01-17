@@ -8,6 +8,7 @@ import { Square, Color, PieceSymbol } from 'chess.js';
 import { CardComponent } from '../../components/Card';
 import type { Card, PieceType, PlayerColor } from '../../managers/GameStateManager';
 import { calculateControlPower, playerControlsSquare } from '../../utils/controlPower';
+import { MAX_PILE_LAYERS } from './GameConstants';
 import { makeCardComponentClickable } from './GameUIHelpers';
 import type { GameScene } from '../GameScene';
 
@@ -339,7 +340,7 @@ export function setDiscardTopCard(this: GameScene, side: 'local' | 'opponent', c
   // Create top card - always face-up (discard piles are public information)
   // Only create if we have actual card data (no card back for empty/unknown)
   const topCard = new CardComponent(this, 0, 0, cardData, false, scale);
-  topCard.setDepth(11);
+  topCard.setDepth(MAX_PILE_LAYERS + 8);
   topCard.getContainer().setPosition(layout.leftPanelX, positionY);
   makeCardComponentClickable(topCard, () => this.showDiscardViewer(side));
 

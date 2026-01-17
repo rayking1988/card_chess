@@ -64,6 +64,25 @@ export function updateUIFromState(this: GameScene, options: { sendStats?: boolea
   const opponentEnergyCap = this.networkManager ? this.opponentEnergyCap : opponentPlayer.energyCap;
   const opponentDisturb = this.networkManager ? this.opponentDisturbTags : opponentPlayer.disturbTags;
 
+  if (this.lastStateSnapshot) {
+    if (this.localTimeTransferTween && localPlayer.stopwatch < this.lastStateSnapshot.localStopwatch) {
+      this.localTimeTransferTween.stop();
+      this.localTimeTransferTween = undefined;
+      this.localClockDeltaText?.destroy();
+      this.localStopwatchDeltaText?.destroy();
+      this.localClockDeltaText = undefined;
+      this.localStopwatchDeltaText = undefined;
+    }
+    if (this.opponentTimeTransferTween && opponentStopwatch < this.lastStateSnapshot.opponentStopwatch) {
+      this.opponentTimeTransferTween.stop();
+      this.opponentTimeTransferTween = undefined;
+      this.opponentClockDeltaText?.destroy();
+      this.opponentStopwatchDeltaText?.destroy();
+      this.opponentClockDeltaText = undefined;
+      this.opponentStopwatchDeltaText = undefined;
+    }
+  }
+
   // Update clocks
   this.playerClock.setTime(localPlayer.clock);
   this.opponentClock.setTime(opponentClock);
@@ -454,12 +473,12 @@ export function animateCardDraw(this: GameScene, side: 'local' | 'opponent', cou
       targets: temp,
       x: point.x,
       y: point.y,
-      duration: 600,
+      duration: 360,
       ease: 'Quad.easeOut',
       onComplete: () => {
         temp.destroy();
         target.setAlpha(1);
-        this.time.delayedCall(120, () => animateNext(index + 1));
+        this.time.delayedCall(80, () => animateNext(index + 1));
       }
     });
   };
@@ -541,7 +560,7 @@ export function animateTimeTransfer(
     this.opponentStopwatchDeltaText = stopwatchDelta;
   }
 
-  const duration = Math.min(2200, 250 + diff * 40);
+  const duration = Math.min(3200, 450 + diff * 90);
   const tween = this.tweens.addCounter({
     from: 0,
     to: diff,

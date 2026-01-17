@@ -205,8 +205,8 @@ export function buildDiscardViewerCards(this: GameScene, layout: GameLayout): vo
   const isOpponent = this.discardViewerSide === 'opponent';
   const localDiscard = this.gameStateManager.getPlayer(this.localColor).discard;
   const rawCards = isOpponent ? this.opponentDiscardCards : localDiscard;
-  // Filter out null values - show from bottom to top
-  const cards = [...rawCards].filter(c => c !== null);
+  // Filter out null values - show newest first
+  const cards = [...rawCards].filter(c => c !== null).reverse();
 
   const scale = DISCARD_VIEWER.CARD_SCALE * layout.panelScale;
   const spacingX = DISCARD_VIEWER.CARD_SPACING_X * layout.panelScale;
@@ -220,7 +220,7 @@ export function buildDiscardViewerCards(this: GameScene, layout: GameLayout): vo
   this.discardViewerScrollOffset = Math.min(this.discardViewerScrollOffset, this.discardViewerMaxScroll);
 
   for (let i = 0; i < cards.length; i++) {
-    const row = (totalRows - 1) - Math.floor(i / columns);
+    const row = Math.floor(i / columns);
     const col = i % columns;
     const cardData = cards[i];
     // Always show cards face-up in discard viewer (discard piles are public information)

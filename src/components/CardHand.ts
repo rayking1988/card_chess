@@ -678,13 +678,22 @@ export class CardHandComponent {
   queueDrawCards(cards: CardData[], origin: { x: number; y: number }): void {
     if (cards.length === 0) return;
 
+    const existingIds = new Set(this.cardData.map(card => card.id));
+    for (const queued of this.drawQueue) {
+      existingIds.add(queued.card.id);
+    }
+    const uniqueCards = cards.filter(card => !existingIds.has(card.id));
+    if (uniqueCards.length === 0) {
+      return;
+    }
+
     // Preserve interaction state for restoration after draw sequence.
     if (!this.isDrawAnimating) {
       this.restoreInteractionAfterDraw = this.isInteractive;
       this.disableInteraction();
     }
 
-    for (const card of cards) {
+    for (const card of uniqueCards) {
       this.drawQueue.push({ card, origin });
     }
 
@@ -762,7 +771,7 @@ export class CardHandComponent {
       (cardView as CardComponentWithOriginal).originalScale = pos.scale;
 
       const isNewCard = i === newCardIndex;
-      const duration = isNewCard ? 600 : 200;
+      const duration = isNewCard ? 360 : 160;
 
       this.scene.tweens.add({
         targets: cardView.getContainer(),
@@ -776,7 +785,7 @@ export class CardHandComponent {
         onComplete: isNewCard
           ? () => {
               if (token !== this.drawSequenceToken) return;
-              this.scene.time.delayedCall(120, () => this.processDrawQueue(token));
+              this.scene.time.delayedCall(80, () => this.processDrawQueue(token));
             }
           : undefined
       });

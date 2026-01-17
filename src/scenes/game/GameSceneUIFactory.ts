@@ -278,9 +278,6 @@ export function createLeftPanel(this: GameScene, layout: GameLayout): void {
     strokeThickness: 3
   }).setOrigin(0.5).setDepth(textDepth);
 
-  // === OPPONENT'S DISCARD (below deck) ===
-  this.opponentDiscardStack = createPileStack(this, x, layout.opponentDiscardY, deckScale, stackDepth, 0.95);
-
   this.opponentDiscardLabelText = this.add.text(x, layout.opponentDiscardY, '', {
     fontSize: `${UI_FACTORY.DECK_LABEL_FONT_SIZE * scale}px`, fontFamily: 'BoldPixels, Arial', color: '#888888'
   }).setOrigin(0.5).setDepth(textDepth);
@@ -293,9 +290,6 @@ export function createLeftPanel(this: GameScene, layout: GameLayout): void {
     stroke: '#000000',
     strokeThickness: 3
   }).setOrigin(0.5).setDepth(textDepth);
-
-  // === PLAYER'S DISCARD (above player deck) ===
-  this.playerDiscardStack = createPileStack(this, x, layout.playerDiscardY, deckScale, stackDepth, 0.95);
 
   this.playerDiscardLabelText = this.add.text(x, layout.playerDiscardY, '', {
     fontSize: `${UI_FACTORY.DECK_LABEL_FONT_SIZE * scale}px`, fontFamily: 'BoldPixels, Arial', color: '#888888'
