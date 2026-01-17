@@ -26,13 +26,13 @@ export function showPromotionPicker(this: GameScene, from: Square, to: Square, m
   const backdrop = this.add.rectangle(width / 2, height / 2, width, height, hex('#000000'), 0.6);
   const panelWidth = Math.min(420, width * 0.7);
   const panelHeight = 160;
-  const panel = this.add.rectangle(width / 2, height / 2, panelWidth, panelHeight, hex('#1b1b1b'), 0.95);
-  panel.setStrokeStyle(2, hex('#4a4a4a'), 1);
+  const panel = this.add.rectangle(width / 2, height / 2, panelWidth, panelHeight, hex('#23211f'), 0.95);
+  panel.setStrokeStyle(2, hex('#e48212ff'), 1);
 
   const title = this.add.text(width / 2, height / 2 - 55, 'Choose Promotion', {
     fontSize: '20px',
     fontFamily: 'BoldPixels, Arial',
-    color: '#ffffff'
+    color: '#ffcc00'
   }).setOrigin(0.5);
 
   const iconSpacing = panelWidth / (PROMOTION_OPTIONS.length + 1);

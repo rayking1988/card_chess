@@ -11,7 +11,7 @@ import { createImageButton } from './GameUIHelpers';
 import { hex } from '../../utils/colors';
 import type { GameScene } from '../GameScene';
 import { OVERLAY_LAYOUT } from '../../config';
-import { getBoardOverlayMetrics, getPreviewOverlayMetrics } from './GameSceneOverlays';
+import { getBoardOverlayMetrics } from './GameSceneOverlays';
 
 /**
  * Checks for game-ending conditions
@@ -144,14 +144,14 @@ export function handleGameEnd(this: GameScene, winner: PlayerColor | null, reaso
   this.cardHand.disableInteraction();
 
   const { overlayWidth, overlayHeight, overlayX, overlayY } = getBoardOverlayMetrics(this, layout);
-  const buttonLayout = getPreviewOverlayMetrics(this, layout);
+  const buttonLayout = getBoardOverlayMetrics(this, layout);
 
   const isLocalWin = winner === this.localColor;
-  const bannerText = winner === null ? 'Draw' : isLocalWin ? 'You win!' : 'You lose';
-  const bannerColor = winner === null ? '#777777' : isLocalWin ? '#2e6bff' : '#cc3333';
+  const bannerText = winner === null ? 'DRAW' : isLocalWin ? 'VICTORY!' : 'DEFEAT';
+  const bannerColor = winner === null ? '#777777' : isLocalWin ? '#006657' : '#e50b0b';
 
   if (!this.gameEndBannerRect) {
-    this.gameEndBannerRect = this.add.rectangle(overlayX, overlayY, overlayWidth, overlayHeight, hex(bannerColor), 0.9);
+    this.gameEndBannerRect = this.add.rectangle(overlayX, overlayY, overlayWidth, overlayHeight, hex(bannerColor), 0.5);
     this.gameEndBannerRect.setDepth(140);
   } else {
     this.gameEndBannerRect.setPosition(overlayX, overlayY);

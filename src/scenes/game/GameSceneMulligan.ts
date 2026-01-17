@@ -9,7 +9,8 @@ import { createImageButton } from './GameUIHelpers';
 import { hex } from '../../utils/colors';
 import type { GameScene } from '../GameScene';
 import { INTERACTION_BLOCKER, OVERLAY_LAYOUT } from '../../config';
-import { getBoardOverlayMetrics, getPreviewOverlayMetrics } from './GameSceneOverlays';
+import { getBoardOverlayMetrics } from './GameSceneOverlays';
+import { MULLIGAN_TIME_BASE_COST } from '../../managers/gameState';
 
 function showMulliganWaitingState(scene: GameScene, layout = scene.currentLayout ?? calculateLayout(scene.scale.width, scene.scale.height)): void {
   const { overlayWidth, overlayHeight, overlayX, overlayY } = getBoardOverlayMetrics(scene, layout);
@@ -126,10 +127,10 @@ export function showMulliganUI(this: GameScene): void {
   this.cardHand.disableInteraction();
 
   const { overlayWidth, overlayHeight, overlayX, overlayY } = getBoardOverlayMetrics(this, layout);
-  const buttonLayout = getPreviewOverlayMetrics(this, layout);
+  const buttonLayout = getBoardOverlayMetrics(this, layout);
 
   if (!this.mulliganBannerRect) {
-    this.mulliganBannerRect = this.add.rectangle(overlayX, overlayY, overlayWidth, overlayHeight, hex('#ff9a2a'), 0.9);
+    this.mulliganBannerRect = this.add.rectangle(overlayX, overlayY, overlayWidth, overlayHeight, hex('#ff9a2a'), 0.5);
     this.mulliganBannerRect.setDepth(120);
   } else {
     this.mulliganBannerRect.setPosition(overlayX, overlayY);
@@ -137,15 +138,11 @@ export function showMulliganUI(this: GameScene): void {
   }
 
   if (!this.mulliganTitleText) {
-    this.mulliganTitleText = this.add.text(overlayX, overlayY - overlayHeight * OVERLAY_LAYOUT.TITLE_Y_OFFSET_FACTOR, 'Mulligan?', {
+    this.mulliganTitleText = this.add.text(overlayX, overlayY - overlayHeight * OVERLAY_LAYOUT.TITLE_Y_OFFSET_FACTOR, `RE-DRAW HAND WITH COST OF ${MULLIGAN_TIME_BASE_COST} SECONDS?`, {
       fontSize: `${OVERLAY_LAYOUT.MULLIGAN_TITLE_FONT_SIZE * scale}px`,
       fontFamily: 'BoldPixels, Arial',
       color: '#ffffff'
     }).setOrigin(0.5).setDepth(121);
-  } else {
-    this.mulliganTitleText.setPosition(overlayX, overlayY - overlayHeight * OVERLAY_LAYOUT.TITLE_Y_OFFSET_FACTOR);
-    this.mulliganTitleText.setFontSize(OVERLAY_LAYOUT.MULLIGAN_TITLE_FONT_SIZE * scale);
-    this.mulliganTitleText.setText('Mulligan?');
   }
 
   const buttonScale = scale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR;
@@ -157,7 +154,7 @@ export function showMulliganUI(this: GameScene): void {
       this,
       buttonLayout.overlayX - buttonOffset,
       buttonY,
-      'Mulligan (-10)',
+      'RE-DRAW',
       'yellow_button',
       'yellow_button_pressed',
       () => this.handleMulligan()
@@ -174,7 +171,7 @@ export function showMulliganUI(this: GameScene): void {
       this,
       buttonLayout.overlayX + buttonOffset,
       buttonY,
-      'Keep Hand',
+      'KEEP HAND',
       'blue_button',
       'blue_button_pressed',
       () => this.handleReady()
@@ -190,12 +187,9 @@ export function showMulliganUI(this: GameScene): void {
 /**
  * Handles mulligan button click
  * Returns hand to deck, reshuffles, and draws new hand
- * Deducts 10 seconds from clock
+ * Deducts time cost (10s base, doubles each mulligan)
  */
 export function handleMulligan(this: GameScene): void {
-  // Deduct mulligan time cost (Requirement 3.2)
-  this.gameStateManager.deductMulliganTimeCost(this.localColor);
-
   // Return hand to deck and reshuffle
   const hand = this.gameStateManager.getHand(this.localColor);
   const deck = this.gameStateManager.getDeck(this.localColor);
@@ -213,13 +207,32 @@ export function handleMulligan(this: GameScene): void {
   this.gameStateManager.shuffleDeck(this.localColor);
   this.gameStateManager.drawCards(this.localColor, 7, false);
 
-  // Update display
-  this.updateHandDisplay();
+  // Deduct mulligan time cost (Requirement 3.2)
+  // Cost doubles each time: 10s, 20s, 40s, 80s, etc.
+  const mulliganTimeCost = this.gameStateManager.deductMulliganTimeCost(this.localColor, this.mulliganCount);
 
-  this.logEvent(this.localColor, 'Mulligan (-10s)');
+  // Increment mulligan counter for next mulligan
+  this.mulliganCount++;
+
+  this.logEvent(this.localColor, `Mulligan Cost: ${mulliganTimeCost}s`);
+
+  const nextMulliganCost = MULLIGAN_TIME_BASE_COST * (2 ** this.mulliganCount);
+
+  if (nextMulliganCost >= this.playerClock.getTime()) {
+    const { width, height } = this.scale;
+    const layout = this.currentLayout ?? calculateLayout(width, height);
+    const buttonLayout = getBoardOverlayMetrics(this, layout);
+
+    this.mulliganTitleText?.setText(`NO ENOUGH TIME TO PERFORM MULLIGAN`)
+    this.mulliganButton?.destroy();
+    this.readyButton?.setPosition(buttonLayout.overlayX);
+  } else {
+    this.mulliganTitleText?.setText(`RE-DRAW HAND WITH COST OF ${nextMulliganCost} SECONDS?`)
+  }
+  
 
   // Send to network
-  this.networkManager?.sendMulligan();
+  this.networkManager?.sendMulligan(mulliganTimeCost);
 
   this.updateUIFromState();
 }
@@ -231,6 +244,9 @@ export function handleMulligan(this: GameScene): void {
 export function handleReady(this: GameScene): void {
   // Mark local player as ready
   this.localPlayerReady = true;
+
+  // Set mulligan count back to 0
+  this.mulliganCount=0;
 
   // Swap to waiting state (keep blockers until both ready)
   showMulliganWaitingState(this);

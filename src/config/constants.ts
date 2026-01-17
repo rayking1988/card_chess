@@ -34,7 +34,7 @@ export const CLOCK = {
   MOVE_TIME_COST: 3,
   
   /** Time cost for mulligan action (seconds) */
-  MULLIGAN_TIME_COST: 10,
+  MULLIGAN_TIME_BASE_COST: 10,
   
   /** Time threshold for low time warning (seconds) */
   LOW_TIME_THRESHOLD: 60,

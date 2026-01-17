@@ -585,6 +585,9 @@ export class GameScene extends Phaser.Scene {
   /** Mulligan banner strip */
   public mulliganBannerRect: Phaser.GameObjects.Rectangle | null = null;
   
+  /** Counter for number of mulligans used (for doubling cost) */
+  public mulliganCount: number = 0;
+  
   /* ----------------------------------------
    * Discard Mode UI Elements
    * ---------------------------------------- */
@@ -1093,8 +1096,8 @@ export class GameScene extends Phaser.Scene {
     handleOpponentMovePiece.call(this, from, to, promotion);
   }
 
-  public handleOpponentMulligan(): void {
-    handleOpponentMulligan.call(this);
+  public handleOpponentMulligan(time_cost: number): void {
+    handleOpponentMulligan.call(this, time_cost);
   }
 
   public handleOpponentReady(): void {

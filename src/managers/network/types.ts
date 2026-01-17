@@ -39,7 +39,7 @@ export interface NetworkMessage {
 export type GameAction =
   | { type: 'PLAY_CARD'; cardId: string; cardName: string; target?: string; pieceType?: string; effectAction?: string }
   | { type: 'MOVE_PIECE'; from: string; to: string; promotion?: string }
-  | { type: 'MULLIGAN' }
+  | { type: 'MULLIGAN'; time_cost: number }
   | { type: 'READY' }
   | { type: 'END_TURN'; disturbAmount?: number }
   | { type: 'DISCARD_CARDS'; count: number }

@@ -23,7 +23,7 @@
 import {
   MAX_HAND_SIZE,
   MOVE_TIME_COST,
-  MULLIGAN_TIME_COST,
+  MULLIGAN_TIME_BASE_COST,
   STOPWATCH_THRESHOLD
 } from './constants';
 import { resolveCardEffect as resolveCardEffectHelper } from './effects';
@@ -322,9 +322,12 @@ export class GameStateManager {
    * Deducts time cost for mulligan (10 seconds)
    * 
    * @param player - Player color
+   * @returns Actual mulligan cost
    */
-  deductMulliganTimeCost(player: PlayerColor): void {
-    this.deductTime(player, MULLIGAN_TIME_COST);
+  deductMulliganTimeCost(player: PlayerColor, count: number): number {
+    const mulliganTimeCost =  MULLIGAN_TIME_BASE_COST * (2 ** count)
+    this.deductTime(player, mulliganTimeCost);
+    return mulliganTimeCost
   }
 
   /**

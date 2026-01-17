@@ -836,10 +836,12 @@ export class NetworkManager {
   /**
    * Sends a mulligan action (redraw hand)
    * 
+   * @param time_cost - Time cost by mulligan
+   * 
    * Used by: GameScene.handleMulligan()
    */
-  sendMulligan(): void {
-    this.sendGameAction({ type: 'MULLIGAN' });
+  sendMulligan(time_cost: number): void {
+    this.sendGameAction({ type: 'MULLIGAN', time_cost });
   }
 
   /**

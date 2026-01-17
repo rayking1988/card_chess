@@ -16,7 +16,7 @@ export const INITIAL_CLOCK_SECONDS = CLOCK.INITIAL_SECONDS;
 export const MOVE_TIME_COST = CLOCK.MOVE_TIME_COST;
 
 /** Time cost for mulligan action (seconds) */
-export const MULLIGAN_TIME_COST = CLOCK.MULLIGAN_TIME_COST;
+export const MULLIGAN_TIME_BASE_COST = CLOCK.MULLIGAN_TIME_BASE_COST;
 
 /** Stopwatch threshold for opponent draw (seconds) */
 export const STOPWATCH_THRESHOLD = STOPWATCH.THRESHOLD_SECONDS;

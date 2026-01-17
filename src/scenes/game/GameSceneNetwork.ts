@@ -49,7 +49,9 @@ export function setupNetworkCallbacks(this: GameScene): void {
 
   this.networkManager.onEventLogSync((entries) => {
     if (!this.eventLog) return;
-    const merged = mergeEventLogs(this.eventLog.getEntries(), entries);
+    // Filter out chat entries (they're local only, not synced)
+    const gameEntries = this.eventLog.getEntries().filter(e => e.player !== 'chat') as any[];
+    const merged = mergeEventLogs(gameEntries, entries);
     this.eventLog.importEntries(merged);
   });
 
@@ -59,7 +61,9 @@ export function setupNetworkCallbacks(this: GameScene): void {
     if (this.networkManager?.getIsHost()) {
       this.networkManager.sendStateSync(this.gameStateManager.getState());
       if (this.eventLog) {
-        this.networkManager.sendEventLogSync(this.eventLog.getEntries());
+        // Filter out chat entries (they're local only, not synced)
+        const gameEntries = this.eventLog.getEntries().filter(e => e.player !== 'chat') as any[];
+        this.networkManager.sendEventLogSync(gameEntries);
       }
     }
   });
@@ -88,7 +92,9 @@ export function setupNetworkCallbacks(this: GameScene): void {
     if (this.networkManager.getIsHost()) {
       this.networkManager.sendStateSync(this.gameStateManager.getState());
       if (this.eventLog) {
-        this.networkManager.sendEventLogSync(this.eventLog.getEntries());
+        // Filter out chat entries (they're local only, not synced)
+        const gameEntries = this.eventLog.getEntries().filter(e => e.player !== 'chat') as any[];
+        this.networkManager.sendEventLogSync(gameEntries);
       }
     }
   }
@@ -109,7 +115,7 @@ export function handleNetworkAction(this: GameScene, action: GameAction): void {
       this.handleOpponentMovePiece(action.from, action.to, action.promotion);
       break;
     case 'MULLIGAN':
-      this.handleOpponentMulligan();
+      this.handleOpponentMulligan(action.time_cost);
       break;
     case 'READY':
       this.handleOpponentReady();
@@ -417,11 +423,11 @@ export function handleOpponentMovePiece(this: GameScene, from: string, to: strin
  * Handles opponent performing a mulligan
  * Logs event (time cost is already synced via PLAYER_STATS_SYNC)
  */
-export function handleOpponentMulligan(this: GameScene): void {
+export function handleOpponentMulligan(this: GameScene, time_cost: number): void {
   const opponentColor = this.localColor === 'white' ? 'black' : 'white';
   // Note: We don't call deductMulliganTimeCost here because the opponent's stopwatch
   // is already synced via PLAYER_STATS_SYNC. Calling it would add time twice.
-  this.logEvent(opponentColor, 'Mulligan (-10s)');
+  this.logEvent(opponentColor, `Mulligan (-${time_cost}s)`);
   const opponentState = this.gameStateManager.getPlayer(opponentColor);
   this.opponentClockTime = opponentState.clock;
   this.opponentStopwatchTime = opponentState.stopwatch;
