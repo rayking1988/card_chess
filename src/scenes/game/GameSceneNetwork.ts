@@ -133,6 +133,13 @@ export function handleNetworkAction(this: GameScene, action: GameAction): void {
       this.gameStateManager.endTurn(true);
       const opponentColor = this.localColor === 'white' ? 'black' : 'white';
       const newTurn = this.gameStateManager.getCurrentTurn();
+      
+      // Update opponent hand count: they drew 1 card at turn start (except white's first turn)
+      const isWhiteVeryFirstTurn = newTurn === 'white' && this.gameStateManager.getState().turnNumber === 1;
+      if (!isWhiteVeryFirstTurn) {
+        this.opponentHandCount = Math.min(this.opponentHandCount + 1, 7); // Max hand size is 7
+      }
+      
       this.logEvent('system', `Ending ${opponentColor}'s turn...`);
       this.logEvent('system', `Now ${newTurn}'s turn`);
       this.updateUIFromState();
@@ -156,6 +163,15 @@ export function handleNetworkAction(this: GameScene, action: GameAction): void {
       break;
     case 'REMATCH_DECLINE':
       this.handleRematchDeclined();
+      break;
+    case 'OFFER_DRAW':
+      this.handleOpponentOfferDraw();
+      break;
+    case 'ACCEPT_DRAW':
+      this.handleOpponentAcceptDraw();
+      break;
+    case 'RESIGN':
+      this.handleOpponentResign();
       break;
     case 'CHAT_MESSAGE':
       this.eventLog.addEntry('chat', action.message, action.senderName);

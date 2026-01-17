@@ -99,6 +99,11 @@ import {
   updateUIFromState,
   runUIAnimations,
   animateStopwatchChange,
+  animateTimeTransfer,
+  animateSegmentedEnergyChange,
+  animateSegmentedDisturbChange,
+  animateFocusConversion,
+  animateDisturbConversion,
   animateCardDraw,
   animateCardDiscard,
   createFloatingDelta,
@@ -141,6 +146,14 @@ import {
 } from './game/GameSceneNetwork';
 import { setupChessBoardCallbacks, handleLocalMove } from './game/GameSceneBoard';
 import {
+  updateDrawResignButtons,
+  handleOfferDraw,
+  handleResignClick,
+  handleOpponentOfferDraw,
+  handleOpponentAcceptDraw,
+  handleOpponentResign
+} from './game/GameSceneDrawResign';
+import {
   setupCardHandCallbacks,
   validateCardTarget,
   handleLocalCardPlay,
@@ -169,6 +182,7 @@ import {
   checkGameEndConditions,
   checkCardPlayEndConditions,
   handleGameEnd,
+  enterViewBoardMode,
   handleRematchRequest,
   handleRematchReceived,
   handleRematchDeclined,
@@ -260,6 +274,12 @@ export class GameScene extends Phaser.Scene {
   /** Controlled squares button */
   public controlledSquaresButton!: Phaser.GameObjects.Container;
 
+  /** Offer draw button */
+  public offerDrawButton?: Phaser.GameObjects.Container;
+
+  /** Resign button */
+  public resignButton?: Phaser.GameObjects.Container;
+
   /** Right panel backdrop rectangles */
   public rightPanelTopBackdrop!: Phaser.GameObjects.Rectangle;
   public rightPanelMiddleBackdrop!: Phaser.GameObjects.Rectangle;
@@ -269,6 +289,13 @@ export class GameScene extends Phaser.Scene {
   public rightPanelTopTint!: Phaser.GameObjects.Rectangle;
   public rightPanelMiddleTint!: Phaser.GameObjects.Rectangle;
   public rightPanelBottomTint!: Phaser.GameObjects.Rectangle;
+
+  /** Offer draw state */
+  public localOfferedDraw: boolean = false;
+  public opponentOfferedDraw: boolean = false;
+
+  /** Resign confirmation state */
+  public isResignConfirm: boolean = false;
 
   /** Preview panel background for card preview */
   public previewPanelBackground: Phaser.GameObjects.Rectangle | null = null;
@@ -358,6 +385,25 @@ export class GameScene extends Phaser.Scene {
   
   /** Card count indicator text (Hand: X / 7) */
   public cardCountText!: Phaser.GameObjects.Text;
+
+  /* ----------------------------------------
+   * UI Animation State
+   * ---------------------------------------- */
+
+  public localEnergyAnimEvent?: Phaser.Time.TimerEvent;
+  public opponentEnergyAnimEvent?: Phaser.Time.TimerEvent;
+  public localDisturbAnimEvent?: Phaser.Time.TimerEvent;
+  public opponentDisturbAnimEvent?: Phaser.Time.TimerEvent;
+  public localFocusAnimEvent?: Phaser.Time.TimerEvent;
+  public opponentFocusAnimEvent?: Phaser.Time.TimerEvent;
+  public localTimeTransferTween?: Phaser.Tweens.Tween;
+  public opponentTimeTransferTween?: Phaser.Tweens.Tween;
+  public localClockDeltaText?: Phaser.GameObjects.Text;
+  public localStopwatchDeltaText?: Phaser.GameObjects.Text;
+  public opponentClockDeltaText?: Phaser.GameObjects.Text;
+  public opponentStopwatchDeltaText?: Phaser.GameObjects.Text;
+  public localFocusTimeBankText?: Phaser.GameObjects.Text;
+  public opponentFocusTimeBankText?: Phaser.GameObjects.Text;
   
   /** Player's nameplate text */
   public playerNameText!: Phaser.GameObjects.Text;
@@ -392,7 +438,14 @@ export class GameScene extends Phaser.Scene {
    * ---------------------------------------- */
 
   public promotionOverlay: Phaser.GameObjects.Container | null = null;
-  public pendingPromotion: { from: Square; to: Square; color: PlayerColor } | null = null;
+  public pendingPromotion: {
+    from: Square;
+    to: Square;
+    color: PlayerColor;
+    options?: PieceSymbol[];
+    onSelect?: (piece: PieceSymbol) => void;
+    title?: string;
+  } | null = null;
 
   /* ----------------------------------------
    * Mobile UI Bars
@@ -626,6 +679,12 @@ export class GameScene extends Phaser.Scene {
   /** Back to menu button in game end banner */
   public gameEndMenuButton: Phaser.GameObjects.Container | null = null;
 
+  /** View board button in game end banner */
+  public gameEndViewBoardButton: Phaser.GameObjects.Container | null = null;
+
+  /** Whether the end screen is in view-board mode */
+  public isViewingBoard: boolean = false;
+
   /** Rematch request state */
   public localRematchRequested: boolean = false;
   public opponentRematchRequested: boolean = false;
@@ -666,6 +725,9 @@ export class GameScene extends Phaser.Scene {
   
   /** Array of card components in discard viewer */
   public discardViewerCards: CardComponent[] = [];
+
+  /** Preview card shown when hovering discard viewer cards */
+  public discardViewerPreviewCard: CardComponent | null = null;
   
   /** Bounds of the discard viewer content area */
   public discardViewerBounds: { x: number; y: number; width: number; height: number } | null = null;
@@ -923,6 +985,57 @@ export class GameScene extends Phaser.Scene {
     animateStopwatchChange.call(this, component, oldValue, newValue);
   }
 
+  public animateTimeTransfer(
+    side: 'local' | 'opponent',
+    clock: ClockComponent,
+    stopwatch: StopwatchComponent,
+    oldClock: number,
+    newClock: number,
+    oldStopwatch: number,
+    newStopwatch: number
+  ): void {
+    animateTimeTransfer.call(this, side, clock, stopwatch, oldClock, newClock, oldStopwatch, newStopwatch);
+  }
+
+  public animateSegmentedEnergyChange(
+    side: 'local' | 'opponent',
+    component: EnergyBarComponent,
+    from: number,
+    to: number,
+    cap: number
+  ): void {
+    animateSegmentedEnergyChange.call(this, side, component, from, to, cap);
+  }
+
+  public animateSegmentedDisturbChange(
+    side: 'local' | 'opponent',
+    component: DisturbCounterComponent | undefined,
+    from: number,
+    to: number
+  ): void {
+    animateSegmentedDisturbChange.call(this, side, component, from, to);
+  }
+
+  public animateFocusConversion(
+    side: 'local' | 'opponent',
+    energyAmount: number,
+    oldClock: number,
+    newClock: number,
+    cap: number
+  ): void {
+    animateFocusConversion.call(this, side, energyAmount, oldClock, newClock, cap);
+  }
+
+  public animateDisturbConversion(
+    side: 'local' | 'opponent',
+    energyAmount: number,
+    disturbStart: number,
+    disturbEnd: number,
+    cap: number
+  ): void {
+    animateDisturbConversion.call(this, side, energyAmount, disturbStart, disturbEnd, cap);
+  }
+
   public animateCardDraw(side: 'local' | 'opponent', count: number): void {
     animateCardDraw.call(this, side, count);
   }
@@ -961,8 +1074,39 @@ export class GameScene extends Phaser.Scene {
     toggleMobileEventLog.call(this);
   }
 
-  public showPromotionPicker(from: Square, to: Square, movingColor: PlayerColor): void {
-    showPromotionPicker.call(this, from, to, movingColor);
+  public updateDrawResignButtons(): void {
+    updateDrawResignButtons.call(this);
+  }
+
+  public handleOfferDraw(): void {
+    handleOfferDraw.call(this);
+  }
+
+  public handleResignClick(): void {
+    handleResignClick.call(this);
+  }
+
+  public handleOpponentOfferDraw(): void {
+    handleOpponentOfferDraw.call(this);
+  }
+
+  public handleOpponentAcceptDraw(): void {
+    handleOpponentAcceptDraw.call(this);
+  }
+
+  public handleOpponentResign(): void {
+    handleOpponentResign.call(this);
+  }
+
+  public showPromotionPicker(
+    from: Square,
+    to: Square,
+    movingColor: PlayerColor,
+    options?: PieceSymbol[],
+    onSelect?: (piece: PieceSymbol) => void,
+    title?: string
+  ): void {
+    showPromotionPicker.call(this, from, to, movingColor, options, onSelect, title);
   }
 
   public hidePromotionPicker(): void {
@@ -1034,9 +1178,10 @@ export class GameScene extends Phaser.Scene {
     cardData: Card | null,
     side: 'local' | 'opponent',
     target?: Square,
-    onComplete?: () => void
+    onComplete?: () => void,
+    startPos?: { x: number; y: number }
   ): void {
-    animateCardPlay.call(this, cardData, side, target, onComplete);
+    animateCardPlay.call(this, cardData, side, target, onComplete, startPos);
   }
 
   public animatePieceMove(
@@ -1198,6 +1343,10 @@ export class GameScene extends Phaser.Scene {
 
   public handleGameEnd(winner: PlayerColor | null, reason: string): void {
     handleGameEnd.call(this, winner, reason);
+  }
+
+  public enterViewBoardMode(): void {
+    enterViewBoardMode.call(this);
   }
 
   public handleRematchRequest(): void {

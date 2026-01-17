@@ -724,13 +724,13 @@ export const LEFT_PANEL_LAYOUT = {
   LABEL_FONT_SIZE: 11,
   
   /** Count font size factor */
-  COUNT_FONT_SIZE: 12,
+  COUNT_FONT_SIZE: 18,
   
   /** Label Y offset factor */
   LABEL_Y_OFFSET: 60,
   
   /** Count Y offset factor */
-  COUNT_Y_OFFSET: 55,
+  COUNT_Y_OFFSET: 0,
   
   /** Maximum pile layers for visual depth */
   MAX_PILE_LAYERS: 60,
@@ -1103,7 +1103,7 @@ export const UI_FACTORY = {
   DECK_LABEL_FONT_SIZE: 10,
   
   /** Deck count font size */
-  DECK_COUNT_FONT_SIZE: 12,
+  DECK_COUNT_FONT_SIZE: 18,
   
   /** Hand label font size */
   HAND_LABEL_FONT_SIZE: 12,

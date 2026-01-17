@@ -19,6 +19,7 @@ export {
   checkGameEndConditions,
   checkCardPlayEndConditions,
   handleGameEnd,
+  enterViewBoardMode,
   handleRematchRequest,
   handleRematchReceived,
   handleRematchDeclined,

@@ -6,7 +6,7 @@
 
 import { Square, Color, PieceSymbol } from 'chess.js';
 import { CardComponent } from '../../components/Card';
-import type { Card, PieceType } from '../../managers/GameStateManager';
+import type { Card, PieceType, PlayerColor } from '../../managers/GameStateManager';
 import { calculateControlPower, playerControlsSquare } from '../../utils/controlPower';
 import { makeCardComponentClickable } from './GameUIHelpers';
 import type { GameScene } from '../GameScene';
@@ -16,6 +16,15 @@ const DEPLOY_HIGHLIGHT_COLOR = 0x4488ff;
 
 /** Color for destroy target highlights (red) */
 const DESTROY_HIGHLIGHT_COLOR = 0xff4444;
+
+const PROMOTION_PIECES: PieceSymbol[] = ['q', 'r', 'b', 'n'];
+
+function isOpponentHomeRank(square: Square, player: PlayerColor): boolean {
+  if (player === 'white') {
+    return square[1] === '8';
+  }
+  return square[1] === '1';
+}
 
 /**
  * Gets all legal target squares for a card
@@ -207,57 +216,90 @@ export function handleLocalCardPlay(this: GameScene, card: Card, target?: Square
     return false;
   }
 
-  // Lock discard display BEFORE playing card to prevent UI update during animation
-  this.lockDiscardTop('local');
+  const releasePos = this.cardHand.getTargeting()?.getLastReleasePosition() ?? undefined;
 
-  // Play the card
-  const result = this.gameStateManager.playCard(card.id, this.localColor, target);
+  const finalizeCardPlay = (deployPieceOverride?: PieceSymbol): boolean => {
+    // Lock discard display BEFORE playing card to prevent UI update during animation
+    this.lockDiscardTop('local');
 
-  if (result.success) {
-    this.logEvent(this.localColor, `Played ${card.name}`);
-    // Animation will call releaseDiscardTop when complete
-    this.animateCardPlay(card, 'local', target);
+    const result = this.gameStateManager.playCard(card.id, this.localColor, target);
 
-    // Handle piece deployment/destruction on board
-    if (card.effect.action === 'DEPLOY_PIECE' && target) {
-      const piece = (card.effect as { piece: PieceSymbol }).piece;
-      const color: Color = this.localColor === 'white' ? 'w' : 'b';
-      this.chessBoard.placePiece(target, piece, color);
-      this.gameStateManager.setBoardFEN(this.chessBoard.getPosition());
-      this.animatePieceDeploy(target);
-    } else if (card.effect.action === 'DESTROY_PIECE' && target) {
-      const targetPiece = this.chessBoard.getWrapper().getPiece(target);
-      this.chessBoard.removePiece(target);
-      this.gameStateManager.setBoardFEN(this.chessBoard.getPosition());
-      if (targetPiece) {
-        this.animatePieceDestroy(targetPiece, target);
+    if (result.success) {
+      this.logEvent(this.localColor, `Played ${card.name}`);
+      // Animation will call releaseDiscardTop when complete
+      this.animateCardPlay(card, 'local', target, undefined, releasePos);
+
+      // Handle piece deployment/destruction on board
+      if (card.effect.action === 'DEPLOY_PIECE' && target) {
+        const piece = deployPieceOverride ?? (card.effect as { piece: PieceSymbol }).piece;
+        const color: Color = this.localColor === 'white' ? 'w' : 'b';
+        this.chessBoard.placePiece(target, piece, color);
+        this.gameStateManager.setBoardFEN(this.chessBoard.getPosition());
+        this.animatePieceDeploy(target);
+      } else if (card.effect.action === 'DESTROY_PIECE' && target) {
+        const targetPiece = this.chessBoard.getWrapper().getPiece(target);
+        this.chessBoard.removePiece(target);
+        this.gameStateManager.setBoardFEN(this.chessBoard.getPosition());
+        if (targetPiece) {
+          this.animatePieceDestroy(targetPiece, target);
+        }
       }
+
+      // Send to network with card details for opponent to sync
+      const pieceType = card.effect.action === 'DEPLOY_PIECE'
+        ? (deployPieceOverride ?? (card.effect as { piece: PieceSymbol }).piece)
+        : undefined;
+      this.networkManager?.sendPlayCard(card.id, card.name, target, pieceType, card.effect.action);
+
+      // Check for checkmate/stalemate after card play (Requirement 3.8)
+      this.checkCardPlayEndConditions();
+    } else {
+      // Release lock if card play failed
+      this.releaseDiscardTop('local');
+      this.logEvent('system', result.message);
+      this.updateHandDisplay();
+      return false;
     }
 
-    // Send to network with card details for opponent to sync
-    const pieceType = card.effect.action === 'DEPLOY_PIECE' ? (card.effect as { piece: PieceSymbol }).piece : undefined;
-    this.networkManager?.sendPlayCard(card.id, card.name, target, pieceType, card.effect.action);
-
-    // Check for checkmate/stalemate after card play (Requirement 3.8)
-    this.checkCardPlayEndConditions();
-  } else {
-    // Release lock if card play failed
-    this.releaseDiscardTop('local');
-    this.logEvent('system', result.message);
-    return false;
-  }
-
-  this.updateUIFromState();
-  
-  // Check stopwatch threshold AFTER UI is updated
-  // This ensures the displayed stopwatch value matches when draws are triggered
-  const cardsDrawn = this.gameStateManager.checkStopwatchThreshold(this.localColor);
-  if (cardsDrawn > 0) {
-    this.logEvent('system', `Opponent drew ${cardsDrawn} card(s) (stopwatch threshold)`);
     this.updateUIFromState();
+    
+    // Check stopwatch threshold AFTER UI is updated
+    // This ensures the displayed stopwatch value matches when draws are triggered
+    const cardsDrawn = this.gameStateManager.checkStopwatchThreshold(this.localColor);
+    if (cardsDrawn > 0) {
+      this.logEvent('system', `Opponent drew ${cardsDrawn} card(s) (stopwatch threshold)`);
+      this.updateUIFromState();
+    }
+    
+    return true;
+  };
+
+  if (card.effect.action === 'DEPLOY_PIECE' && target) {
+    const basePiece = (card.effect as { piece: PieceSymbol }).piece;
+    if (basePiece === 'p' && isOpponentHomeRank(target, this.localColor)) {
+      const boardFEN = this.chessBoard.getPosition();
+      const allowedPromotions = PROMOTION_PIECES.filter(
+        piece => !this.gameStateManager.wouldDeploymentGiveCheck(target, piece as PieceType, this.localColor, boardFEN)
+      );
+      if (allowedPromotions.length === 0) {
+        this.logEvent('system', 'No legal promotion options');
+        return false;
+      }
+
+      this.showPromotionPicker(
+        target,
+        target,
+        this.localColor,
+        allowedPromotions,
+        (piece) => {
+          finalizeCardPlay(piece);
+        }
+      );
+      return true;
+    }
   }
-  
-  return true;
+
+  return finalizeCardPlay();
 }
 
 /**

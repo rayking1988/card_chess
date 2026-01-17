@@ -957,6 +957,18 @@ export class NetworkManager {
     this.sendGameAction({ type: 'REMATCH_DECLINE' });
   }
 
+  sendOfferDraw(): void {
+    this.sendGameAction({ type: 'OFFER_DRAW' });
+  }
+
+  sendAcceptDraw(): void {
+    this.sendGameAction({ type: 'ACCEPT_DRAW' });
+  }
+
+  sendResign(): void {
+    this.sendGameAction({ type: 'RESIGN' });
+  }
+
 
   /* ============================================
    * PRIVATE EVENT HANDLERS

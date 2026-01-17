@@ -65,15 +65,16 @@ export function animateCardPlay(
   cardData: Card | null,
   side: 'local' | 'opponent',
   target?: Square,
-  onComplete?: () => void
+  onComplete?: () => void,
+  startPos?: { x: number; y: number }
 ): void {
   const layout = this.currentLayout;
   if (!layout) return;
 
-  let startX = side === 'local' ? layout.cardHandX : layout.opponentHandX;
-  let startY = side === 'local' ? layout.cardHandY : layout.opponentHandY;
+  let startX = startPos?.x ?? (side === 'local' ? layout.cardHandX : layout.opponentHandX);
+  let startY = startPos?.y ?? (side === 'local' ? layout.cardHandY : layout.opponentHandY);
 
-  if (side === 'local' && cardData) {
+  if (!startPos && side === 'local' && cardData) {
     const cardComponent = this.cardHand.getCardComponent(cardData.id);
     if (cardComponent) {
       const worldPos = this.getWorldPosition(cardComponent.getContainer());

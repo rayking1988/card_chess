@@ -9,7 +9,7 @@ import type { GameScene } from '../GameScene';
 import { MAX_HAND_SIZE } from './GameConstants';
 import { calculateLayout } from './GameLayout';
 import type { GameLayout } from './GameTypes';
-import { layoutPileStack } from './GameUIHelpers';
+import { getPileLayerCount, layoutPileStack } from './GameUIHelpers';
 import { scaleBackgroundToCover } from './GameSceneBackground';
 import { updateDebugOverlays } from './GameSceneDebug';
 import {
@@ -148,6 +148,8 @@ export function positionRightPanel(this: GameScene, layout: GameLayout): void {
     this.playerDisturbCounter?.setVisible(false);
     this.playerFocusDisturb?.setVisible(false);
     this.controlledSquaresButton?.setVisible(false);
+    this.offerDrawButton?.setVisible(false);
+    this.resignButton?.setVisible(false);
     this.rightPanelTopBackdrop?.setVisible(false);
     this.rightPanelMiddleBackdrop?.setVisible(false);
     this.rightPanelBottomBackdrop?.setVisible(false);
@@ -243,12 +245,54 @@ export function positionRightPanel(this: GameScene, layout: GameLayout): void {
     { component: this.playerFocusDisturb }
   ], middleSection);
 
+  const buttonScale = Math.min(topScale, midScale) * RIGHT_PANEL_LAYOUT.BUTTON_SCALE_FACTOR;
+  
+  // Layout: Offer Draw and Resign on top row, Controlled Squares below
+  const rowGap = 8 * buttonScale;
+  const buttonGap = 6 * buttonScale;
+  
+  // First row: Offer Draw and Resign
+  const topRowButtons: Phaser.GameObjects.Container[] = [];
+  if (this.offerDrawButton) {
+    this.offerDrawButton.setVisible(true);
+    this.offerDrawButton.setData('baseScale', buttonScale);
+    this.offerDrawButton.setScale(buttonScale);
+    topRowButtons.push(this.offerDrawButton);
+  }
+  if (this.resignButton) {
+    this.resignButton.setVisible(true);
+    this.resignButton.setData('baseScale', buttonScale);
+    this.resignButton.setScale(buttonScale);
+    topRowButtons.push(this.resignButton);
+  }
+  
+  // Second row: Controlled Squares
   if (this.controlledSquaresButton) {
     this.controlledSquaresButton.setVisible(true);
-    this.controlledSquaresButton.setPosition(rightX, bottomSection.centerY);
-    const buttonScale = Math.min(topScale, midScale) * RIGHT_PANEL_LAYOUT.BUTTON_SCALE_FACTOR;
     this.controlledSquaresButton.setData('baseScale', buttonScale);
     this.controlledSquaresButton.setScale(buttonScale);
+  }
+  
+  // Position top row buttons side by side
+  if (topRowButtons.length > 0) {
+    const topRowHeight = topRowButtons[0].getBounds().height;
+    const topRowWidth = topRowButtons.reduce((sum, btn) => sum + btn.getBounds().width, 0) + buttonGap * (topRowButtons.length - 1);
+    let x = rightX - topRowWidth / 2;
+    const topRowY = bottomSection.centerY - (topRowHeight + rowGap) / 2;
+    
+    for (const button of topRowButtons) {
+      const width = button.getBounds().width;
+      x += width / 2;
+      button.setPosition(x, topRowY);
+      x += width / 2 + buttonGap;
+    }
+  }
+  
+  // Position controlled squares button below
+  if (this.controlledSquaresButton) {
+    const topRowHeight = topRowButtons.length > 0 ? topRowButtons[0].getBounds().height : 0;
+    const controlledSquaresY = bottomSection.centerY + (topRowHeight + rowGap) / 2;
+    this.controlledSquaresButton.setPosition(rightX, controlledSquaresY);
   }
 }
 
@@ -378,6 +422,19 @@ export function positionLeftPanel(this: GameScene, layout: GameLayout): void {
   const topCardScale = LEFT_PANEL_LAYOUT.TOP_CARD_SCALE * scale;
   const labelSize = LEFT_PANEL_LAYOUT.LABEL_FONT_SIZE * scale;
   const countSize = LEFT_PANEL_LAYOUT.COUNT_FONT_SIZE * scale;
+  const offsetX = -1.8 * deckScale;
+  const offsetY = -3.2 * deckScale;
+
+  const getPileTop = (x: number, y: number, count: number): { x: number; y: number } => {
+    const layers = getPileLayerCount(count);
+    if (layers <= 0) {
+      return { x, y };
+    }
+    return {
+      x: x + (layers - 1) * offsetX,
+      y: y + (layers - 1) * offsetY
+    };
+  };
 
   layoutPileStack(this.opponentDeckStack, leftX, layout.opponentDeckY, deckScale, this.opponentDeckCount, 1);
   if (this.opponentDeckLabelText) {
@@ -385,13 +442,15 @@ export function positionLeftPanel(this: GameScene, layout: GameLayout): void {
     this.opponentDeckLabelText.setFontSize(labelSize);
   }
   if (this.opponentDeckCountText) {
-    this.opponentDeckCountText.setPosition(leftX, layout.opponentDeckY + LEFT_PANEL_LAYOUT.COUNT_Y_OFFSET * scale);
+    const topPos = getPileTop(leftX, layout.opponentDeckY, this.opponentDeckCount);
+    this.opponentDeckCountText.setPosition(topPos.x, topPos.y);
     this.opponentDeckCountText.setFontSize(countSize);
   }
 
   layoutPileStack(this.opponentDiscardStack, leftX, layout.opponentDiscardY, deckScale, this.opponentDiscardCount, 1);
   if (this.opponentDiscardTopCard) {
-    this.opponentDiscardTopCard.setPosition(leftX, layout.opponentDiscardY);
+    const topPos = getPileTop(leftX, layout.opponentDiscardY, this.opponentDiscardCount);
+    this.opponentDiscardTopCard.setPosition(topPos.x, topPos.y);
     this.opponentDiscardTopCard.setScale(topCardScale);
   }
   if (this.opponentDiscardLabelText) {
@@ -399,14 +458,16 @@ export function positionLeftPanel(this: GameScene, layout: GameLayout): void {
     this.opponentDiscardLabelText.setFontSize(labelSize);
   }
   if (this.opponentDiscardCountText) {
-    this.opponentDiscardCountText.setPosition(leftX, layout.opponentDiscardY + LEFT_PANEL_LAYOUT.COUNT_Y_OFFSET * scale);
+    const topPos = getPileTop(leftX, layout.opponentDiscardY, this.opponentDiscardCount);
+    this.opponentDiscardCountText.setPosition(topPos.x, topPos.y);
     this.opponentDiscardCountText.setFontSize(countSize);
   }
 
   const localDiscardCount = this.gameStateManager ? this.gameStateManager.getPlayer(this.localColor).discard.length : 0;
   layoutPileStack(this.playerDiscardStack, leftX, layout.playerDiscardY, deckScale, localDiscardCount, 1);
   if (this.playerDiscardTopCard) {
-    this.playerDiscardTopCard.setPosition(leftX, layout.playerDiscardY);
+    const topPos = getPileTop(leftX, layout.playerDiscardY, localDiscardCount);
+    this.playerDiscardTopCard.setPosition(topPos.x, topPos.y);
     this.playerDiscardTopCard.setScale(topCardScale);
   }
   if (this.playerDiscardLabelText) {
@@ -414,7 +475,8 @@ export function positionLeftPanel(this: GameScene, layout: GameLayout): void {
     this.playerDiscardLabelText.setFontSize(labelSize);
   }
   if (this.playerDiscardCountText) {
-    this.playerDiscardCountText.setPosition(leftX, layout.playerDiscardY + LEFT_PANEL_LAYOUT.COUNT_Y_OFFSET * scale);
+    const topPos = getPileTop(leftX, layout.playerDiscardY, localDiscardCount);
+    this.playerDiscardCountText.setPosition(topPos.x, topPos.y);
     this.playerDiscardCountText.setFontSize(countSize);
   }
 
@@ -425,7 +487,8 @@ export function positionLeftPanel(this: GameScene, layout: GameLayout): void {
     this.playerDeckLabelText.setFontSize(labelSize);
   }
   if (this.playerDeckCountText) {
-    this.playerDeckCountText.setPosition(leftX, layout.playerDeckY + LEFT_PANEL_LAYOUT.COUNT_Y_OFFSET * scale);
+    const topPos = getPileTop(leftX, layout.playerDeckY, localDeckCount);
+    this.playerDeckCountText.setPosition(topPos.x, topPos.y);
     this.playerDeckCountText.setFontSize(countSize);
   }
 }

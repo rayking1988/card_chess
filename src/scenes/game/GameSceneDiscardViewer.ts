@@ -47,16 +47,16 @@ export function showDiscardViewer(this: GameScene, side: 'local' | 'opponent'): 
   this.discardViewerTitleText = this.add.text(0, 0, title, {
     fontFamily: 'BoldPixels, Arial',
     fontSize: `${DISCARD_VIEWER.TITLE_FONT_SIZE * layout.panelScale}px`,
-    color: '#ffffff'
+    color: '#dba616'
   }).setOrigin(0.5, 0.5);
   this.discardViewer.add(this.discardViewerTitleText);
 
   this.discardViewerCloseButton = createImageButton(this,
     0,
     0,
-    'CLOSE',
-    'red_button',
-    'red_button_pressed',
+    '',
+    'cross_close',
+    'cross_close',
     () => this.hideDiscardViewer()
   );
   this.discardViewerCloseButton.setData('baseScale', layout.panelScale * DISCARD_VIEWER.CLOSE_BUTTON_SCALE);
@@ -81,6 +81,8 @@ export function showDiscardViewer(this: GameScene, side: 'local' | 'opponent'): 
 export function hideDiscardViewer(this: GameScene): void {
   this.discardViewerCards.forEach(card => card.destroy());
   this.discardViewerCards = [];
+  this.discardViewerPreviewCard?.destroy();
+  this.discardViewerPreviewCard = null;
   this.discardViewerContent?.destroy();
   this.discardViewerMask?.destroy();
   this.discardViewerPanel?.destroy();
@@ -120,7 +122,7 @@ export function layoutDiscardViewer(this: GameScene, layout: GameLayout): void {
   const titleHeight = DISCARD_VIEWER.TITLE_HEIGHT * layout.panelScale;
 
   this.discardViewerPanel.clear();
-  this.discardViewerPanel.fillStyle(hex('#1a1a2e'), DISCARD_VIEWER.PANEL_FILL_ALPHA);
+  this.discardViewerPanel.fillStyle(hex('#23211f'), DISCARD_VIEWER.PANEL_FILL_ALPHA);
   this.discardViewerPanel.fillRoundedRect(
     panelX - panelWidth / 2,
     panelY - panelHeight / 2,
@@ -128,13 +130,29 @@ export function layoutDiscardViewer(this: GameScene, layout: GameLayout): void {
     panelHeight,
     DISCARD_VIEWER.BORDER_RADIUS
   );
-  this.discardViewerPanel.lineStyle(2, hex('#4a4a6e'), 1);
+  this.discardViewerPanel.lineStyle(4, hex('#000000'), 1);
   this.discardViewerPanel.strokeRoundedRect(
     panelX - panelWidth / 2,
     panelY - panelHeight / 2,
     panelWidth,
     panelHeight,
     DISCARD_VIEWER.BORDER_RADIUS
+  );
+  this.discardViewerPanel.lineStyle(2, hex('#2a1a0a'), 1);
+  this.discardViewerPanel.strokeRoundedRect(
+    panelX - panelWidth / 2 + 2,
+    panelY - panelHeight / 2 + 2,
+    panelWidth - 4,
+    panelHeight - 4,
+    Math.max(0, DISCARD_VIEWER.BORDER_RADIUS - 2)
+  );
+  this.discardViewerPanel.lineStyle(2, hex('#1d1b1a'), 1);
+  this.discardViewerPanel.strokeRoundedRect(
+    panelX - panelWidth / 2 + 4,
+    panelY - panelHeight / 2 + 4,
+    panelWidth - 8,
+    panelHeight - 8,
+    Math.max(0, DISCARD_VIEWER.BORDER_RADIUS - 4)
   );
 
   this.discardViewerTitleText.setPosition(panelX, panelY - panelHeight / 2 + titleHeight * 0.55);
@@ -187,8 +205,8 @@ export function buildDiscardViewerCards(this: GameScene, layout: GameLayout): vo
   const isOpponent = this.discardViewerSide === 'opponent';
   const localDiscard = this.gameStateManager.getPlayer(this.localColor).discard;
   const rawCards = isOpponent ? this.opponentDiscardCards : localDiscard;
-  // Filter out null values and reverse (most recent first)
-  const cards = [...rawCards].filter(c => c !== null).reverse();
+  // Filter out null values - show from bottom to top
+  const cards = [...rawCards].filter(c => c !== null);
 
   const scale = DISCARD_VIEWER.CARD_SCALE * layout.panelScale;
   const spacingX = DISCARD_VIEWER.CARD_SPACING_X * layout.panelScale;
@@ -202,7 +220,7 @@ export function buildDiscardViewerCards(this: GameScene, layout: GameLayout): vo
   this.discardViewerScrollOffset = Math.min(this.discardViewerScrollOffset, this.discardViewerMaxScroll);
 
   for (let i = 0; i < cards.length; i++) {
-    const row = Math.floor(i / columns);
+    const row = (totalRows - 1) - Math.floor(i / columns);
     const col = i % columns;
     const cardData = cards[i];
     // Always show cards face-up in discard viewer (discard piles are public information)
@@ -212,6 +230,23 @@ export function buildDiscardViewerCards(this: GameScene, layout: GameLayout): vo
     const y = row * spacingY + spacingY / 2;
     card.setPosition(x, y);
     card.getContainer().setDepth(DISCARD_VIEWER.CARD_DEPTH);
+    const container = card.getContainer();
+    const bounds = container.getBounds();
+    const width = bounds.width / (container.scaleX || 1);
+    const height = bounds.height / (container.scaleY || 1);
+    const hitArea = new Phaser.Geom.Rectangle(-width / 2, -height / 2, width, height);
+    container.setInteractive(hitArea, Phaser.Geom.Rectangle.Contains);
+    container.on('pointerover', () => {
+      this.discardViewerPreviewCard?.destroy();
+      const previewScale = 1.35 * layout.panelScale;
+      const preview = new CardComponent(this, layout.previewX, layout.previewY, cardData, false, previewScale);
+      preview.setDepth(DISCARD_VIEWER.CARD_DEPTH + 20);
+      this.discardViewerPreviewCard = preview;
+    });
+    container.on('pointerout', () => {
+      this.discardViewerPreviewCard?.destroy();
+      this.discardViewerPreviewCard = null;
+    });
     this.discardViewerCards.push(card);
     this.discardViewerContent.add(card.getContainer());
   }

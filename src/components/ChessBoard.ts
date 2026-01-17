@@ -725,7 +725,11 @@ export class ChessBoardComponent {
     const size = SQUARE_SIZE * this.scale;
     
     // Make sprite interactive
-    sprite.setInteractive({ draggable: true });
+    sprite.setInteractive({ draggable: true, useHandCursor: true });
+
+    sprite.on('pointerdown', () => {
+      this.handleSquareClick(square);
+    });
     
     sprite.on('dragstart', () => {
       // Only allow dragging pieces of current turn
@@ -747,6 +751,7 @@ export class ChessBoardComponent {
       // Bring piece to front and make it slightly transparent
       sprite.setDepth(1000);
       sprite.setAlpha(0.8);
+      this.container.bringToTop(sprite);
       
       // Highlight valid moves
       this.renderHighlights();
@@ -832,7 +837,7 @@ export class ChessBoardComponent {
       .setOrigin(0, 0)
       .setInteractive({ hitArea, hitAreaCallback: Phaser.Geom.Rectangle.Contains });
     
-    this.container.add(zone);
+    this.container.addAt(zone, 1);
     
     zone.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       // Convert pointer position to board coordinates

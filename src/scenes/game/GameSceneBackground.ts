@@ -8,6 +8,8 @@ import Phaser from 'phaser';
 import { hex } from '../../utils/colors';
 import type { GameScene } from '../GameScene';
 
+const TILE_ZOOM = 1.25;
+
 /**
  * Creates the scene background
  *
@@ -24,6 +26,7 @@ export function createBackground(this: GameScene, width: number, height: number)
       height,
       'wood_background'
     );
+    tiledBg.setTileScale(TILE_ZOOM);
     tiledBg.setDepth(-1);
     // Store reference for resize handling
     this.background = tiledBg as unknown as Phaser.GameObjects.Image;
@@ -41,6 +44,7 @@ export function createBackground(this: GameScene, width: number, height: number)
       height,
       'background'
     );
+    tiledBg.setTileScale(TILE_ZOOM);
     tiledBg.setDepth(-1);
   } else {
     this.cameras.main.setBackgroundColor(hex('#2a1a0a'));
@@ -61,6 +65,7 @@ export function scaleBackgroundToCover(this: GameScene): void {
   if (this.background instanceof Phaser.GameObjects.TileSprite) {
     this.background.setSize(width, height);
     this.background.setPosition(width / 2, height / 2);
+    this.background.setTileScale(TILE_ZOOM);
   } else {
     // Regular image - scale to cover
     const bgWidth = this.background.width;

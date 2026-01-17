@@ -34,6 +34,12 @@ export interface UISnapshot {
   opponentStopwatch: number;
   localEnergy: number;
   localEnergyCap: number;
+  opponentEnergy: number;
+  opponentEnergyCap: number;
+  localDisturb: number;
+  opponentDisturb: number;
+  localMode: 'focus' | 'disturb';
+  opponentMode: 'focus' | 'disturb';
   currentTurn: PlayerColor;
   localHand: number;
   opponentHand: number;

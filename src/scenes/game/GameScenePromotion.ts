@@ -4,51 +4,97 @@
  * @module scenes/game/GameScenePromotion
  */
 
-import { Square } from 'chess.js';
+import { Square, PieceSymbol } from 'chess.js';
 import type { PlayerColor } from '../../managers/GameStateManager';
 import type { GameScene } from '../GameScene';
 import { hex } from '../../utils/colors';
+import { calculateLayout } from './GameLayout';
 
-const PROMOTION_OPTIONS = ['q', 'r', 'b', 'n'] as const;
+const DEFAULT_PROMOTION_OPTIONS: PieceSymbol[] = ['q', 'r', 'b', 'n'];
+const PANEL_BASE_WIDTH = 420;
+const PANEL_BASE_HEIGHT = 170;
+const PANEL_RADIUS = 10;
+const TITLE_FONT_SIZE = 22;
+const ICON_BASE_SIZE = 56;
 
-export function showPromotionPicker(this: GameScene, from: Square, to: Square, movingColor: PlayerColor): void {
+export function showPromotionPicker(
+  this: GameScene,
+  from: Square,
+  to: Square,
+  movingColor: PlayerColor,
+  options: PieceSymbol[] = DEFAULT_PROMOTION_OPTIONS,
+  onSelect?: (piece: PieceSymbol) => void,
+  titleText: string = 'Choose Promotion'
+): void {
   if (this.promotionOverlay) {
     this.promotionOverlay.destroy();
     this.promotionOverlay = null;
   }
 
-  this.pendingPromotion = { from, to, color: movingColor };
+  this.pendingPromotion = { from, to, color: movingColor, options, onSelect, title: titleText };
 
+  const layout = this.currentLayout ?? calculateLayout(this.scale.width, this.scale.height);
+  this.currentLayout = layout;
   const { width, height } = this.scale;
   const overlay = this.add.container(0, 0);
   overlay.setDepth(150);
 
   const backdrop = this.add.rectangle(width / 2, height / 2, width, height, hex('#000000'), 0.6);
-  const panelWidth = Math.min(420, width * 0.7);
-  const panelHeight = 160;
-  const panel = this.add.rectangle(width / 2, height / 2, panelWidth, panelHeight, hex('#23211f'), 0.95);
-  panel.setStrokeStyle(2, hex('#e48212ff'), 1);
+  backdrop.setInteractive();
+  overlay.add(backdrop);
 
-  const title = this.add.text(width / 2, height / 2 - 55, 'Choose Promotion', {
-    fontSize: '20px',
+  const panelWidth = Math.min(width * 0.75, PANEL_BASE_WIDTH * layout.panelScale);
+  const panelHeight = Math.min(height * 0.3, PANEL_BASE_HEIGHT * layout.panelScale);
+  const panelX = width / 2;
+  const panelY = height / 2;
+
+  const panel = this.add.graphics();
+  panel.fillStyle(hex('#23211f'), 0.95);
+  panel.fillRoundedRect(panelX - panelWidth / 2, panelY - panelHeight / 2, panelWidth, panelHeight, PANEL_RADIUS);
+  panel.lineStyle(4, hex('#000000'), 1);
+  panel.strokeRoundedRect(panelX - panelWidth / 2, panelY - panelHeight / 2, panelWidth, panelHeight, PANEL_RADIUS);
+  panel.lineStyle(2, hex('#2a1a0a'), 1);
+  panel.strokeRoundedRect(
+    panelX - panelWidth / 2 + 2,
+    panelY - panelHeight / 2 + 2,
+    panelWidth - 4,
+    panelHeight - 4,
+    Math.max(0, PANEL_RADIUS - 2)
+  );
+  panel.lineStyle(2, hex('#1d1b1a'), 1);
+  panel.strokeRoundedRect(
+    panelX - panelWidth / 2 + 4,
+    panelY - panelHeight / 2 + 4,
+    panelWidth - 8,
+    panelHeight - 8,
+    Math.max(0, PANEL_RADIUS - 4)
+  );
+
+  const title = this.add.text(panelX, panelY - panelHeight / 2 + 30 * layout.panelScale, titleText, {
+    fontSize: `${TITLE_FONT_SIZE * layout.panelScale}px`,
     fontFamily: 'BoldPixels, Arial',
-    color: '#ffcc00'
+    color: '#dba616',
+    stroke: '#000000',
+    strokeThickness: 3
   }).setOrigin(0.5);
 
-  const iconSpacing = panelWidth / (PROMOTION_OPTIONS.length + 1);
-  const iconY = height / 2 + 10;
-  overlay.add([backdrop, panel, title]);
+  overlay.add([panel, title]);
 
-  PROMOTION_OPTIONS.forEach((piece, index) => {
+  const iconSpacing = panelWidth / (options.length + 1);
+  const iconY = panelY + panelHeight * 0.15;
+  const iconSize = ICON_BASE_SIZE * layout.panelScale;
+  const handleSelect = onSelect ?? ((piece: PieceSymbol) => this.handleLocalMove(from, to, piece, true));
+
+  options.forEach((piece, index) => {
     const textureKey = this.chessBoard.getPieceTextureKey(piece, movingColor === 'white' ? 'w' : 'b');
     if (!textureKey) return;
-    const icon = this.add.image(width / 2 - panelWidth / 2 + iconSpacing * (index + 1), iconY, textureKey);
-    icon.setDisplaySize(50, 50);
+    const icon = this.add.image(panelX - panelWidth / 2 + iconSpacing * (index + 1), iconY, textureKey);
+    icon.setDisplaySize(iconSize, iconSize);
 
     icon.setInteractive({ useHandCursor: true });
     icon.on('pointerdown', () => {
       this.hidePromotionPicker();
-      this.handleLocalMove(from, to, piece, true); // true = animate promotion moves
+      handleSelect(piece);
     });
     overlay.add(icon);
   });

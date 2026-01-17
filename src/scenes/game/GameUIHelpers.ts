@@ -39,13 +39,15 @@ export function createImageButton(
   const bgPressed = scene.add.image(0, 0, pressedTexture);
   bgPressed.setVisible(false);
   
-  const buttonText = scene.add.text(0, -5, text.toUpperCase(), {
+  const label = text.trim();
+  const buttonText = scene.add.text(0, -5, label.toUpperCase(), {
     fontFamily: 'BoldPixels, Arial',
     fontSize: '30px',
     color: '#ffffff',
     stroke: '#000000ff',
     strokeThickness: 8
   }).setOrigin(0.5);
+  buttonText.setVisible(label.length > 0);
   
   container.add([bgNormal, bgPressed, buttonText]);
   
@@ -54,6 +56,9 @@ export function createImageButton(
   container.setSize(hitWidth, hitHeight);
   container.setInteractive({ useHandCursor: true });
   container.setData('baseScale', 1);
+  container.setData('label', buttonText);
+  container.setData('bgNormal', bgNormal);
+  container.setData('bgPressed', bgPressed);
   
   const applyScale = (multiplier: number) => {
     const baseScale = (container.getData('baseScale') as number) ?? 1;

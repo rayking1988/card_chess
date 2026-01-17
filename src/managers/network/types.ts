@@ -49,6 +49,9 @@ export type GameAction =
   | { type: 'REMATCH_REQUEST' }
   | { type: 'REMATCH_ACCEPT' }
   | { type: 'REMATCH_DECLINE' }
+  | { type: 'OFFER_DRAW' }
+  | { type: 'ACCEPT_DRAW' }
+  | { type: 'RESIGN' }
   | { type: 'STATE_SYNC'; state: GameState }
   | { type: 'PLAYER_STATS_SYNC'; clock: number; stopwatch: number; mode: 'focus' | 'disturb'; deckCount: number; discardCount: number; handCount: number; energy: number; energyCap: number; disturb: number }
   | { type: 'EVENT_LOG'; entries: EventLogEntry[] }

@@ -347,6 +347,7 @@ export class BootScene extends Phaser.Scene {
     this.load.image('yellow_button_pressed', UI_ASSETS.buttons.yellow.pressed);
     this.load.image('red_button', UI_ASSETS.buttons.red.normal);
     this.load.image('red_button_pressed', UI_ASSETS.buttons.red.pressed);
+    this.load.image('cross_close', 'button/cross_close.png');
   }
 
   /**

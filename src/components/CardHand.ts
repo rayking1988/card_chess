@@ -163,6 +163,18 @@ export class CardHandComponent {
   
   /** Section height for constraining hand */
   private sectionHeight: number = 0;
+
+  /** Queue of cards to animate from deck into hand */
+  private drawQueue: Array<{ card: CardData; origin: { x: number; y: number } }> = [];
+
+  /** Whether a draw animation sequence is active */
+  private isDrawAnimating: boolean = false;
+
+  /** Sequence token to invalidate queued draw animations */
+  private drawSequenceToken: number = 0;
+
+  /** Whether interaction was enabled before draw animation started */
+  private restoreInteractionAfterDraw: boolean = false;
   
   /* ============================================
    * EVENT CALLBACKS
@@ -655,6 +667,124 @@ export class CardHandComponent {
     this.cardData.push(card);
     this.addCardIncremental(card);
     this.repositionCards();
+  }
+
+  /**
+   * Queues cards to animate from a specific origin into the hand.
+   *
+   * @param cards - Cards to add in order
+   * @param origin - World position to start the draw animation
+   */
+  queueDrawCards(cards: CardData[], origin: { x: number; y: number }): void {
+    if (cards.length === 0) return;
+
+    // Preserve interaction state for restoration after draw sequence.
+    if (!this.isDrawAnimating) {
+      this.restoreInteractionAfterDraw = this.isInteractive;
+      this.disableInteraction();
+    }
+
+    for (const card of cards) {
+      this.drawQueue.push({ card, origin });
+    }
+
+    if (!this.isDrawAnimating) {
+      this.isDrawAnimating = true;
+      this.processDrawQueue(this.drawSequenceToken);
+    }
+  }
+
+  /**
+   * Cancels any queued draw animations.
+   */
+  cancelDrawQueue(): void {
+    this.drawQueue = [];
+    this.isDrawAnimating = false;
+    this.drawSequenceToken += 1;
+    if (this.restoreInteractionAfterDraw) {
+      this.enableInteraction();
+    }
+    this.restoreInteractionAfterDraw = false;
+  }
+
+  /**
+   * Checks if draw animation is active.
+   */
+  isAnimatingDraw(): boolean {
+    return this.isDrawAnimating || this.drawQueue.length > 0;
+  }
+
+  private processDrawQueue(token: number): void {
+    if (token !== this.drawSequenceToken) return;
+
+    const next = this.drawQueue.shift();
+    if (!next) {
+      this.isDrawAnimating = false;
+      if (this.restoreInteractionAfterDraw) {
+        this.enableInteraction();
+      }
+      this.restoreInteractionAfterDraw = false;
+      return;
+    }
+
+    this.animateDrawCard(next.card, next.origin, token);
+  }
+
+  private animateDrawCard(card: CardData, origin: { x: number; y: number }, token: number): void {
+    if (token !== this.drawSequenceToken) return;
+
+    const effectiveScale = this.calculateEffectiveScale();
+    const cardComponent = new CardComponent(
+      this.scene,
+      origin.x,
+      origin.y,
+      card,
+      false,
+      effectiveScale
+    );
+
+    this.cardData.push(card);
+    this.cards.push(cardComponent);
+    this.container.add(cardComponent.getContainer());
+
+    const positions = this.calculateFanPositions(this.cardData.length, effectiveScale);
+    const newCardIndex = this.cards.length - 1;
+
+    for (let i = 0; i < this.cards.length; i++) {
+      const cardView = this.cards[i];
+      const pos = positions[i];
+      if (!pos) continue;
+
+      (cardView as CardComponentWithOriginal).originalX = pos.x;
+      (cardView as CardComponentWithOriginal).originalY = pos.y;
+      (cardView as CardComponentWithOriginal).originalRotation = pos.rotation;
+      (cardView as CardComponentWithOriginal).originalDepth = i;
+      (cardView as CardComponentWithOriginal).originalScale = pos.scale;
+
+      const isNewCard = i === newCardIndex;
+      const duration = isNewCard ? 600 : 200;
+
+      this.scene.tweens.add({
+        targets: cardView.getContainer(),
+        x: pos.x,
+        y: pos.y,
+        rotation: pos.rotation,
+        scaleX: pos.scale,
+        scaleY: pos.scale,
+        duration,
+        ease: 'Quad.easeOut',
+        onComplete: isNewCard
+          ? () => {
+              if (token !== this.drawSequenceToken) return;
+              this.scene.time.delayedCall(120, () => this.processDrawQueue(token));
+            }
+          : undefined
+      });
+
+      cardView.setDepth(i);
+    }
+
+    this.container.sort('depth');
   }
 
   /**

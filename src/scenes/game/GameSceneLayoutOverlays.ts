@@ -83,17 +83,29 @@ export function positionOverlays(this: GameScene, layout: GameLayout): void {
     );
     this.gameEndBannerText.setFontSize(OVERLAY_LAYOUT.GAME_END_TITLE_FONT_SIZE * layout.panelScale);
   }
-  const gameEndButtonOffset = Math.min(OVERLAY_LAYOUT.GAME_END_BUTTON_X_OFFSET * layout.panelScale, previewOverlay.overlayWidth * 0.3);
-  const gameEndButtonY = previewOverlay.overlayY + previewOverlay.overlayHeight * OVERLAY_LAYOUT.BUTTON_Y_OFFSET_FACTOR;
+  const isViewingBoard = this.isViewingBoard === true;
+  const gameEndButtonArea = isViewingBoard ? previewOverlay : boardOverlay;
+  const gameEndButtonOffset = Math.min(
+    OVERLAY_LAYOUT.GAME_END_BUTTON_X_OFFSET * layout.panelScale,
+    gameEndButtonArea.overlayWidth * 0.3
+  );
+  const gameEndButtonY = gameEndButtonArea.overlayY + gameEndButtonArea.overlayHeight * OVERLAY_LAYOUT.BUTTON_Y_OFFSET_FACTOR;
   if (this.gameEndRematchButton) {
-    this.gameEndRematchButton.setPosition(previewOverlay.overlayX - gameEndButtonOffset, gameEndButtonY);
+    this.gameEndRematchButton.setPosition(gameEndButtonArea.overlayX - gameEndButtonOffset, gameEndButtonY);
     this.gameEndRematchButton.setData('baseScale', layout.panelScale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR);
     this.gameEndRematchButton.setScale(layout.panelScale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR);
   }
   if (this.gameEndMenuButton) {
-    this.gameEndMenuButton.setPosition(previewOverlay.overlayX + gameEndButtonOffset, gameEndButtonY);
+    this.gameEndMenuButton.setPosition(gameEndButtonArea.overlayX + gameEndButtonOffset, gameEndButtonY);
     this.gameEndMenuButton.setData('baseScale', layout.panelScale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR);
     this.gameEndMenuButton.setScale(layout.panelScale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR);
+  }
+  if (this.gameEndViewBoardButton) {
+    const viewBoardY = boardOverlay.overlayY + boardOverlay.overlayHeight * 0.35;
+    this.gameEndViewBoardButton.setPosition(boardOverlay.overlayX, viewBoardY);
+    this.gameEndViewBoardButton.setData('baseScale', layout.panelScale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR);
+    this.gameEndViewBoardButton.setScale(layout.panelScale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR);
+    this.gameEndViewBoardButton.setVisible(!isViewingBoard);
   }
 
   if (this.discardOverlay) {
@@ -128,7 +140,8 @@ export function positionOverlays(this: GameScene, layout: GameLayout): void {
   }
 
   if (this.promotionOverlay && this.pendingPromotion) {
-    this.showPromotionPicker(this.pendingPromotion.from, this.pendingPromotion.to, this.pendingPromotion.color);
+    const pending = this.pendingPromotion;
+    this.showPromotionPicker(pending.from, pending.to, pending.color, pending.options, pending.onSelect, pending.title);
   }
 
   if (this.interactionBlockersActive) {

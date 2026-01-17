@@ -169,6 +169,10 @@ export class CardTargetingComponent {
   /** Last coordinates used to render targeting (avoid duplicate redraws) */
   private lastUpdateX: number | null = null;
   private lastUpdateY: number | null = null;
+
+  /** Last pointer release position */
+  private lastReleaseX: number | null = null;
+  private lastReleaseY: number | null = null;
   
   /** Cached play zone hit state to avoid redundant redraws */
   private lastPlayZoneInBounds: boolean | null = null;
@@ -385,6 +389,8 @@ export class CardTargetingComponent {
     this.lastUpdateX = null;
     this.lastUpdateY = null;
     this.lastPlayZoneInBounds = null;
+    this.lastReleaseX = null;
+    this.lastReleaseY = null;
     
     const requiresTarget = this.forceDragMode ? false : cardRequiresTarget(card);
     
@@ -483,6 +489,8 @@ export class CardTargetingComponent {
     if (!this.activeCard) return 'cancelled';
     
     const card = this.activeCard;
+    this.lastReleaseX = x;
+    this.lastReleaseY = y;
     
     if (this.isTargeting) {
       // Arrow targeting - check if we hit a valid target
@@ -602,6 +610,14 @@ export class CardTargetingComponent {
    */
   getActiveCardComponent(): CardComponent | null {
     return this.activeCardComponent;
+  }
+
+  /**
+   * Gets the last pointer release position, if any.
+   */
+  getLastReleasePosition(): { x: number; y: number } | null {
+    if (this.lastReleaseX === null || this.lastReleaseY === null) return null;
+    return { x: this.lastReleaseX, y: this.lastReleaseY };
   }
 
   /* ============================================

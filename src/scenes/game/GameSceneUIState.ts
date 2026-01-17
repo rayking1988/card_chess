@@ -4,6 +4,9 @@
  * @module scenes/game/GameSceneUIState
  */
 
+import type { ClockComponent } from '../../components/Clock';
+import type { DisturbCounterComponent } from '../../components/DisturbCounter';
+import type { EnergyBarComponent } from '../../components/EnergyBar';
 import type { StopwatchComponent } from '../../components/Stopwatch';
 import type { GameScene } from '../GameScene';
 import type { UISnapshot } from './GameTypes';
@@ -11,6 +14,8 @@ import type { PlayerColor } from '../../managers/GameStateManager';
 import { calculateControlPower } from '../../utils/controlPower';
 import { formatTime } from '../../components/Clock';
 import { hex } from '../../utils/colors';
+import { getPileLayerCount } from './GameUIHelpers';
+import { LEFT_PANEL_LAYOUT } from '../../config';
 
 function formatStopwatchTime(seconds: number): string {
   const safeSeconds = Math.max(0, Math.floor(seconds));
@@ -44,6 +49,7 @@ export function setupGameStateCallbacks(this: GameScene): void {
  */
 export function updateUIFromState(this: GameScene, options: { sendStats?: boolean } = {}): void {
   const state = this.gameStateManager.getState();
+  const layout = this.currentLayout;
   const localPlayer = state.players[this.localColor];
   const opponentColor = this.localColor === 'white' ? 'black' : 'white';
   const opponentPlayer = state.players[opponentColor];
@@ -107,7 +113,37 @@ export function updateUIFromState(this: GameScene, options: { sendStats?: boolea
 
   // Update hand display if hand changed (e.g., card drawn at turn start)
   if (this.cardHand.getCardCount() !== localPlayer.hand.length) {
-    this.updateHandDisplay();
+    if (!this.lastStateSnapshot) {
+      this.updateHandDisplay();
+    } else {
+      const currentCards = this.cardHand.getCards();
+      const currentIds = new Set(currentCards.map(card => card.id));
+      const nextIds = new Set(localPlayer.hand.map(card => card.id));
+      const added = localPlayer.hand.filter(card => !currentIds.has(card.id));
+      const removed = currentCards.filter(card => !nextIds.has(card.id));
+
+      if (added.length > 0 && removed.length === 0) {
+        if (layout) {
+          const previousDeckCount = this.lastStateSnapshot?.localDeck ?? localPlayer.deck.length;
+          const deckScale = LEFT_PANEL_LAYOUT.DECK_SCALE * layout.panelScale;
+          const offsetX = -1.8 * deckScale;
+          const offsetY = -3.2 * deckScale;
+          const layers = getPileLayerCount(previousDeckCount);
+          const deckPos = {
+            x: layout.leftPanelX + Math.max(0, layers - 1) * offsetX,
+            y: layout.playerDeckY + Math.max(0, layers - 1) * offsetY
+          };
+          this.cardHand.queueDrawCards(added, deckPos);
+        } else {
+          this.updateHandDisplay();
+        }
+      } else {
+        if (this.cardHand.isAnimatingDraw()) {
+          this.cardHand.cancelDrawQueue();
+        }
+        this.updateHandDisplay();
+      }
+    }
   }
 
   if (!this.lastStateSnapshot || this.lastStateSnapshot.opponentHand !== opponentHandCount) {
@@ -153,6 +189,12 @@ export function updateUIFromState(this: GameScene, options: { sendStats?: boolea
     opponentStopwatch,
     localEnergy: localPlayer.energy,
     localEnergyCap: localPlayer.energyCap,
+    opponentEnergy,
+    opponentEnergyCap,
+    localDisturb: localPlayer.disturbTags,
+    opponentDisturb,
+    localMode: localPlayer.mode,
+    opponentMode,
     currentTurn: state.currentTurn,
     localHand: localPlayer.hand.length,
     opponentHand: opponentHandCount,
@@ -189,7 +231,42 @@ export function runUIAnimations(this: GameScene, prev: UISnapshot, next: UISnaps
     // No popup banner needed
   }
 
-  if (prev.localClock !== next.localClock) {
+  const localTimeTransfer = prev.localClock > next.localClock &&
+    next.localStopwatch > prev.localStopwatch &&
+    (prev.localClock - next.localClock) === (next.localStopwatch - prev.localStopwatch);
+  const opponentTimeTransfer = prev.opponentClock > next.opponentClock &&
+    next.opponentStopwatch > prev.opponentStopwatch &&
+    (prev.opponentClock - next.opponentClock) === (next.opponentStopwatch - prev.opponentStopwatch);
+
+  const localFocusConversion = prev.localMode === 'focus' &&
+    prev.localEnergy > 0 &&
+    next.localEnergy === 0 &&
+    (next.localClock - prev.localClock) === prev.localEnergy;
+  const opponentFocusConversion = prev.opponentMode === 'focus' &&
+    prev.opponentEnergy > 0 &&
+    next.opponentEnergy === 0 &&
+    (next.opponentClock - prev.opponentClock) === prev.opponentEnergy;
+
+  const localDisturbConversion = prev.localMode === 'disturb' &&
+    prev.localEnergy > 0 &&
+    next.localEnergy === 0 &&
+    (next.opponentDisturb - prev.opponentDisturb) === prev.localEnergy;
+  const opponentDisturbConversion = prev.opponentMode === 'disturb' &&
+    prev.opponentEnergy > 0 &&
+    next.opponentEnergy === 0 &&
+    (next.localDisturb - prev.localDisturb) === prev.opponentEnergy;
+
+  if (localTimeTransfer) {
+    this.animateTimeTransfer(
+      'local',
+      this.playerClock,
+      this.playerStopwatch,
+      prev.localClock,
+      next.localClock,
+      prev.localStopwatch,
+      next.localStopwatch
+    );
+  } else if (!localFocusConversion && prev.localClock !== next.localClock) {
     this.animations.animateClockChange(
       this.playerClock.getContainer(),
       this.playerClock.getTimeText(),
@@ -205,7 +282,17 @@ export function runUIAnimations(this: GameScene, prev: UISnapshot, next: UISnaps
     );
   }
 
-  if (prev.opponentClock !== next.opponentClock) {
+  if (opponentTimeTransfer) {
+    this.animateTimeTransfer(
+      'opponent',
+      this.opponentClock,
+      this.opponentStopwatch,
+      prev.opponentClock,
+      next.opponentClock,
+      prev.opponentStopwatch,
+      next.opponentStopwatch
+    );
+  } else if (!opponentFocusConversion && prev.opponentClock !== next.opponentClock) {
     this.animations.animateClockChange(
       this.opponentClock.getContainer(),
       this.opponentClock.getTimeText(),
@@ -221,28 +308,51 @@ export function runUIAnimations(this: GameScene, prev: UISnapshot, next: UISnaps
     );
   }
 
-  if (prev.localEnergy !== next.localEnergy || prev.localEnergyCap !== next.localEnergyCap) {
-    this.animations.animateEnergyChange(
-      this.energyBar.getContainer(),
-      this.energyBar.getEnergyText(),
-      prev.localEnergy,
-      next.localEnergy
-    );
-    if (next.localEnergyCap > prev.localEnergyCap) {
-      this.animations.animateEnergyCapIncrease(this.energyBar.getContainer());
-    }
-  }
-
-  if (prev.localStopwatch !== next.localStopwatch) {
+  if (!localTimeTransfer && prev.localStopwatch !== next.localStopwatch) {
     this.animateStopwatchChange(this.playerStopwatch, prev.localStopwatch, next.localStopwatch);
   }
-  if (prev.opponentStopwatch !== next.opponentStopwatch) {
+  if (!opponentTimeTransfer && prev.opponentStopwatch !== next.opponentStopwatch) {
     this.animateStopwatchChange(this.opponentStopwatch, prev.opponentStopwatch, next.opponentStopwatch);
   }
 
-  if (next.localHand > prev.localHand) {
-    this.animateCardDraw('local', next.localHand - prev.localHand);
+  if (localFocusConversion) {
+    this.animateFocusConversion('local', prev.localEnergy, prev.localClock, next.localClock, next.localEnergyCap);
+  } else if (localDisturbConversion) {
+    this.animateDisturbConversion(
+      'local',
+      prev.localEnergy,
+      prev.opponentDisturb,
+      next.opponentDisturb,
+      next.localEnergyCap
+    );
+  } else if (prev.localEnergy !== next.localEnergy || prev.localEnergyCap !== next.localEnergyCap) {
+    this.animateSegmentedEnergyChange('local', this.energyBar, prev.localEnergy, next.localEnergy, next.localEnergyCap);
   }
+
+  if (opponentFocusConversion) {
+    this.animateFocusConversion('opponent', prev.opponentEnergy, prev.opponentClock, next.opponentClock, next.opponentEnergyCap);
+  } else if (opponentDisturbConversion) {
+    this.animateDisturbConversion(
+      'opponent',
+      prev.opponentEnergy,
+      prev.localDisturb,
+      next.localDisturb,
+      next.opponentEnergyCap
+    );
+  } else if (prev.opponentEnergy !== next.opponentEnergy || prev.opponentEnergyCap !== next.opponentEnergyCap) {
+    if (this.opponentEnergyBar) {
+      this.animateSegmentedEnergyChange('opponent', this.opponentEnergyBar, prev.opponentEnergy, next.opponentEnergy, next.opponentEnergyCap);
+    }
+  }
+
+  if (!localDisturbConversion && !opponentDisturbConversion && prev.localDisturb !== next.localDisturb) {
+    this.animateSegmentedDisturbChange('local', this.playerDisturbCounter, prev.localDisturb, next.localDisturb);
+  }
+  if (!localDisturbConversion && !opponentDisturbConversion && prev.opponentDisturb !== next.opponentDisturb) {
+    this.animateSegmentedDisturbChange('opponent', this.opponentDisturbCounter, prev.opponentDisturb, next.opponentDisturb);
+  }
+
+  // Local draw animation is handled by CardHand draw queue.
 
   if (next.opponentHand > prev.opponentHand) {
     this.animateCardDraw('opponent', next.opponentHand - prev.opponentHand);
@@ -309,29 +419,410 @@ export function animateCardDraw(this: GameScene, side: 'local' | 'opponent', cou
   const layout = this.currentLayout;
   if (!layout || count <= 0) return;
 
-  // Use deck position from layout instead of sprite
-  const deckPos = side === 'local' 
-    ? { x: layout.leftPanelX, y: layout.playerDeckY }
-    : { x: layout.leftPanelX, y: layout.opponentDeckY };
-  const handPos = side === 'local'
-    ? { x: layout.cardHandX, y: layout.cardHandY - 40 * layout.handScale }
-    : { x: layout.opponentHandX, y: layout.opponentHandY + 10 * layout.panelScale };
-
-  const scale = 0.26 * layout.panelScale;
-  const spacing = 22 * layout.panelScale;
-  const startX = handPos.x - ((Math.min(count, 3) - 1) * spacing) / 2;
-
-  for (let i = 0; i < Math.min(count, 3); i++) {
-    const card = this.add.image(deckPos.x, deckPos.y, 'card_back');
-    card.setScale(scale);
-    card.setDepth(30);
-
-    const toPos = { x: startX + i * spacing, y: handPos.y };
-    this.animations.arcMove(card, { x: deckPos.x, y: deckPos.y }, toPos, 120 * layout.panelScale, {
-      duration: 350,
-      onComplete: () => card.destroy()
-    });
+  if (side === 'local') {
+    return;
   }
+
+  const previousDeckCount = this.lastStateSnapshot?.opponentDeck ?? this.opponentDeckCount;
+  const deckScale = LEFT_PANEL_LAYOUT.DECK_SCALE * layout.panelScale;
+  const offsetX = -1.8 * deckScale;
+  const offsetY = -3.2 * deckScale;
+  const layers = getPileLayerCount(previousDeckCount);
+  const deckPos = {
+    x: layout.leftPanelX + Math.max(0, layers - 1) * offsetX,
+    y: layout.opponentDeckY + Math.max(0, layers - 1) * offsetY
+  };
+
+  const targetCards = this.opponentHandCards.slice(-count);
+  targetCards.forEach(card => card.setAlpha(0));
+
+  const animateNext = (index: number): void => {
+    if (index >= targetCards.length) {
+      return;
+    }
+
+    const target = targetCards[index];
+    const matrix = target.getWorldTransformMatrix();
+    const point = new Phaser.Math.Vector2();
+    matrix.transformPoint(0, 0, point);
+
+    const temp = this.add.image(deckPos.x, deckPos.y, 'card_back');
+    temp.setScale(target.scaleX || 1);
+    temp.setDepth(30);
+
+    this.tweens.add({
+      targets: temp,
+      x: point.x,
+      y: point.y,
+      duration: 600,
+      ease: 'Quad.easeOut',
+      onComplete: () => {
+        temp.destroy();
+        target.setAlpha(1);
+        this.time.delayedCall(120, () => animateNext(index + 1));
+      }
+    });
+  };
+
+  animateNext(0);
+}
+
+/**
+ * Animates time transfer from clock to stopwatch (time cost).
+ */
+export function animateTimeTransfer(
+  this: GameScene,
+  side: 'local' | 'opponent',
+  clock: ClockComponent,
+  stopwatch: StopwatchComponent,
+  oldClock: number,
+  newClock: number,
+  oldStopwatch: number,
+  newStopwatch: number
+): void {
+  const diff = oldClock - newClock;
+  if (diff <= 0) return;
+  const layout = this.currentLayout;
+  if (!layout) return;
+
+  const isLocal = side === 'local';
+  const existingTween = isLocal ? this.localTimeTransferTween : this.opponentTimeTransferTween;
+  existingTween?.stop();
+
+  if (isLocal) {
+    this.localClockDeltaText?.destroy();
+    this.localStopwatchDeltaText?.destroy();
+  } else {
+    this.opponentClockDeltaText?.destroy();
+    this.opponentStopwatchDeltaText?.destroy();
+  }
+
+  clock.setTime(oldClock);
+  stopwatch.setTime(oldStopwatch);
+
+  const clockContainer = clock.getContainer();
+  const stopwatchContainer = stopwatch.getContainer();
+  const clockScale = clockContainer.scaleX || 1;
+  const stopwatchScale = stopwatchContainer.scaleX || 1;
+  const clockDims = clock.getDimensions();
+  const stopwatchDims = stopwatch.getDimensions();
+  const clockPos = {
+    x: clockContainer.x + (clockDims.width / 2 + 18) * clockScale,
+    y: clockContainer.y - 6 * clockScale
+  };
+  const stopwatchPos = {
+    x: stopwatchContainer.x + (stopwatchDims.width / 2 + 18) * stopwatchScale,
+    y: stopwatchContainer.y - 6 * stopwatchScale
+  };
+
+  const fontSize = 22 * layout.panelScale;
+  const clockDelta = this.add.text(clockPos.x, clockPos.y, `-${diff}s`, {
+    fontFamily: 'BoldPixels, Arial',
+    fontSize: `${fontSize}px`,
+    color: '#ff4444',
+    stroke: '#000000',
+    strokeThickness: 3
+  }).setOrigin(0.5);
+  const stopwatchDelta = this.add.text(stopwatchPos.x, stopwatchPos.y, `-${diff}s`, {
+    fontFamily: 'BoldPixels, Arial',
+    fontSize: `${fontSize}px`,
+    color: '#ff4444',
+    stroke: '#000000',
+    strokeThickness: 3
+  }).setOrigin(0.5);
+  clockDelta.setDepth(2000);
+  stopwatchDelta.setDepth(2000);
+
+  if (isLocal) {
+    this.localClockDeltaText = clockDelta;
+    this.localStopwatchDeltaText = stopwatchDelta;
+  } else {
+    this.opponentClockDeltaText = clockDelta;
+    this.opponentStopwatchDeltaText = stopwatchDelta;
+  }
+
+  const duration = Math.min(2200, 250 + diff * 40);
+  const tween = this.tweens.addCounter({
+    from: 0,
+    to: diff,
+    duration,
+    ease: 'Linear',
+    onUpdate: (t) => {
+      const value = Math.floor(t.getValue() ?? 0);
+      const remaining = Math.max(0, diff - value);
+      clock.setTime(oldClock - value);
+      stopwatch.setTime(oldStopwatch + value);
+      const label = `-${remaining}s`;
+      clockDelta.setText(label);
+      stopwatchDelta.setText(label);
+    },
+    onComplete: () => {
+      clock.setTime(newClock);
+      stopwatch.setTime(newStopwatch);
+      clockDelta.destroy();
+      stopwatchDelta.destroy();
+      if (isLocal) {
+        this.localClockDeltaText = undefined;
+        this.localStopwatchDeltaText = undefined;
+        this.localTimeTransferTween = undefined;
+      } else {
+        this.opponentClockDeltaText = undefined;
+        this.opponentStopwatchDeltaText = undefined;
+        this.opponentTimeTransferTween = undefined;
+      }
+    }
+  });
+
+  if (isLocal) {
+    this.localTimeTransferTween = tween;
+  } else {
+    this.opponentTimeTransferTween = tween;
+  }
+}
+
+/**
+ * Animates energy bar change by segments.
+ */
+export function animateSegmentedEnergyChange(
+  this: GameScene,
+  side: 'local' | 'opponent',
+  component: EnergyBarComponent,
+  from: number,
+  to: number,
+  cap: number
+): void {
+  if (!component) return;
+  const steps = Math.abs(to - from);
+  if (steps === 0) {
+    component.setEnergy(to, cap);
+    return;
+  }
+
+  const eventKey = side === 'local' ? 'localEnergyAnimEvent' : 'opponentEnergyAnimEvent';
+  this[eventKey as 'localEnergyAnimEvent' | 'opponentEnergyAnimEvent']?.remove(false);
+
+  component.setEnergy(from, cap);
+  const step = from < to ? 1 : -1;
+  let current = from;
+  let stepCount = 0;
+
+  this[eventKey as 'localEnergyAnimEvent' | 'opponentEnergyAnimEvent'] = this.time.addEvent({
+    delay: 80,
+    repeat: steps - 1,
+    callback: () => {
+      current += step;
+      stepCount += 1;
+      component.setEnergy(current, cap);
+      if (stepCount >= steps) {
+        component.setEnergy(to, cap);
+        this[eventKey as 'localEnergyAnimEvent' | 'opponentEnergyAnimEvent'] = undefined;
+      }
+    }
+  });
+}
+
+/**
+ * Animates disturb counter change by segments.
+ */
+export function animateSegmentedDisturbChange(
+  this: GameScene,
+  side: 'local' | 'opponent',
+  component: DisturbCounterComponent | undefined,
+  from: number,
+  to: number
+): void {
+  if (!component) return;
+  const steps = Math.abs(to - from);
+  if (steps === 0) {
+    component.setValue(to);
+    return;
+  }
+
+  const eventKey = side === 'local' ? 'localDisturbAnimEvent' : 'opponentDisturbAnimEvent';
+  this[eventKey as 'localDisturbAnimEvent' | 'opponentDisturbAnimEvent']?.remove(false);
+
+  component.setValue(from);
+  const step = from < to ? 1 : -1;
+  let current = from;
+  let stepCount = 0;
+
+  this[eventKey as 'localDisturbAnimEvent' | 'opponentDisturbAnimEvent'] = this.time.addEvent({
+    delay: 80,
+    repeat: steps - 1,
+    callback: () => {
+      current += step;
+      stepCount += 1;
+      component.setValue(current);
+      if (stepCount >= steps) {
+        component.setValue(to);
+        this[eventKey as 'localDisturbAnimEvent' | 'opponentDisturbAnimEvent'] = undefined;
+      }
+    }
+  });
+}
+
+/**
+ * Animates focus mode conversion: energy drains into a time bank, then adds to clock.
+ */
+export function animateFocusConversion(
+  this: GameScene,
+  side: 'local' | 'opponent',
+  energyAmount: number,
+  oldClock: number,
+  newClock: number,
+  cap: number
+): void {
+  if (energyAmount <= 0) return;
+  const layout = this.currentLayout;
+  if (!layout) return;
+
+  const isLocal = side === 'local';
+  const energyBar = isLocal ? this.energyBar : this.opponentEnergyBar;
+  const clock = isLocal ? this.playerClock : this.opponentClock;
+  if (!energyBar || !clock) return;
+
+  const focusEventKey = isLocal ? 'localFocusAnimEvent' : 'opponentFocusAnimEvent';
+  const energyEventKey = isLocal ? 'localEnergyAnimEvent' : 'opponentEnergyAnimEvent';
+  this[focusEventKey as 'localFocusAnimEvent' | 'opponentFocusAnimEvent']?.remove(false);
+  this[energyEventKey as 'localEnergyAnimEvent' | 'opponentEnergyAnimEvent']?.remove(false);
+
+  if (isLocal) {
+    this.localFocusTimeBankText?.destroy();
+    this.localFocusTimeBankText = undefined;
+  } else {
+    this.opponentFocusTimeBankText?.destroy();
+    this.opponentFocusTimeBankText = undefined;
+  }
+
+  energyBar.setEnergy(energyAmount, cap);
+  clock.setTime(oldClock);
+
+  const clockContainer = clock.getContainer();
+  const clockScale = clockContainer.scaleX || 1;
+  const clockDims = clock.getDimensions();
+  const bankText = this.add.text(
+    clockContainer.x + (clockDims.width / 2 + 18) * clockScale,
+    clockContainer.y + 18 * clockScale,
+    '+0s',
+    {
+      fontFamily: 'BoldPixels, Arial',
+      fontSize: `${22 * layout.panelScale}px`,
+      color: '#66ff66',
+      stroke: '#000000',
+      strokeThickness: 3
+    }
+  ).setOrigin(0.5);
+  bankText.setDepth(2000);
+
+  if (isLocal) {
+    this.localFocusTimeBankText = bankText;
+  } else {
+    this.opponentFocusTimeBankText = bankText;
+  }
+
+  let energyRemaining = energyAmount;
+  let bank = 0;
+  let drained = 0;
+  const stepDelay = 110;
+
+  this[focusEventKey as 'localFocusAnimEvent' | 'opponentFocusAnimEvent'] = this.time.addEvent({
+    delay: stepDelay,
+    repeat: energyAmount - 1,
+    callback: () => {
+      energyRemaining -= 1;
+      bank += 1;
+      drained += 1;
+      energyBar.setEnergy(energyRemaining, cap);
+      bankText.setText(`+${bank}s`);
+      if (drained >= energyAmount) {
+        let clockValue = oldClock;
+        const transferSteps = bank;
+        let transferred = 0;
+        const transferEvent = this.time.addEvent({
+          delay: stepDelay,
+          repeat: Math.max(0, transferSteps - 1),
+          callback: () => {
+            bank -= 1;
+            transferred += 1;
+            clockValue += 1;
+            clock.setTime(clockValue);
+            bankText.setText(`+${bank}s`);
+            if (transferred >= transferSteps) {
+              clock.setTime(newClock);
+              bankText.destroy();
+              if (isLocal) {
+                this.localFocusTimeBankText = undefined;
+                this.localFocusAnimEvent = undefined;
+              } else {
+                this.opponentFocusTimeBankText = undefined;
+                this.opponentFocusAnimEvent = undefined;
+              }
+            }
+          }
+        });
+        if (isLocal) {
+          this.localFocusAnimEvent = transferEvent;
+        } else {
+          this.opponentFocusAnimEvent = transferEvent;
+        }
+      }
+    }
+  });
+}
+
+/**
+ * Animates disturb mode conversion: energy drains into opponent disturb.
+ */
+export function animateDisturbConversion(
+  this: GameScene,
+  side: 'local' | 'opponent',
+  energyAmount: number,
+  disturbStart: number,
+  disturbEnd: number,
+  cap: number
+): void {
+  if (energyAmount <= 0) return;
+
+  const isLocal = side === 'local';
+  const energyBar = isLocal ? this.energyBar : this.opponentEnergyBar;
+  const disturbCounter = isLocal ? this.opponentDisturbCounter : this.playerDisturbCounter;
+  if (!energyBar || !disturbCounter) return;
+
+  const focusEventKey = isLocal ? 'localFocusAnimEvent' : 'opponentFocusAnimEvent';
+  const energyEventKey = isLocal ? 'localEnergyAnimEvent' : 'opponentEnergyAnimEvent';
+  const disturbEventKey = isLocal ? 'opponentDisturbAnimEvent' : 'localDisturbAnimEvent';
+  this[focusEventKey as 'localFocusAnimEvent' | 'opponentFocusAnimEvent']?.remove(false);
+  this[energyEventKey as 'localEnergyAnimEvent' | 'opponentEnergyAnimEvent']?.remove(false);
+  this[disturbEventKey as 'localDisturbAnimEvent' | 'opponentDisturbAnimEvent']?.remove(false);
+
+  energyBar.setEnergy(energyAmount, cap);
+  disturbCounter.setValue(disturbStart);
+
+  let energyRemaining = energyAmount;
+  let disturbValue = disturbStart;
+  let converted = 0;
+  const stepDelay = 110;
+
+  this[focusEventKey as 'localFocusAnimEvent' | 'opponentFocusAnimEvent'] = this.time.addEvent({
+    delay: stepDelay,
+    repeat: energyAmount - 1,
+    callback: () => {
+      energyRemaining -= 1;
+      disturbValue += 1;
+      converted += 1;
+      energyBar.setEnergy(energyRemaining, cap);
+      disturbCounter.setValue(disturbValue);
+      if (converted >= energyAmount) {
+        energyBar.setEnergy(0, cap);
+        disturbCounter.setValue(disturbEnd);
+        if (isLocal) {
+          this.localFocusAnimEvent = undefined;
+        } else {
+          this.opponentFocusAnimEvent = undefined;
+        }
+      }
+    }
+  });
 }
 
 /**
@@ -507,6 +998,8 @@ export function updateOpponentDeckCounts(this: GameScene, deckCount: number, dis
   this.opponentDiscardCount = discardCount;
   this.opponentDeckCountText.setText(`${deckCount}`);
   this.opponentDiscardCountText.setText(`${discardCount}`);
+  this.opponentDeckCountText.setVisible(deckCount > 0);
+  this.opponentDiscardCountText.setVisible(discardCount > 0);
 }
 
 /**
@@ -518,4 +1011,6 @@ export function updateOpponentDeckCounts(this: GameScene, deckCount: number, dis
 export function updatePlayerDeckCounts(this: GameScene, deckCount: number, discardCount: number): void {
   this.playerDeckCountText.setText(`${deckCount}`);
   this.playerDiscardCountText.setText(`${discardCount}`);
+  this.playerDeckCountText.setVisible(deckCount > 0);
+  this.playerDiscardCountText.setVisible(discardCount > 0);
 }

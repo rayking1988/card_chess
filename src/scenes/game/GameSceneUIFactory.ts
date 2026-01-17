@@ -224,7 +224,30 @@ export function createRightPanel(this: GameScene, layout: GameLayout): void {
   this.controlledSquaresButton.on('pointerup', () => this.hideControlledSquaresOverlay());
   this.controlledSquaresButton.on('pointerout', () => this.hideControlledSquaresOverlay());
 
+  this.offerDrawButton = createImageButton(
+    this,
+    bottomSection.centerX,
+    bottomSection.centerY,
+    'Offer Draw',
+    'yellow_button',
+    'yellow_button_pressed',
+    () => this.handleOfferDraw()
+  );
+  this.offerDrawButton.setDepth(10);
+
+  this.resignButton = createImageButton(
+    this,
+    bottomSection.centerX,
+    bottomSection.centerY,
+    'Resign',
+    'red_button',
+    'red_button_pressed',
+    () => this.handleResignClick()
+  );
+  this.resignButton.setDepth(10);
+
   positionRightPanel.call(this, layout);
+  this.updateDrawResignButtons();
 }
 
 /**
@@ -242,47 +265,65 @@ export function createLeftPanel(this: GameScene, layout: GameLayout): void {
   // === OPPONENT'S DECK (top) ===
   this.opponentDeckStack = createPileStack(this, x, layout.opponentDeckY, deckScale, stackDepth, 1);
 
-  this.opponentDeckLabelText = this.add.text(x, layout.opponentDeckY - LEFT_PANEL_LAYOUT.LABEL_Y_OFFSET * scale, 'Opp Deck', {
+  this.opponentDeckLabelText = this.add.text(x, layout.opponentDeckY, '', {
     fontSize: `${UI_FACTORY.DECK_LABEL_FONT_SIZE * scale}px`, fontFamily: 'BoldPixels, Arial', color: '#cccccc'
   }).setOrigin(0.5).setDepth(textDepth);
+  this.opponentDeckLabelText.setVisible(false);
 
-  this.opponentDeckCountText = this.add.text(x, layout.opponentDeckY + LEFT_PANEL_LAYOUT.COUNT_Y_OFFSET * scale, '60', {
-    fontSize: `${UI_FACTORY.DECK_COUNT_FONT_SIZE * scale}px`, fontFamily: 'BoldPixels, Arial', color: '#ffffff'
+  this.opponentDeckCountText = this.add.text(x, layout.opponentDeckY, '60', {
+    fontSize: `${UI_FACTORY.DECK_COUNT_FONT_SIZE * scale}px`,
+    fontFamily: 'BoldPixels, Arial',
+    color: '#ffcc66',
+    stroke: '#000000',
+    strokeThickness: 3
   }).setOrigin(0.5).setDepth(textDepth);
 
   // === OPPONENT'S DISCARD (below deck) ===
-  // No pile stack needed - only the top card is displayed
-  this.opponentDiscardStack = [];
+  this.opponentDiscardStack = createPileStack(this, x, layout.opponentDiscardY, deckScale, stackDepth, 0.95);
 
-  this.opponentDiscardLabelText = this.add.text(x, layout.opponentDiscardY - LEFT_PANEL_LAYOUT.LABEL_Y_OFFSET * scale, 'Opp Discard', {
+  this.opponentDiscardLabelText = this.add.text(x, layout.opponentDiscardY, '', {
     fontSize: `${UI_FACTORY.DECK_LABEL_FONT_SIZE * scale}px`, fontFamily: 'BoldPixels, Arial', color: '#888888'
   }).setOrigin(0.5).setDepth(textDepth);
+  this.opponentDiscardLabelText.setVisible(false);
 
-  this.opponentDiscardCountText = this.add.text(x, layout.opponentDiscardY + LEFT_PANEL_LAYOUT.COUNT_Y_OFFSET * scale, '0', {
-    fontSize: `${UI_FACTORY.DECK_COUNT_FONT_SIZE * scale}px`, fontFamily: 'BoldPixels, Arial', color: '#888888'
+  this.opponentDiscardCountText = this.add.text(x, layout.opponentDiscardY, '0', {
+    fontSize: `${UI_FACTORY.DECK_COUNT_FONT_SIZE * scale}px`,
+    fontFamily: 'BoldPixels, Arial',
+    color: '#ffcc66',
+    stroke: '#000000',
+    strokeThickness: 3
   }).setOrigin(0.5).setDepth(textDepth);
 
   // === PLAYER'S DISCARD (above player deck) ===
-  // No pile stack needed - only the top card is displayed
-  this.playerDiscardStack = [];
+  this.playerDiscardStack = createPileStack(this, x, layout.playerDiscardY, deckScale, stackDepth, 0.95);
 
-  this.playerDiscardLabelText = this.add.text(x, layout.playerDiscardY - LEFT_PANEL_LAYOUT.LABEL_Y_OFFSET * scale, 'Your Discard', {
+  this.playerDiscardLabelText = this.add.text(x, layout.playerDiscardY, '', {
     fontSize: `${UI_FACTORY.DECK_LABEL_FONT_SIZE * scale}px`, fontFamily: 'BoldPixels, Arial', color: '#888888'
   }).setOrigin(0.5).setDepth(textDepth);
+  this.playerDiscardLabelText.setVisible(false);
 
-  this.playerDiscardCountText = this.add.text(x, layout.playerDiscardY + LEFT_PANEL_LAYOUT.COUNT_Y_OFFSET * scale, '0', {
-    fontSize: `${UI_FACTORY.DECK_COUNT_FONT_SIZE * scale}px`, fontFamily: 'BoldPixels, Arial', color: '#888888'
+  this.playerDiscardCountText = this.add.text(x, layout.playerDiscardY, '0', {
+    fontSize: `${UI_FACTORY.DECK_COUNT_FONT_SIZE * scale}px`,
+    fontFamily: 'BoldPixels, Arial',
+    color: '#ffcc66',
+    stroke: '#000000',
+    strokeThickness: 3
   }).setOrigin(0.5).setDepth(textDepth);
 
   // === PLAYER'S DECK (bottom) ===
   this.playerDeckStack = createPileStack(this, x, layout.playerDeckY, deckScale, stackDepth, 1);
 
-  this.playerDeckLabelText = this.add.text(x, layout.playerDeckY - LEFT_PANEL_LAYOUT.LABEL_Y_OFFSET * scale, 'Your Deck', {
+  this.playerDeckLabelText = this.add.text(x, layout.playerDeckY, '', {
     fontSize: `${UI_FACTORY.DECK_LABEL_FONT_SIZE * scale}px`, fontFamily: 'BoldPixels, Arial', color: '#cccccc'
   }).setOrigin(0.5).setDepth(textDepth);
+  this.playerDeckLabelText.setVisible(false);
 
-  this.playerDeckCountText = this.add.text(x, layout.playerDeckY + LEFT_PANEL_LAYOUT.COUNT_Y_OFFSET * scale, '60', {
-    fontSize: `${UI_FACTORY.DECK_COUNT_FONT_SIZE * scale}px`, fontFamily: 'BoldPixels, Arial', color: '#ffffff'
+  this.playerDeckCountText = this.add.text(x, layout.playerDeckY, '60', {
+    fontSize: `${UI_FACTORY.DECK_COUNT_FONT_SIZE * scale}px`,
+    fontFamily: 'BoldPixels, Arial',
+    color: '#ffcc66',
+    stroke: '#000000',
+    strokeThickness: 3
   }).setOrigin(0.5).setDepth(textDepth);
 
   positionLeftPanel.call(this, layout);

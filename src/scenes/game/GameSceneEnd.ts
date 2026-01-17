@@ -173,10 +173,30 @@ export function handleGameEnd(this: GameScene, winner: PlayerColor | null, reaso
 
   this.localRematchRequested = false;
   this.opponentRematchRequested = false;
+  this.isViewingBoard = false;
 
   const buttonScale = layout.panelScale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR;
   const buttonY = buttonLayout.overlayY + buttonLayout.overlayHeight * OVERLAY_LAYOUT.BUTTON_Y_OFFSET_FACTOR;
   const buttonOffset = Math.min(OVERLAY_LAYOUT.GAME_END_BUTTON_X_OFFSET * layout.panelScale, buttonLayout.overlayWidth * 0.3);
+  const viewBoardY = overlayY + overlayHeight * 0.35;
+
+  if (!this.gameEndViewBoardButton) {
+    this.gameEndViewBoardButton = createImageButton(
+      this,
+      overlayX,
+      viewBoardY,
+      'View Board',
+      'yellow_button',
+      'yellow_button_pressed',
+      () => this.enterViewBoardMode()
+    );
+    this.gameEndViewBoardButton.setDepth(142);
+  } else {
+    this.gameEndViewBoardButton.setPosition(overlayX, viewBoardY);
+  }
+  this.gameEndViewBoardButton.setData('baseScale', buttonScale);
+  this.gameEndViewBoardButton.setScale(buttonScale);
+  this.gameEndViewBoardButton.setVisible(true);
 
   if (!this.gameEndRematchButton) {
     this.gameEndRematchButton = createImageButton(
@@ -213,6 +233,16 @@ export function handleGameEnd(this: GameScene, winner: PlayerColor | null, reaso
   }
   this.gameEndMenuButton.setData('baseScale', buttonScale);
   this.gameEndMenuButton.setScale(buttonScale);
+}
+
+export function enterViewBoardMode(this: GameScene): void {
+  this.isViewingBoard = true;
+  this.gameEndBannerRect?.setVisible(false);
+  this.gameEndBannerText?.setVisible(false);
+  this.gameEndViewBoardButton?.setVisible(false);
+  const layout = this.currentLayout ?? calculateLayout(this.scale.width, this.scale.height);
+  this.currentLayout = layout;
+  this.positionOverlays(layout);
 }
 
 /**
