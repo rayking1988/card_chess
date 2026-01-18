@@ -113,6 +113,9 @@ export function handleLocalMove(this: GameScene, from: Square, to: Square, promo
     if (movingPiece && animate) {
       this.animatePieceMove(from, to, movingPiece, capturedPiece);
     }
+    // Reset draw/resign button states when a move is made
+    this.resetDrawResignState();
+    
     // Update game state
     this.gameStateManager.setBoardFEN(this.chessBoard.getPosition());
     this.gameStateManager.deductMoveTimeCost(movingColor);

@@ -230,7 +230,7 @@ export class MenuScene extends Phaser.Scene {
     this.uiContainer.add(title);
     
     // Subtitle
-    const subtitle = this.add.text(0, -BASE_HEIGHT * 0.28, 'Chess meets Cards', {
+    const subtitle = this.add.text(0, -BASE_HEIGHT * 0.28, 'CHESS MEETS CARDS', {
       fontFamily: 'BoldPixels, Arial',
       fontSize: '36px',
       color: '#cccccc',
@@ -248,7 +248,7 @@ export class MenuScene extends Phaser.Scene {
    */
   private createNameInput(): void {
     // Label
-    const label = this.add.text(0, -BASE_HEIGHT * 0.15, 'Enter Your Name:', {
+    const label = this.add.text(0, -BASE_HEIGHT * 0.15, 'ENTER YOUR NAME:', {
       fontFamily: 'BoldPixels, Arial',
       fontSize: '28px',
       color: '#ffffff',
@@ -535,7 +535,7 @@ export class MenuScene extends Phaser.Scene {
     if (this.isWaitingForMatch) return;
     const name = this.nameInput?.value.trim() || '';
     if (name.length < 1) {
-      this.statusText.setText('Please enter a name!');
+      this.statusText.setText('PLEASE ENTER A NAME!');
       this.statusText.setColor('#ff6666');
       return;
     }
@@ -546,14 +546,14 @@ export class MenuScene extends Phaser.Scene {
     }
     this.savePlayerName(trimmed);
     this.setWaitingState(true);
-    this.statusText.setText('Connecting...');
+    this.statusText.setText('CONNECTING...');
     this.statusText.setColor('#ffcc00');
     
     try {
       await this.networkManager?.joinRoom(DEFAULT_ROOM_ID);
     } catch (error) {
       console.error('Failed to join room:', error);
-      this.statusText.setText('Connection failed. Try again.');
+      this.statusText.setText('CONNECTION FAILEDPLEASE TRY AGAIN.');
       this.statusText.setColor('#ff6666');
       this.setWaitingState(false);
     }
@@ -602,13 +602,13 @@ export class MenuScene extends Phaser.Scene {
     
     this.networkManager.onPeerJoined((peerId) => {
       console.log('Peer joined:', peerId);
-      this.statusText.setText('Opponent found! Starting game...');
+      this.statusText.setText('OPPONENT FOUND! STARTING GAME...');
       this.statusText.setColor('#66ff66');
     });
     
     this.networkManager.onPeerLeft((peerId) => {
       console.log('Peer left:', peerId);
-      this.statusText.setText('Opponent disconnected. Waiting...');
+      this.statusText.setText('OPPONENT DISCONNECTED. WAITING...');
       this.statusText.setColor('#ffcc00');
     });
     
@@ -622,8 +622,8 @@ export class MenuScene extends Phaser.Scene {
     });
     
     this.networkManager.onError((error) => {
-      console.error('Network error:', error);
-      this.statusText.setText('Network error. Try again.');
+      console.error('NETWORK ERROR:', error);
+      this.statusText.setText('NETWORK ERROR. PLEASE TRY AGAIN.');
       this.statusText.setColor('#ff6666');
       this.setWaitingState(false);
     });
@@ -638,16 +638,16 @@ export class MenuScene extends Phaser.Scene {
   private updateStatusFromConnectionState(state: ConnectionState): void {
     switch (state) {
       case 'connecting':
-        this.statusText.setText('Connecting to network...');
+        this.statusText.setText('CONNECTING TO NETWORK...');
         this.statusText.setColor('#ffcc00');
         break;
       case 'waiting':
-        this.statusText.setText('Waiting for opponent...');
+        this.statusText.setText('WAITING FOR OPPONENT...');
         this.statusText.setColor('#ffcc00');
         this.startWaitingAnimation();
         break;
       case 'connected':
-        this.statusText.setText('Opponent found!');
+        this.statusText.setText('OPPONENT FOUND!');
         this.statusText.setColor('#66ff66');
         this.stopWaitingAnimation();
         break;

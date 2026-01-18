@@ -51,11 +51,10 @@ export const STOPWATCH = {
   /** Threshold in seconds that triggers opponent card draw */
   THRESHOLD_SECONDS: 60,
   
-  /** Progress thresholds for visual warnings (as percentage of threshold) */
+  /** Absolute time thresholds for visual warnings (in seconds) */
   WARNING_THRESHOLDS: {
-    LOW: 0.5,      // 50% - Yellow text starts
-    MEDIUM: 0.75,  // 75% - Orange text
-    HIGH: 0.9,     // 90% - Red text
+    LOW: 30,       // 30 seconds - Orange text starts
+    HIGH: 50,      // 50 seconds - Red text
   },
 } as const;
 
@@ -190,17 +189,14 @@ export const CLOCK_COLORS = {
  * Colors for the stopwatch based on threshold progress.
  */
 export const STOPWATCH_COLORS = {
-  /** Base time color (white) */
-  BASE: '#ffffff',
+  /** Base time color (black) - below 30 seconds */
+  BASE: '#000000',
   
-  /** Low warning color (yellow) */
-  LOW: '#ffff44',
+  /** Low warning color (orange) - 30 to 49 seconds */
+  LOW: '#ff8800',
   
-  /** Medium warning color (orange) */
-  MEDIUM: '#ffaa44',
-  
-  /** High warning color (red) */
-  HIGH: '#ff4444',
+  /** High warning color (red) - 50+ seconds */
+  HIGH: '#ff0000',
 } as const;
 
 /**
@@ -467,7 +463,7 @@ export const TARGETING_LAYOUT = {
   ARROW_HEAD_SIZE: 15,
   
   /** Alpha for play zone highlight */
-  PLAY_ZONE_ALPHA: 0.3,
+  PLAY_ZONE_ALPHA: 0.5,
   
   /** Curve factor for the targeting arrow (0 = straight, higher = more curved) */
   ARROW_CURVE_FACTOR: 0.3,
@@ -652,9 +648,9 @@ export const GAME_LAYOUT = {
   
   /** Right panel vertical split ratios */
   RIGHT_PANEL_SPLIT: {
-    TOP: 0.45,
-    MIDDLE: 0.45,
-    BOTTOM: 0.1,
+    TOP: 0.4,
+    MIDDLE: 0.4,
+    BOTTOM: 0.3,
   },
   
   /** Event log vertical split ratio */
@@ -747,16 +743,16 @@ export const RIGHT_PANEL_LAYOUT = {
   BASE_GAP: 10,
   
   /** Available height factor */
-  AVAILABLE_HEIGHT_FACTOR: 0.84,
+  AVAILABLE_HEIGHT_FACTOR: 0.79,
   
   /** Maximum scale factor */
   MAX_SCALE_FACTOR: 1.4,
   
   /** Minimum scale factor */
-  MIN_SCALE_FACTOR: 0.85,
+  MIN_SCALE_FACTOR: 0.80,
   
   /** Controlled squares button scale factor */
-  BUTTON_SCALE_FACTOR: 0.7,
+  BUTTON_SCALE_FACTOR: 0.75,
 } as const;
 
 /* ============================================
@@ -1115,5 +1111,5 @@ export const UI_FACTORY = {
   RIGHT_PANEL_TINT_ALPHA: 0.28,
   
   /** Right panel backdrop alpha */
-  RIGHT_PANEL_BACKDROP_ALPHA: 0.3,
+  RIGHT_PANEL_BACKDROP_ALPHA: 0.45,
 } as const;

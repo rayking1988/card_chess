@@ -469,16 +469,17 @@ export function animateCardDraw(this: GameScene, side: 'local' | 'opponent', cou
     temp.setScale(target.scaleX || 1);
     temp.setDepth(30);
 
+    // Match player's draw animation speed (600ms + 120ms delay)
     this.tweens.add({
       targets: temp,
       x: point.x,
       y: point.y,
-      duration: 360,
+      duration: 100,
       ease: 'Quad.easeOut',
       onComplete: () => {
         temp.destroy();
         target.setAlpha(1);
-        this.time.delayedCall(80, () => animateNext(index + 1));
+        this.time.delayedCall(20, () => animateNext(index + 1));
       }
     });
   };
@@ -560,7 +561,7 @@ export function animateTimeTransfer(
     this.opponentStopwatchDeltaText = stopwatchDelta;
   }
 
-  const duration = Math.min(3200, 450 + diff * 90);
+  const duration = Math.min(5000, 600 + diff * 150);
   const tween = this.tweens.addCounter({
     from: 0,
     to: diff,
@@ -954,6 +955,14 @@ export function showTurnBanner(this: GameScene, turn: PlayerColor): void {
  */
 export function updateTurnOverlay(this: GameScene, turn: PlayerColor): void {
   if (!this.turnOverlayRect || !this.turnOverlayText) return;
+  
+  // Don't show turn overlay during mulligan phase
+  if (this.gameStateManager.getPhase() === 'mulligan') {
+    this.turnOverlayRect.setVisible(false);
+    this.turnOverlayText.setVisible(false);
+    return;
+  }
+  
   if (this.lastTurnOverlayTurn === turn) return;
   this.lastTurnOverlayTurn = turn;
 
@@ -961,7 +970,7 @@ export function updateTurnOverlay(this: GameScene, turn: PlayerColor): void {
   const text = isLocalTurn ? 'YOUR TURN' : 'OPPONENT\'S TURN';
   const color = isLocalTurn ? '#3377ff' : '#ff3333';
 
-  this.turnOverlayRect.setFillStyle(hex(color), 0.5);
+  this.turnOverlayRect.setFillStyle(hex(color), 0.8);
   this.turnOverlayText.setText(text);
   this.turnOverlayRect.setVisible(true);
   this.turnOverlayText.setVisible(true);
@@ -983,7 +992,7 @@ export function showControlledSquaresOverlay(this: GameScene): void {
   this.chessBoard.renderControlOverlay(controlMap, {
     whiteColor: '#ffffff',
     blackColor: '#000000',
-    alpha: 0.5,
+    alpha: 0.8,
     usePowerAlpha: false
   });
 }

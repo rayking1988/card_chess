@@ -212,7 +212,7 @@ export function createRightPanel(this: GameScene, layout: GameLayout): void {
     this,
     bottomSection.centerX,
     bottomSection.centerY,
-    'Controlled Squares',
+    'CTRL. SQUARES',
     'blue_button',
     'blue_button_pressed',
     () => {
@@ -228,7 +228,7 @@ export function createRightPanel(this: GameScene, layout: GameLayout): void {
     this,
     bottomSection.centerX,
     bottomSection.centerY,
-    'Offer Draw',
+    'OFFER DRAW',
     'yellow_button',
     'yellow_button_pressed',
     () => this.handleOfferDraw()
@@ -239,7 +239,7 @@ export function createRightPanel(this: GameScene, layout: GameLayout): void {
     this,
     bottomSection.centerX,
     bottomSection.centerY,
-    'Resign',
+    'RESIGN',
     'red_button',
     'red_button_pressed',
     () => this.handleResignClick()

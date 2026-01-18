@@ -244,55 +244,36 @@ export function positionRightPanel(this: GameScene, layout: GameLayout): void {
     { component: this.playerDisturbCounter },
     { component: this.playerFocusDisturb }
   ], middleSection);
+  
 
   const buttonScale = Math.min(topScale, midScale) * RIGHT_PANEL_LAYOUT.BUTTON_SCALE_FACTOR;
   
   // Layout: Offer Draw and Resign on top row, Controlled Squares below
-  const rowGap = 8 * buttonScale;
-  const buttonGap = 6 * buttonScale;
-  
-  // First row: Offer Draw and Resign
-  const topRowButtons: Phaser.GameObjects.Container[] = [];
-  if (this.offerDrawButton) {
-    this.offerDrawButton.setVisible(true);
-    this.offerDrawButton.setData('baseScale', buttonScale);
-    this.offerDrawButton.setScale(buttonScale);
-    topRowButtons.push(this.offerDrawButton);
-  }
-  if (this.resignButton) {
-    this.resignButton.setVisible(true);
-    this.resignButton.setData('baseScale', buttonScale);
-    this.resignButton.setScale(buttonScale);
-    topRowButtons.push(this.resignButton);
-  }
-  
-  // Second row: Controlled Squares
+  const buttonSectionTopY = bottomSection.centerY - bottomSection.height/2;
+  const buttonGap = (this.controlledSquaresButton.height) * buttonScale;
+
+  // Controlled Squares
   if (this.controlledSquaresButton) {
     this.controlledSquaresButton.setVisible(true);
     this.controlledSquaresButton.setData('baseScale', buttonScale);
     this.controlledSquaresButton.setScale(buttonScale);
+    this.controlledSquaresButton.setPosition(rightX, buttonSectionTopY);
   }
   
-  // Position top row buttons side by side
-  if (topRowButtons.length > 0) {
-    const topRowHeight = topRowButtons[0].getBounds().height;
-    const topRowWidth = topRowButtons.reduce((sum, btn) => sum + btn.getBounds().width, 0) + buttonGap * (topRowButtons.length - 1);
-    let x = rightX - topRowWidth / 2;
-    const topRowY = bottomSection.centerY - (topRowHeight + rowGap) / 2;
-    
-    for (const button of topRowButtons) {
-      const width = button.getBounds().width;
-      x += width / 2;
-      button.setPosition(x, topRowY);
-      x += width / 2 + buttonGap;
-    }
+  // Offer Draw
+  if (this.offerDrawButton) {
+    this.offerDrawButton.setVisible(true);
+    this.offerDrawButton.setData('baseScale', buttonScale);
+    this.offerDrawButton.setScale(buttonScale);
+    this.offerDrawButton.setPosition(rightX, buttonSectionTopY + buttonGap);
   }
-  
-  // Position controlled squares button below
-  if (this.controlledSquaresButton) {
-    const topRowHeight = topRowButtons.length > 0 ? topRowButtons[0].getBounds().height : 0;
-    const controlledSquaresY = bottomSection.centerY + (topRowHeight + rowGap) / 2;
-    this.controlledSquaresButton.setPosition(rightX, controlledSquaresY);
+
+  // Resign
+  if (this.resignButton) {
+    this.resignButton.setVisible(true);
+    this.resignButton.setData('baseScale', buttonScale);
+    this.resignButton.setScale(buttonScale);
+    this.resignButton.setPosition(rightX, buttonSectionTopY + buttonGap * 2);
   }
 }
 

@@ -771,7 +771,7 @@ export class CardHandComponent {
       (cardView as CardComponentWithOriginal).originalScale = pos.scale;
 
       const isNewCard = i === newCardIndex;
-      const duration = isNewCard ? 360 : 160;
+      const duration = isNewCard ? 100 : 300;
 
       this.scene.tweens.add({
         targets: cardView.getContainer(),
@@ -785,7 +785,7 @@ export class CardHandComponent {
         onComplete: isNewCard
           ? () => {
               if (token !== this.drawSequenceToken) return;
-              this.scene.time.delayedCall(80, () => this.processDrawQueue(token));
+              this.scene.time.delayedCall(20, () => this.processDrawQueue(token));
             }
           : undefined
       });

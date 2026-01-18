@@ -111,3 +111,14 @@ export function handleOpponentResign(this: GameScene): void {
   this.logEvent('system', `${this.opponentName} resigned`);
   this.handleGameEnd(this.localColor, 'Opponent resigned');
 }
+
+/**
+ * Resets draw/resign button states when a move is made
+ * Called after a player makes a move to clear any pending draw offers or resign confirmations
+ */
+export function resetDrawResignState(this: GameScene): void {
+  this.localOfferedDraw = false;
+  this.opponentOfferedDraw = false;
+  this.isResignConfirm = false;
+  this.updateDrawResignButtons();
+}

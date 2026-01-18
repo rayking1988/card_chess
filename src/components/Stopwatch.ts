@@ -34,10 +34,9 @@ const STOPWATCH_HEIGHT = STOPWATCH_LAYOUT.HEIGHT;
  */
 const THRESHOLD_SECONDS = STOPWATCH.THRESHOLD_SECONDS;
 
-/** Progress thresholds for visual warnings (as percentage of threshold) */
+/** Absolute time thresholds for visual warnings (in seconds) */
 const WARNING_THRESHOLDS = {
   low: STOPWATCH.WARNING_THRESHOLDS.LOW,
-  medium: STOPWATCH.WARNING_THRESHOLDS.MEDIUM,
   high: STOPWATCH.WARNING_THRESHOLDS.HIGH
 };
 
@@ -75,8 +74,8 @@ export class StopwatchComponent {
   private timeText: Phaser.GameObjects.Text;
   private currentTime: number = 0;
   private lastDisplayedTime: number = -1;
-  private lastWarningLevel: 'none' | 'low' | 'medium' | 'high' = 'none';
-  private baseTimeColor: string = '#ffffff';
+  private lastWarningLevel: 'none' | 'low' | 'high' = 'none';
+  private baseTimeColor: string = '#000000';
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     this.container = scene.add.container(x, y);
@@ -132,12 +131,11 @@ export class StopwatchComponent {
   private updateDisplay(): void {
     const displayTime = Math.floor(this.currentTime);
     
-    let currentWarningLevel: 'none' | 'low' | 'medium' | 'high' = 'none';
-    if (this.currentTime >= THRESHOLD_SECONDS * WARNING_THRESHOLDS.high) {
+    // Use absolute thresholds: black < 30, orange 30-49, red >= 50
+    let currentWarningLevel: 'none' | 'low' | 'high' = 'none';
+    if (this.currentTime >= WARNING_THRESHOLDS.high) {
       currentWarningLevel = 'high';
-    } else if (this.currentTime >= THRESHOLD_SECONDS * WARNING_THRESHOLDS.medium) {
-      currentWarningLevel = 'medium';
-    } else if (this.currentTime >= THRESHOLD_SECONDS * WARNING_THRESHOLDS.low) {
+    } else if (this.currentTime >= WARNING_THRESHOLDS.low) {
       currentWarningLevel = 'low';
     }
     
@@ -161,8 +159,6 @@ export class StopwatchComponent {
       let timeColor = this.baseTimeColor;
       if (currentWarningLevel === 'high') {
         timeColor = STOPWATCH_COLORS.HIGH;
-      } else if (currentWarningLevel === 'medium') {
-        timeColor = STOPWATCH_COLORS.MEDIUM;
       } else if (currentWarningLevel === 'low') {
         timeColor = STOPWATCH_COLORS.LOW;
       }

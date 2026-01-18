@@ -151,7 +151,8 @@ import {
   handleResignClick,
   handleOpponentOfferDraw,
   handleOpponentAcceptDraw,
-  handleOpponentResign
+  handleOpponentResign,
+  resetDrawResignState
 } from './game/GameSceneDrawResign';
 import {
   setupCardHandCallbacks,
@@ -1096,6 +1097,10 @@ export class GameScene extends Phaser.Scene {
 
   public handleOpponentResign(): void {
     handleOpponentResign.call(this);
+  }
+
+  public resetDrawResignState(): void {
+    resetDrawResignState.call(this);
   }
 
   public showPromotionPicker(

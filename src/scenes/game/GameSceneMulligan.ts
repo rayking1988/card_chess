@@ -25,7 +25,7 @@ function showMulliganWaitingState(scene: GameScene, layout = scene.currentLayout
 
   const scale = layout.panelScale;
   if (!scene.mulliganTitleText) {
-    scene.mulliganTitleText = scene.add.text(overlayX, overlayY - overlayHeight * OVERLAY_LAYOUT.TITLE_Y_OFFSET_FACTOR, 'Waiting for opponent...', {
+    scene.mulliganTitleText = scene.add.text(overlayX, overlayY - overlayHeight * OVERLAY_LAYOUT.TITLE_Y_OFFSET_FACTOR, 'WAITING FOR OPPONENT...', {
       fontSize: `${OVERLAY_LAYOUT.MULLIGAN_TITLE_FONT_SIZE * scale}px`,
       fontFamily: 'BoldPixels, Arial',
       color: '#ffffff'
