@@ -65,11 +65,19 @@ export function checkGameEndConditions(this: GameScene): void {
   }
 }
 
+/**
+ * Checks move availability and escape options for a player
+ * 
+ * @param fen - Current board position
+ * @param turn - Which player to check ('w' or 'b')
+ * @param blockedSquares - Squares with pieces that cannot move (just deployed)
+ * @returns Object with hasMoves, inCheck, and canEscapeMate flags
+ */
 function getMoveAvailability(
   fen: string,
   turn: 'w' | 'b',
   blockedSquares: string[]
-): { hasMoves: boolean; inCheck: boolean } {
+): { hasMoves: boolean; inCheck: boolean; canEscapeMate: boolean } {
   try {
     const parts = fen.split(' ');
     if (parts.length >= 2) {
@@ -77,13 +85,44 @@ function getMoveAvailability(
     }
     const chess = new Chess(parts.join(' '));
     const blocked = new Set(blockedSquares);
-    const moves = chess.moves({ verbose: true }) as Array<{ from: string; flags?: string }>;
-    const hasMoves = moves.some(move => !blocked.has(move.from) && !move.flags?.includes('k') && !move.flags?.includes('q'));
-    return { hasMoves, inCheck: chess.isCheck() };
+    const moves = chess.moves({ verbose: true }) as Array<{ from: string; to: string; flags?: string }>;
+    
+    // Filter out castling moves and moves from blocked squares
+    const availableMoves = moves.filter(
+      move => !blocked.has(move.from) && !move.flags?.includes('k') && !move.flags?.includes('q')
+    );
+    const hasMoves = availableMoves.length > 0;
+    const inCheck = chess.isCheck();
+    
+    // canEscapeMate: Can the player escape checkmate?
+    // A player can escape mate if ANY legal move (from non-blocked pieces) gets them out of check
+    // This includes king moves, blocking moves, and capturing the attacker
+    let canEscapeMate = false;
+    
+    if (inCheck) {
+      // Check if any available move escapes check
+      for (const move of availableMoves) {
+        // Try the move on a clone to see if it escapes check
+        const testChess = new Chess(parts.join(' '));
+        try {
+          testChess.move({ from: move.from as any, to: move.to as any, promotion: 'q' });
+          // If we get here, the move was legal and escapes check
+          canEscapeMate = true;
+          break;
+        } catch {
+          // Move didn't work (shouldn't happen since we got it from moves())
+        }
+      }
+    } else {
+      // Not in check, so no mate to escape
+      canEscapeMate = true;
+    }
+    
+    return { hasMoves, inCheck, canEscapeMate };
   } catch {
     // FEN validation can fail for edge cases (e.g., pawns on edge rows after deployment)
     // In these cases, assume moves are available to avoid false game-end triggers
-    return { hasMoves: true, inCheck: false };
+    return { hasMoves: true, inCheck: false, canEscapeMate: true };
   }
 }
 
@@ -101,17 +140,24 @@ export function checkCardPlayEndConditions(this: GameScene): void {
   const whiteState = getMoveAvailability(fen, 'w', whiteBlocks);
   const blackState = getMoveAvailability(fen, 'b', blackBlocks);
 
-  if (!whiteState.hasMoves && whiteState.inCheck) {
+  // Checkmate: in check and cannot escape (no legal moves from non-blocked pieces)
+  if (!whiteState.canEscapeMate && whiteState.inCheck) {
     this.handleGameEnd('black', 'Checkmate!');
     return;
   }
 
-  if (!blackState.hasMoves && blackState.inCheck) {
+  if (!blackState.canEscapeMate && blackState.inCheck) {
     this.handleGameEnd('white', 'Checkmate!');
     return;
   }
 
-  if (!whiteState.hasMoves || !blackState.hasMoves) {
+  // Stalemate: no legal moves but not in check
+  if (!whiteState.hasMoves && !whiteState.inCheck) {
+    this.handleGameEnd(null, 'Stalemate - Draw!');
+    return;
+  }
+  
+  if (!blackState.hasMoves && !blackState.inCheck) {
     this.handleGameEnd(null, 'Stalemate - Draw!');
   }
 }

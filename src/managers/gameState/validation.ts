@@ -24,54 +24,28 @@ export function wouldDeploymentGiveCheck(
   playerColor: PlayerColor,
   boardFEN: string
 ): boolean {
-  // Modify FEN to ensure it's the deploying player's turn
-  // This is necessary because chess.js only returns moves for the current turn
+  // Modify FEN to set it to opponent's turn after we place the piece
+  // This way chess.js will check if the opponent's king is in check
   const fenParts = boardFEN.split(' ');
-  const deployingTurn = playerColor === 'white' ? 'w' : 'b';
-  fenParts[1] = deployingTurn;
+  const opponentTurn = playerColor === 'white' ? 'b' : 'w';
+  fenParts[1] = opponentTurn;
   const modifiedFEN = fenParts.join(' ');
   
-  const tempChess = new Chess(modifiedFEN);
+  try {
+    const tempChess = new Chess(modifiedFEN);
+    const pieceColor = playerColor === 'white' ? 'w' : 'b';
 
-  // Find opponent's king
-  const opponentColor = playerColor === 'white' ? 'b' : 'w';
-  const pieceColor = playerColor === 'white' ? 'w' : 'b';
-  let kingSquare: ChessSquare | null = null;
-
-  const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
-  const ranks = ['1', '2', '3', '4', '5', '6', '7', '8'];
-
-  for (const file of files) {
-    for (const rank of ranks) {
-      const square = (file + rank) as ChessSquare;
-      const piece = tempChess.get(square);
-      if (piece && piece.type === 'k' && piece.color === opponentColor) {
-        kingSquare = square;
-        break;
-      }
+    // Place the piece temporarily
+    const placed = tempChess.put({ type: pieceType, color: pieceColor }, targetSquare as ChessSquare);
+    if (!placed) {
+      return false;
     }
-    if (kingSquare) break;
-  }
 
-  if (!kingSquare) return false;
-
-  // Place the piece temporarily
-  const placed = tempChess.put({ type: pieceType, color: pieceColor }, targetSquare as ChessSquare);
-  if (!placed) {
+    // Check if the opponent is now in check
+    // Since it's the opponent's turn, isCheck() tells us if their king is attacked
+    return tempChess.isCheck();
+  } catch {
+    // If FEN is invalid or other error, assume no check to avoid blocking valid moves
     return false;
   }
-
-  // Check if the deployed piece can attack the king
-  try {
-    const moves = tempChess.moves({ square: targetSquare as ChessSquare, verbose: true });
-    for (const move of moves) {
-      if (move.to === kingSquare) {
-        return true;
-      }
-    }
-  } catch {
-    // If we can't get moves, assume no check
-  }
-
-  return false;
 }

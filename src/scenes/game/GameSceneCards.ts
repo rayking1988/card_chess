@@ -28,6 +28,17 @@ function isOpponentHomeRank(square: Square, player: PlayerColor): boolean {
 }
 
 /**
+ * Checks if a square is the player's own home rank (where pawns can't be deployed)
+ * White's home rank is 1, Black's home rank is 8
+ */
+function isOwnHomeRank(square: Square, player: PlayerColor): boolean {
+  if (player === 'white') {
+    return square[1] === '1';
+  }
+  return square[1] === '8';
+}
+
+/**
  * Gets all legal target squares for a card
  * 
  * @param card - Card to check targets for
@@ -54,6 +65,12 @@ export function getLegalTargetSquares(this: GameScene, card: Card): { deploy: Sq
         // Can deploy to empty controlled squares (if it doesn't give check)
         if (!piece) {
           const pieceType = (card.effect as { piece: PieceType }).piece;
+          
+          // Pawns cannot be deployed on player's own home rank
+          if (pieceType === 'p' && isOwnHomeRank(square, this.localColor)) {
+            continue;
+          }
+          
           const boardFEN = this.chessBoard.getPosition();
           if (!this.gameStateManager.wouldDeploymentGiveCheck(square, pieceType, this.localColor, boardFEN)) {
             deploy.push(square);
@@ -149,8 +166,14 @@ export function validateCardTarget(this: GameScene, card: Card, square: Square):
       return false;
     }
 
-    // Check if deployment would give check (not allowed)
     const pieceType = (card.effect as { piece: PieceType }).piece;
+    
+    // Pawns cannot be deployed on player's own home rank
+    if (pieceType === 'p' && isOwnHomeRank(square, this.localColor)) {
+      return false;
+    }
+
+    // Check if deployment would give check (not allowed)
     const boardFEN = this.chessBoard.getPosition();
     if (this.gameStateManager.wouldDeploymentGiveCheck(square, pieceType, this.localColor, boardFEN)) {
       return false;

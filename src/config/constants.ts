@@ -868,7 +868,7 @@ export const OVERLAY_LAYOUT = {
   BUTTON_X_OFFSET: 160,
   
   /** Button scale factor */
-  BUTTON_SCALE_FACTOR: 0.8,
+  BUTTON_SCALE_FACTOR: 0.5,
   
   /** Mulligan title font size */
   MULLIGAN_TITLE_FONT_SIZE: 28,
