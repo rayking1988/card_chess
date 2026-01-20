@@ -75,7 +75,7 @@ const CARD_ART_ASSETS = {
   ponder: 'card_art/ponder.png',
   queen: 'card_art/queen.png',
   rook: 'card_art/rook.png',
-  search: 'card_art/search.png'
+  deep_analysis: 'card_art/deep_analysis.png'
 };
 
 /** UI element asset paths */
@@ -307,7 +307,7 @@ export class BootScene extends Phaser.Scene {
     this.load.image('card_art_ponder', CARD_ART_ASSETS.ponder);
     this.load.image('card_art_queen', CARD_ART_ASSETS.queen);
     this.load.image('card_art_rook', CARD_ART_ASSETS.rook);
-    this.load.image('card_art_search', CARD_ART_ASSETS.search);
+    this.load.image('card_art_deep_analysis', CARD_ART_ASSETS.deep_analysis);
   }
 
   /**

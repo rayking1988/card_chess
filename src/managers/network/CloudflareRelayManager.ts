@@ -422,6 +422,10 @@ export class CloudflareRelayManager {
     });
 
     if (!joinResponse.ok) {
+      const errorData = await joinResponse.json().catch(() => ({}));
+      if (errorData.code === 'ROOM_FULL') {
+        throw new Error('Room is full. Please try again later.');
+      }
       throw new Error(`Failed to join room: ${joinResponse.status}`);
     }
 
@@ -495,6 +499,12 @@ export class CloudflareRelayManager {
     switch (data.type) {
       case 'connected':
         debugLog('Relay connection confirmed');
+        break;
+
+      case 'room_full':
+        debugLog('Room is full, cannot join');
+        this.setConnectionState('disconnected');
+        this.callbacks.onError?.(new Error('Room is full. Please try again later.'));
         break;
 
       case 'peer_joined':

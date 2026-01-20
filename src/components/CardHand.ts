@@ -240,7 +240,7 @@ export class CardHandComponent {
     this.container = scene.add.container(0, 0);
     
     // Initialize targeting component
-    this.targeting = new CardTargetingComponent(scene);
+    this.targeting = new CardTargetingComponent(scene, false);
     this.setupTargetingCallbacks();
   }
 

@@ -31,6 +31,10 @@ const corsHeaders = {
   'Access-Control-Max-Age': '86400',
 };
 
+const DEFAULT_QUEUE_ID = 'default';
+const MATCHMAKING_STORAGE_PREFIX = 'matchmaking_waiting:';
+const MATCHMAKING_TTL_MS = 45000;
+
 // Handle CORS preflight
 function handleCORS(request) {
   if (request.method === 'OPTIONS') {
@@ -65,6 +69,12 @@ export class GameStats {
         return this.incrementStarted();
       case '/stats/increment-finished':
         return this.incrementFinished();
+      case '/matchmaking/join':
+        return this.handleMatchmakingJoin(request);
+      case '/matchmaking/leave':
+        return this.handleMatchmakingLeave(request);
+      case '/matchmaking/heartbeat':
+        return this.handleMatchmakingHeartbeat(request);
       default:
         return new Response('Not Found', { status: 404, headers: corsHeaders });
     }
@@ -109,6 +119,153 @@ export class GameStats {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
+
+  async handleMatchmakingJoin(request) {
+    try {
+      const body = await request.json();
+      const clientId = body?.clientId;
+      const queueId = body?.queueId || DEFAULT_QUEUE_ID;
+      if (!clientId) {
+        return new Response(JSON.stringify({ error: 'Missing clientId' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      const key = `${MATCHMAKING_STORAGE_PREFIX}${queueId}`;
+      let waiting = await this.state.storage.get(key);
+      const now = Date.now();
+
+      const lastSeen = waiting?.lastSeen ?? waiting?.createdAt;
+      if (lastSeen && now - lastSeen > MATCHMAKING_TTL_MS) {
+        await this.state.storage.delete(key);
+        waiting = null;
+      }
+
+      if (waiting?.clientId && waiting.clientId !== clientId) {
+        await this.state.storage.delete(key);
+        return new Response(JSON.stringify({
+          roomId: waiting.roomId,
+          queueId,
+          status: 'paired'
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (waiting?.clientId === clientId) {
+        await this.state.storage.put(key, { ...waiting, lastSeen: now });
+        return new Response(JSON.stringify({
+          roomId: waiting.roomId,
+          queueId,
+          status: 'waiting'
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      const roomId = `room_${crypto.randomUUID()}`;
+      await this.state.storage.put(key, { roomId, clientId, createdAt: now, lastSeen: now });
+
+      return new Response(JSON.stringify({
+        roomId,
+        queueId,
+        status: 'waiting'
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({ error: 'Invalid request' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+  }
+
+  async handleMatchmakingLeave(request) {
+    try {
+      const body = await request.json();
+      const clientId = body?.clientId;
+      const queueId = body?.queueId || DEFAULT_QUEUE_ID;
+      if (!clientId) {
+        return new Response(JSON.stringify({ error: 'Missing clientId' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      const key = `${MATCHMAKING_STORAGE_PREFIX}${queueId}`;
+      const waiting = await this.state.storage.get(key);
+      let cleared = false;
+
+      if (waiting?.clientId === clientId) {
+        await this.state.storage.delete(key);
+        cleared = true;
+      }
+
+      return new Response(JSON.stringify({ success: true, cleared }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({ error: 'Invalid request' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+  }
+
+  async handleMatchmakingHeartbeat(request) {
+    try {
+      const body = await request.json();
+      const clientId = body?.clientId;
+      const queueId = body?.queueId || DEFAULT_QUEUE_ID;
+      if (!clientId) {
+        return new Response(JSON.stringify({ error: 'Missing clientId' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      const key = `${MATCHMAKING_STORAGE_PREFIX}${queueId}`;
+      let waiting = await this.state.storage.get(key);
+      const now = Date.now();
+
+      const lastSeen = waiting?.lastSeen ?? waiting?.createdAt;
+      if (lastSeen && now - lastSeen > MATCHMAKING_TTL_MS) {
+        await this.state.storage.delete(key);
+        waiting = null;
+      }
+
+      if (waiting?.clientId === clientId) {
+        await this.state.storage.put(key, { ...waiting, lastSeen: now });
+        return new Response(JSON.stringify({
+          roomId: waiting.roomId,
+          queueId,
+          status: 'waiting'
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      return new Response(JSON.stringify({
+        status: 'missing',
+        queueId
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({ error: 'Invalid request' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+  }
 }
 
 /**
@@ -123,6 +280,41 @@ export class GameRoom {
     this.sessions = new Map(); // playerId -> WebSocket
     this.players = new Map(); // playerId -> { lastSeen, messages: [] }
     this.gameStarted = false; // Track if game has started (2 players connected)
+  }
+
+  /**
+   * Clean up stale players who haven't been seen recently
+   * This handles cases where WebSocket close events weren't received
+   */
+  cleanupStalePlayers() {
+    const now = Date.now();
+    const STALE_THRESHOLD_MS = 60000; // 60 seconds without activity = stale
+    const stalePlayers = [];
+    
+    for (const [playerId, player] of this.players) {
+      if (now - player.lastSeen > STALE_THRESHOLD_MS) {
+        stalePlayers.push(playerId);
+      }
+    }
+    
+    for (const playerId of stalePlayers) {
+      console.log(`Cleaning up stale player: ${playerId}`);
+      this.sessions.delete(playerId);
+      this.players.delete(playerId);
+      // Notify remaining players
+      this.broadcast({ type: 'peer_left', peerId: playerId }, playerId);
+      for (const [id, player] of this.players) {
+        player.messages.push({ type: 'peer_left', peerId: playerId });
+      }
+    }
+    
+    // Reset gameStarted if room is now empty or has only 1 player
+    if (stalePlayers.length > 0 && this.players.size < 2) {
+      this.gameStarted = false;
+      console.log(`Room reset after cleanup: gameStarted = false, players: ${this.players.size}`);
+    }
+    
+    return stalePlayers.length;
   }
 
   async fetch(request) {
@@ -174,6 +366,9 @@ export class GameRoom {
         });
       }
 
+      // Clean up stale players before checking room capacity
+      this.cleanupStalePlayers();
+
       // Check if room is full (max 2 players)
       const existingPlayers = Array.from(this.players.keys()).filter(id => id !== playerId);
       if (existingPlayers.length >= 2) {
@@ -216,17 +411,8 @@ export class GameRoom {
         }
       }
 
-      // Track game start when 2 players are connected
       if (this.players.size === 2 && !this.gameStarted) {
         this.gameStarted = true;
-        // Increment game started counter
-        try {
-          const statsId = this.env.STATS.idFromName('global');
-          const statsObject = this.env.STATS.get(statsId);
-          await statsObject.fetch(new Request('https://internal/stats/increment-started', { method: 'POST' }));
-        } catch (e) {
-          console.error('Failed to increment game started counter:', e);
-        }
       }
 
       console.log(`Player ${playerId} joined via polling. Total: ${this.players.size}`);
@@ -290,17 +476,6 @@ export class GameRoom {
 
       const message = { type: 'action', senderId, action };
 
-      // Track game finished when RESIGN or game end actions are sent
-      if (action.type === 'RESIGN' || action.type === 'ACCEPT_DRAW') {
-        try {
-          const statsId = this.env.STATS.idFromName('global');
-          const statsObject = this.env.STATS.get(statsId);
-          await statsObject.fetch(new Request('https://internal/stats/increment-finished', { method: 'POST' }));
-        } catch (e) {
-          console.error('Failed to increment game finished counter:', e);
-        }
-      }
-
       if (targetId) {
         // Send to specific player
         // Try WebSocket first
@@ -352,6 +527,9 @@ export class GameRoom {
       return new Response('Missing playerId', { status: 400, headers: corsHeaders });
     }
 
+    // Clean up stale players before checking room capacity
+    this.cleanupStalePlayers();
+
     // Check if room is full (max 2 players) - only for new players
     const existingPlayers = Array.from(this.players.keys()).filter(id => id !== playerId);
     if (existingPlayers.length >= 2 && !this.players.has(playerId)) {
@@ -398,17 +576,8 @@ export class GameRoom {
       this.broadcast({ type: 'peer_joined', peerId: playerId }, playerId);
     }
 
-    // Track game start when 2 players are connected
     if (this.players.size === 2 && !this.gameStarted) {
       this.gameStarted = true;
-      // Increment game started counter
-      try {
-        const statsId = this.env.STATS.idFromName('global');
-        const statsObject = this.env.STATS.get(statsId);
-        await statsObject.fetch(new Request('https://internal/stats/increment-started', { method: 'POST' }));
-      } catch (e) {
-        console.error('Failed to increment game started counter:', e);
-      }
     }
 
     // Handle messages
@@ -436,6 +605,12 @@ export class GameRoom {
   }
 
   async handleMessage(playerId, data) {
+    // Update lastSeen on any message
+    const player = this.players.get(playerId);
+    if (player) {
+      player.lastSeen = Date.now();
+    }
+    
     switch (data.type) {
       case 'ping':
         const ws = this.sessions.get(playerId);
@@ -446,17 +621,6 @@ export class GameRoom {
         
       case 'send_action':
         if (data.targetId && data.action) {
-          // Track game finished when RESIGN or game end actions are sent
-          if (data.action.type === 'RESIGN' || data.action.type === 'ACCEPT_DRAW') {
-            try {
-              const statsId = this.env.STATS.idFromName('global');
-              const statsObject = this.env.STATS.get(statsId);
-              await statsObject.fetch(new Request('https://internal/stats/increment-finished', { method: 'POST' }));
-            } catch (e) {
-              console.error('Failed to increment game finished counter:', e);
-            }
-          }
-
           // Send via WebSocket
           const targetWs = this.sessions.get(data.targetId);
           if (targetWs) {
@@ -495,6 +659,13 @@ export class GameRoom {
       if (id !== playerId) {
         player.messages.push({ type: 'peer_left', peerId: playerId });
       }
+    }
+    
+    // Reset gameStarted when room becomes empty or has only 1 player
+    // This allows new players to join and start a new game
+    if (this.players.size < 2) {
+      this.gameStarted = false;
+      console.log(`Room reset: gameStarted = false, players remaining: ${this.players.size}`);
     }
   }
 
@@ -542,11 +713,18 @@ export default {
         });
       }
 
-      // Game statistics endpoint
-      if (path === '/stats') {
+      // Game statistics endpoints
+      if (path === '/stats' || path.startsWith('/stats/')) {
         const statsId = env.STATS.idFromName('global');
         const statsObject = env.STATS.get(statsId);
-        return statsObject.fetch(new Request('https://internal/stats', { method: 'GET' }));
+        return statsObject.fetch(new Request(`https://internal${path}`, request));
+      }
+
+      // Matchmaking endpoints
+      if (path.startsWith('/matchmaking/')) {
+        const statsId = env.STATS.idFromName('global');
+        const statsObject = env.STATS.get(statsId);
+        return statsObject.fetch(new Request(`https://internal${path}`, request));
       }
 
       // Get roomId from query params or body

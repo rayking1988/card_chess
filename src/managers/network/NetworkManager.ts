@@ -40,6 +40,7 @@ import {
   WSS_TRACKERS,
   STUN_SERVER_ENDPOINT,
   STUN_FETCH_TIMEOUT_MS,
+  RELAY_WORKER_ENDPOINT,
   FORCE_RELAY_ONLY,
   NETWORK_DEBUG
 } from './constants';
@@ -160,6 +161,33 @@ export class NetworkManager {
   
   /** Local player's unique ID (from Trystero) */
   private localPlayerId: string = '';
+
+  /** Matchmaking client ID (stable for this session) */
+  private matchmakingClientId: string = '';
+
+  /** Matchmaking queue ID (lobby identifier) */
+  private matchmakingQueueId: string | null = null;
+
+  /** Matchmaking room ID assigned by the relay worker */
+  private matchmakingRoomId: string | null = null;
+
+  /** Whether we're still waiting to be paired by matchmaking */
+  private matchmakingPending: boolean = false;
+
+  /** Matchmaking heartbeat interval */
+  private matchmakingHeartbeat: ReturnType<typeof setInterval> | null = null;
+
+  /** Matchmaking peer timeout (paired but no peer joins) */
+  private matchmakingPairTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  /** Prevents overlapping matchmaking requeue attempts */
+  private matchmakingRequeueInProgress: boolean = false;
+
+  /** Bound unload handler for matchmaking cleanup */
+  private boundBeforeUnload: (() => void) | null = null;
+
+  /** Prevents unload cleanup from running more than once */
+  private unloadCleanupDone: boolean = false;
   
   /** Local player's assigned color */
   private localColor: PlayerColor | null = null;
@@ -197,6 +225,12 @@ export class NetworkManager {
   /** STUN servers cache duration (6 hours - well within 24h TTL) */
   private static readonly STUN_CACHE_DURATION_MS = 6 * 60 * 60 * 1000;
 
+  /** Matchmaking heartbeat interval (ms) */
+  private static readonly MATCHMAKING_HEARTBEAT_MS = 15000;
+
+  /** Matchmaking requeue timeout when paired but no peer joins (ms) */
+  private static readonly MATCHMAKING_PAIR_TIMEOUT_MS = 30000;
+
   /**
    * Creates a new NetworkManager instance
    * 
@@ -210,6 +244,8 @@ export class NetworkManager {
       rtcConfig: config?.rtcConfig || DEFAULT_RTC_CONFIG
     };
     this.localPlayerId = selfId;
+    this.matchmakingClientId = selfId || this.generateMatchmakingId();
+    this.setupUnloadHandler();
   }
 
 
@@ -389,6 +425,238 @@ export class NetworkManager {
     }, 5000);
   }
 
+  /* ============================================
+   * MATCHMAKING AND STATS
+   * ============================================ */
+
+  private generateMatchmakingId(): string {
+    return `match_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+  }
+
+  private async requestMatchmakingRoom(queueId: string): Promise<string> {
+    const response = await fetch(`${RELAY_WORKER_ENDPOINT}/matchmaking/join`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        clientId: this.matchmakingClientId,
+        queueId
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Matchmaking request failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (!data?.roomId) {
+      throw new Error('Matchmaking response missing roomId');
+    }
+
+    const status = data.status === 'paired' ? 'paired' : 'waiting';
+    this.matchmakingQueueId = queueId;
+    this.matchmakingRoomId = data.roomId;
+    this.matchmakingPending = status === 'waiting';
+    if (this.matchmakingPending) {
+      this.startMatchmakingHeartbeat();
+      this.stopMatchmakingPairTimeout();
+    } else {
+      this.stopMatchmakingHeartbeat();
+      this.startMatchmakingPairTimeout();
+    }
+
+    return data.roomId;
+  }
+
+  private startMatchmakingHeartbeat(): void {
+    if (!this.matchmakingQueueId || !this.matchmakingPending) {
+      return;
+    }
+
+    this.stopMatchmakingHeartbeat();
+
+    this.matchmakingHeartbeat = setInterval(async () => {
+      if (!this.matchmakingQueueId || !this.matchmakingPending) {
+        this.stopMatchmakingHeartbeat();
+        return;
+      }
+
+      try {
+        const response = await fetch(`${RELAY_WORKER_ENDPOINT}/matchmaking/heartbeat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clientId: this.matchmakingClientId,
+            queueId: this.matchmakingQueueId
+          })
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const data = await response.json();
+        if (data?.status === 'missing') {
+          this.matchmakingPending = false;
+          this.stopMatchmakingHeartbeat();
+          this.startMatchmakingPairTimeout();
+        }
+      } catch (error) {
+        console.warn('Matchmaking heartbeat failed:', error);
+      }
+    }, NetworkManager.MATCHMAKING_HEARTBEAT_MS);
+  }
+
+  private stopMatchmakingHeartbeat(): void {
+    if (this.matchmakingHeartbeat) {
+      clearInterval(this.matchmakingHeartbeat);
+      this.matchmakingHeartbeat = null;
+    }
+  }
+
+  private startMatchmakingPairTimeout(): void {
+    this.stopMatchmakingPairTimeout();
+
+    if (this.matchmakingPending || !this.matchmakingQueueId) {
+      return;
+    }
+
+    this.matchmakingPairTimeout = setTimeout(() => {
+      if (this.peerId || this.connectionState === 'connected') {
+        return;
+      }
+      if (!this.matchmakingQueueId || this.matchmakingRequeueInProgress) {
+        return;
+      }
+      debugLog('Matchmaking peer timeout, requeueing');
+      void this.requeueMatchmaking();
+    }, NetworkManager.MATCHMAKING_PAIR_TIMEOUT_MS);
+  }
+
+  private stopMatchmakingPairTimeout(): void {
+    if (this.matchmakingPairTimeout) {
+      clearTimeout(this.matchmakingPairTimeout);
+      this.matchmakingPairTimeout = null;
+    }
+  }
+
+  private async requeueMatchmaking(): Promise<void> {
+    if (this.matchmakingRequeueInProgress) {
+      return;
+    }
+
+    const queueId = this.matchmakingQueueId;
+    if (!queueId) {
+      return;
+    }
+
+    this.matchmakingRequeueInProgress = true;
+    this.stopMatchmakingPairTimeout();
+    this.leaveRoom();
+
+    try {
+      await this.joinRoom(queueId);
+    } catch (error) {
+      console.warn('Matchmaking requeue failed:', error);
+    } finally {
+      this.matchmakingRequeueInProgress = false;
+    }
+  }
+
+  private setupUnloadHandler(): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    this.boundBeforeUnload = () => {
+      this.handleBeforeUnload();
+    };
+
+    window.addEventListener('beforeunload', this.boundBeforeUnload);
+    window.addEventListener('pagehide', this.boundBeforeUnload);
+  }
+
+  private handleBeforeUnload(): void {
+    if (this.unloadCleanupDone) {
+      return;
+    }
+
+    this.unloadCleanupDone = true;
+    this.releaseMatchmakingSlotOnUnload();
+  }
+
+  private releaseMatchmakingSlotOnUnload(): void {
+    if (!this.matchmakingPending || !this.matchmakingQueueId) {
+      return;
+    }
+
+    const payload = JSON.stringify({
+      clientId: this.matchmakingClientId,
+      queueId: this.matchmakingQueueId
+    });
+    const url = `${RELAY_WORKER_ENDPOINT}/matchmaking/leave`;
+
+    if (typeof navigator !== 'undefined' && 'sendBeacon' in navigator) {
+      const blob = new Blob([payload], { type: 'application/json' });
+      const queued = navigator.sendBeacon(url, blob);
+      if (queued) {
+        return;
+      }
+    }
+
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload,
+      keepalive: true
+    }).catch(() => {});
+  }
+
+  private async releaseMatchmakingSlot(): Promise<void> {
+    if (!this.matchmakingPending || !this.matchmakingQueueId) {
+      return;
+    }
+
+    this.stopMatchmakingHeartbeat();
+
+    const queueId = this.matchmakingQueueId;
+    const clientId = this.matchmakingClientId;
+
+    try {
+      await fetch(`${RELAY_WORKER_ENDPOINT}/matchmaking/leave`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId, queueId }),
+        keepalive: true
+      });
+    } catch (error) {
+      console.warn('Failed to release matchmaking slot:', error);
+    }
+  }
+
+  private async postStatsIncrement(path: string): Promise<void> {
+    try {
+      const response = await fetch(`${RELAY_WORKER_ENDPOINT}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomId: this.matchmakingRoomId })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Stats increment failed: ${response.status}`);
+      }
+    } catch (error) {
+      console.warn('Failed to report game stats:', error);
+    }
+  }
+
+  reportGameStarted(): void {
+    void this.postStatsIncrement('/stats/increment-started');
+  }
+
+  reportGameFinished(): void {
+    void this.postStatsIncrement('/stats/increment-finished');
+  }
+
 
   /* ============================================
    * CONNECTION MANAGEMENT
@@ -402,11 +670,12 @@ export class NetworkManager {
    * Algorithm:
    * 1. Leave any existing room
    * 2. Set state to 'connecting'
-   * 3. Try direct P2P connection with STUN-only configuration
-   * 4. If P2P fails after timeout, fallback to Cloudflare Worker relay
-   * 5. Set up message channel and event handlers
-   * 6. Set state to 'waiting'
-   * 7. Start peer timeout check and auto-rejoin
+   * 3. Request a paired room from the Cloudflare matchmaker
+   * 4. Try direct P2P connection with STUN-only configuration
+   * 5. If P2P fails after timeout, fallback to Cloudflare Worker relay
+   * 6. Set up message channel and event handlers
+   * 7. Set state to 'waiting'
+   * 8. Start peer timeout check and auto-rejoin
    * 
    * @param roomId - The room identifier to join
    * @throws Error if connection fails
@@ -421,32 +690,52 @@ export class NetworkManager {
 
     this.setConnectionState('connecting');
 
+    let matchedRoomId: string;
+    try {
+      matchedRoomId = await this.requestMatchmakingRoom(roomId);
+      this.currentRoomId = matchedRoomId;
+    } catch (error) {
+      this.setConnectionState('disconnected');
+      this.callbacks.onError?.(error instanceof Error ? error : new Error(String(error)));
+      throw error;
+    }
+
     // If FORCE_RELAY_ONLY is enabled, skip P2P and go directly to relay
     if (FORCE_RELAY_ONLY) {
       debugLog('FORCE_RELAY_ONLY enabled, using Cloudflare Worker relay directly');
-      await this.fallbackToRelay(roomId);
+      try {
+        await this.fallbackToRelay(matchedRoomId);
+      } catch (error) {
+        void this.releaseMatchmakingSlot();
+        throw error;
+      }
       return;
     }
 
     try {
       // First, try direct P2P connection
-      await this.tryP2PConnection(roomId);
+      await this.tryP2PConnection(matchedRoomId);
       
       // Set timeout for P2P connection - if no peer joins, fallback to relay
       this.p2pTimeout = setTimeout(() => {
         if (this.connectionState === 'waiting' && !this.peerId) {
           debugLog('P2P connection timeout, falling back to Cloudflare Worker relay');
-          this.fallbackToRelay(roomId);
+          this.fallbackToRelay(matchedRoomId);
         }
       }, NetworkManager.P2P_TIMEOUT_MS);
 
       this.setConnectionState('waiting');
       this.startPeerTimeoutCheck();
-      this.startRejoinInterval(roomId);
+      this.startRejoinInterval(matchedRoomId);
 
     } catch (error) {
       console.warn('P2P connection failed, trying Cloudflare Worker relay:', error);
-      await this.fallbackToRelay(roomId);
+      try {
+        await this.fallbackToRelay(matchedRoomId);
+      } catch (relayError) {
+        void this.releaseMatchmakingSlot();
+        throw relayError;
+      }
     }
   }
 
@@ -579,6 +868,11 @@ export class NetworkManager {
     this.stopPeerTimeoutCheck();
     this.stopRejoinInterval();
     this.stopColorRequestLoop();
+    this.stopMatchmakingHeartbeat();
+    this.stopMatchmakingPairTimeout();
+    this.matchmakingRequeueInProgress = false;
+
+    void this.releaseMatchmakingSlot();
     
     // Clear P2P timeout
     if (this.p2pTimeout) {
@@ -605,6 +899,9 @@ export class NetworkManager {
     this.currentRoomId = '';
     this.rejoinAttempts = 0;
     this.lastColorAssignment = null;
+    this.matchmakingQueueId = null;
+    this.matchmakingRoomId = null;
+    this.matchmakingPending = false;
     this.usingRelay = false;
     this.setConnectionState('disconnected');
   }
@@ -995,11 +1292,19 @@ export class NetworkManager {
     // Only handle first peer (1v1 game)
     if (this.peerId) {
       console.warn('Already connected to a peer, ignoring new peer:', peerId);
+      // Send rejection message to the new peer if we're using relay
+      if (this.usingRelay && this.relayManager) {
+        // The relay server should handle this, but we log it for debugging
+        debugLog('Room already has 2 players, rejecting peer:', peerId);
+      }
       return;
     }
 
     this.peerId = peerId;
     this.lastPeerActivity = Date.now();
+    this.matchmakingPending = false;
+    this.stopMatchmakingHeartbeat();
+    this.stopMatchmakingPairTimeout();
     this.setConnectionState('connected');
     
     // Clear P2P timeout since we found a peer

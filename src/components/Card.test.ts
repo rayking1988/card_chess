@@ -83,15 +83,15 @@ describe('Card Targeting Logic', () => {
   it('spell cards without target do not require target', () => {
     const ponderCard = createCard('ponder');
     const growthCard = createCard('growth');
-    const treasureHuntCard = createCard('treasureHunt');
+    const deepAnalysisCard = createCard('deepAnalysis');
     
     expect(ponderCard).not.toBeNull();
     expect(growthCard).not.toBeNull();
-    expect(treasureHuntCard).not.toBeNull();
+    expect(deepAnalysisCard).not.toBeNull();
     
     expect(cardRequiresTarget(ponderCard!)).toBe(false);
     expect(cardRequiresTarget(growthCard!)).toBe(false);
-    expect(cardRequiresTarget(treasureHuntCard!)).toBe(false);
+    expect(cardRequiresTarget(deepAnalysisCard!)).toBe(false);
   });
 });
 
@@ -117,7 +117,7 @@ describe('Card Cost Validation', () => {
   });
 
   it('spell cards have both energy and time costs', () => {
-    const spellCards = ['ponder', 'growth', 'slash', 'treasureHunt'];
+    const spellCards = ['ponder', 'growth', 'slash', 'deepAnalysis'];
     
     for (const cardKey of spellCards) {
       const card = createCard(cardKey);
@@ -158,6 +158,6 @@ describe('Card Type Distribution', () => {
     // Based on CARD_DEFINITIONS quantities
     expect(energyCount).toBe(24);
     expect(pieceCount).toBe(23); // 10 pawns + 4 knights + 4 bishops + 4 rooks + 1 queen
-    expect(spellCount).toBe(13); // 4 ponder + 4 growth + 4 slash + 1 treasure hunt
+    expect(spellCount).toBe(13); // 4 ponder + 4 growth + 4 slash + 1 deep analysis
   });
 });

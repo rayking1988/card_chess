@@ -127,6 +127,10 @@ export function handleGameEnd(this: GameScene, winner: PlayerColor | null, reaso
   if (this.gameStateManager.getPhase() === 'ended') return;
 
   this.gameStateManager.endGame();
+  if (this.networkManager?.getIsHost() && !this.hasReportedGameFinish) {
+    this.hasReportedGameFinish = true;
+    this.networkManager.reportGameFinished();
+  }
 
   this.logEvent('system', reason);
 
@@ -177,14 +181,14 @@ export function handleGameEnd(this: GameScene, winner: PlayerColor | null, reaso
 
   const buttonScale = layout.panelScale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR;
   const buttonY = buttonLayout.overlayY + buttonLayout.overlayHeight * OVERLAY_LAYOUT.BUTTON_Y_OFFSET_FACTOR;
-  const buttonOffset = Math.min(OVERLAY_LAYOUT.GAME_END_BUTTON_X_OFFSET * layout.panelScale, buttonLayout.overlayWidth * 0.3);
+  const buttonOffset = Math.min(OVERLAY_LAYOUT.GAME_END_BUTTON_X_OFFSET * layout.panelScale, buttonLayout.overlayWidth * 0.3) * 3 / 2;
   const viewBoardY = overlayY + overlayHeight * 0.35;
 
   if (!this.gameEndViewBoardButton) {
     this.gameEndViewBoardButton = createImageButton(
       this,
-      overlayX,
-      viewBoardY,
+      buttonLayout.overlayX + buttonOffset,
+      buttonY,
       'View Board',
       'yellow_button',
       'yellow_button_pressed',
@@ -220,7 +224,7 @@ export function handleGameEnd(this: GameScene, winner: PlayerColor | null, reaso
   if (!this.gameEndMenuButton) {
     this.gameEndMenuButton = createImageButton(
       this,
-      buttonLayout.overlayX + buttonOffset,
+      buttonLayout.overlayX,
       buttonY,
       'Back to Main Menu',
       'brown_button',

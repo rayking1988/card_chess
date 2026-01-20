@@ -205,6 +205,9 @@ export class CardTargetingComponent {
   
   /** Whether board is flipped (black perspective) */
   private isFlipped: boolean = false;
+
+  /** Whether to listen to scene pointermove/up events internally */
+  private useSceneInputHandlers: boolean = true;
   
   /* ============================================
    * EVENT CALLBACKS
@@ -226,6 +229,7 @@ export class CardTargetingComponent {
   /** Bound input handlers for cleanup */
   private boundPointerMove?: (pointer: Phaser.Input.Pointer) => void;
   private boundPointerUp?: (pointer: Phaser.Input.Pointer) => void;
+  private boundPointerUpOutside?: (pointer: Phaser.Input.Pointer) => void;
   private boundRightClick?: (pointer: Phaser.Input.Pointer) => void;
   
   /** Throttle timestamp for update calls */
@@ -243,11 +247,13 @@ export class CardTargetingComponent {
    * 3. Setup input handlers for pointer events
    * 
    * @param scene - The Phaser scene
+   * @param useSceneInputHandlers - Whether to register scene-level move/up handlers
    * 
    * Used by: CardHandComponent constructor
    */
-  constructor(scene: Phaser.Scene) {
+  constructor(scene: Phaser.Scene, useSceneInputHandlers: boolean = true) {
     this.scene = scene;
+    this.useSceneInputHandlers = useSceneInputHandlers;
     
     // Create graphics layers
     this.arrowGraphics = scene.add.graphics();
@@ -636,27 +642,37 @@ export class CardTargetingComponent {
    * @private
    */
   private setupInputHandlers(): void {
-    this.boundPointerMove = (pointer: Phaser.Input.Pointer) => {
-      if (this.isActive()) {
-        this.updateTargeting(pointer.x, pointer.y);
-      }
-    };
-    
-    this.boundPointerUp = (pointer: Phaser.Input.Pointer) => {
-      if (this.isActive()) {
-        this.endTargeting(pointer.x, pointer.y);
-      }
-    };
-    
+    if (this.useSceneInputHandlers) {
+      this.boundPointerMove = (pointer: Phaser.Input.Pointer) => {
+        if (this.isActive()) {
+          this.updateTargeting(pointer.x, pointer.y);
+        }
+      };
+      
+      this.boundPointerUp = (pointer: Phaser.Input.Pointer) => {
+        if (this.isActive()) {
+          this.endTargeting(pointer.x, pointer.y);
+        }
+      };
+
+      this.boundPointerUpOutside = (pointer: Phaser.Input.Pointer) => {
+        if (this.isActive()) {
+          this.endTargeting(pointer.x, pointer.y);
+        }
+      };
+
+      this.scene.input.on('pointermove', this.boundPointerMove);
+      this.scene.input.on('pointerup', this.boundPointerUp);
+      this.scene.input.on('pointerupoutside', this.boundPointerUpOutside);
+    }
+
     // Right-click to cancel targeting
     this.boundRightClick = (pointer: Phaser.Input.Pointer) => {
       if (pointer.rightButtonDown() && this.isActive()) {
         this.handleCancelRequest();
       }
     };
-    
-    this.scene.input.on('pointermove', this.boundPointerMove);
-    this.scene.input.on('pointerup', this.boundPointerUp);
+
     this.scene.input.on('pointerdown', this.boundRightClick);
   }
   
@@ -971,6 +987,10 @@ export class CardTargetingComponent {
     if (this.boundPointerUp) {
       this.scene.input.off('pointerup', this.boundPointerUp);
       this.boundPointerUp = undefined;
+    }
+    if (this.boundPointerUpOutside) {
+      this.scene.input.off('pointerupoutside', this.boundPointerUpOutside);
+      this.boundPointerUpOutside = undefined;
     }
     if (this.boundRightClick) {
       this.scene.input.off('pointerdown', this.boundRightClick);

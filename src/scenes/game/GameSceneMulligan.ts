@@ -311,6 +311,10 @@ export function checkGameStart(this: GameScene): void {
   // In multiplayer, wait for both players to be ready
   if (this.localPlayerReady && this.opponentPlayerReady) {
     this.gameStateManager.startGame();
+    if (this.networkManager?.getIsHost() && !this.hasReportedGameStart) {
+      this.hasReportedGameStart = true;
+      this.networkManager.reportGameStarted();
+    }
     this.logEvent('system', 'Both players ready - Game started!');
     // Reset lastTurnOverlayTurn to force the turn overlay to show
     this.lastTurnOverlayTurn = undefined;

@@ -69,7 +69,7 @@ const ART_TEXTURES: Record<string, string> = {
   'ponder.png': 'card_art_ponder',
   'grow.png': 'card_art_grow',
   'destroy.png': 'card_art_destroy',
-  'search.png': 'card_art_search'
+  'deep_analysis.png': 'card_art_deep_analysis'
 };
 
 /* ============================================
@@ -184,6 +184,7 @@ export class CardComponent {
   private useExternalDragHandler: boolean = false;
   private boundPointerMove?: (pointer: Phaser.Input.Pointer) => void;
   private boundPointerUp?: (pointer: Phaser.Input.Pointer) => void;
+  private boundPointerUpOutside?: (pointer: Phaser.Input.Pointer) => void;
   private boundPointerOver?: () => void;
   private boundPointerOut?: () => void;
   private boundPointerDown?: (pointer: Phaser.Input.Pointer) => void;
@@ -484,6 +485,12 @@ export class CardComponent {
     return '';
   }
 
+  private finishDrag(pointer: Phaser.Input.Pointer): void {
+    if (!this.isDragging) return;
+    this.isDragging = false;
+    if (this.onDragEnd) this.onDragEnd(this, pointer);
+  }
+
   /**
    * Enables interaction (hover, click, drag)
    * 
@@ -552,25 +559,30 @@ export class CardComponent {
     
     // Scene-level drag handling
     this.boundPointerMove = (pointer: Phaser.Input.Pointer) => {
-      if (this.isDragging) {
-        if (!this.useExternalDragHandler) {
-          // Apply offset to keep card relative to where it was grabbed
-          this.container.x = pointer.x + this.dragOffsetX;
-          this.container.y = pointer.y + this.dragOffsetY;
-        }
-        if (this.onDragMove) this.onDragMove(this, pointer);
+      if (!this.isDragging) return;
+      if (!pointer.isDown) {
+        this.finishDrag(pointer);
+        return;
       }
+      if (!this.useExternalDragHandler) {
+        // Apply offset to keep card relative to where it was grabbed
+        this.container.x = pointer.x + this.dragOffsetX;
+        this.container.y = pointer.y + this.dragOffsetY;
+      }
+      if (this.onDragMove) this.onDragMove(this, pointer);
     };
     
     this.boundPointerUp = (ptr: Phaser.Input.Pointer) => {
-      if (this.isDragging) {
-        this.isDragging = false;
-        if (this.onDragEnd) this.onDragEnd(this, ptr);
-      }
+      this.finishDrag(ptr);
+    };
+
+    this.boundPointerUpOutside = (ptr: Phaser.Input.Pointer) => {
+      this.finishDrag(ptr);
     };
     
     this.scene.input.on('pointermove', this.boundPointerMove);
     this.scene.input.on('pointerup', this.boundPointerUp);
+    this.scene.input.on('pointerupoutside', this.boundPointerUpOutside);
   }
 
   /**
@@ -606,6 +618,10 @@ export class CardComponent {
       if (this.boundPointerUp) {
         this.scene.input.off('pointerup', this.boundPointerUp);
         this.boundPointerUp = undefined;
+      }
+      if (this.boundPointerUpOutside) {
+        this.scene.input.off('pointerupoutside', this.boundPointerUpOutside);
+        this.boundPointerUpOutside = undefined;
       }
     }
   }

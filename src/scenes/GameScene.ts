@@ -511,6 +511,12 @@ export class GameScene extends Phaser.Scene {
   
   /** Network manager for P2P communication (null in single-player) */
   public networkManager: NetworkManager | null = null;
+
+  /** Whether game start stats were reported for this scene */
+  public hasReportedGameStart: boolean = false;
+
+  /** Whether game finish stats were reported for this scene */
+  public hasReportedGameFinish: boolean = false;
   
   /** Deck manager for local player's deck operations */
   public localDeckManager!: DeckManager;
@@ -772,6 +778,22 @@ export class GameScene extends Phaser.Scene {
     this.localColor = data?.localColor || 'white';
     this.networkManager = data?.networkManager || null;
     this.opponentName = data?.opponentName || 'Opponent';
+    this.localPlayerReady = false;
+    this.opponentPlayerReady = false;
+    this.mulliganCount = 0;
+    this.localOfferedDraw = false;
+    this.opponentOfferedDraw = false;
+    this.isResignConfirm = false;
+    this.localRematchRequested = false;
+    this.opponentRematchRequested = false;
+    this.hasReportedGameStart = false;
+    this.hasReportedGameFinish = false;
+    this.isViewingBoard = false;
+    this.gameEndBannerRect = null;
+    this.gameEndBannerText = null;
+    this.gameEndRematchButton = null;
+    this.gameEndMenuButton = null;
+    this.gameEndViewBoardButton = null;
   }
 
   /**

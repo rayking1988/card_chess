@@ -9,7 +9,7 @@
  * - Piece cards (22): Deploy chess pieces
  *   - Pawn (10), Knight (4), Bishop (4), Rook (4), Queen (1)
  * - Spell cards (14): Various effects
- *   - Ponder (4), Growth (4), Slash (4), Treasure Hunt (1)
+ *   - Ponder (4), Growth (4), Slash (4), Deep Analysis (1)
  * 
  * Requirements addressed:
  * - 11.1: Deck contains 60 cards as specified in deck composition
@@ -82,7 +82,7 @@ export interface CardDefinition {
  * - Ponder (4): Draw 2 cards for 3 energy and 30 seconds
  * - Growth (4): Increase energy cap by 1 for 2 energy and 25 seconds
  * - Slash (4): Destroy a piece on a controlled square for 5 energy and 55 seconds
- * - Treasure Hunt (1): Draw 4 cards for 7 energy and 110 seconds
+ * - Deep Analysis (1): Draw 4 cards for 7 energy and 110 seconds
  * 
  * Used by: createCard(), createDeck(), CardComponent.getCardDescription()
  */
@@ -215,13 +215,13 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     description: 'Destroy target non-King piece on a square you control.'
   },
 
-  treasureHunt: {
-    name: 'Treasure Hunt',
+  deepAnalysis: {
+    name: 'Deep Analysis',
     type: 'spell',
     energyCost: 7,
     timeCost: 110,
     effect: { action: 'DRAW_CARDS', count: 4, respectCap: false },
-    artAsset: 'search.png',
+    artAsset: 'deep_analysis.png',
     frameColor: 'blue',
     quantity: 1,           // Rare powerful draw spell
     description: 'Draw 4 cards.'
