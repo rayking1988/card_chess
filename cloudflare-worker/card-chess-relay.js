@@ -11,11 +11,15 @@
  * - Persistent state across worker instances
  * - CORS support for web applications
  * - Rate limiting to prevent abuse
+ * - Game statistics tracking (games started/finished)
+ * - Maximum 2 players per room enforcement
  * 
  * Deployment:
  * 1. Create a new worker at workers.cloudflare.com
  * 2. Enable Durable Objects in your worker settings
- * 3. Add the binding: [[durable_objects.bindings]] name = "ROOMS" class_name = "GameRoom"
+ * 3. Add the bindings: 
+ *    [[durable_objects.bindings]] name = "ROOMS" class_name = "GameRoom"
+ *    [[durable_objects.bindings]] name = "STATS" class_name = "GameStats"
  * 4. Deploy this script
  */
 
@@ -36,8 +40,81 @@ function handleCORS(request) {
 }
 
 /**
+ * Durable Object class for tracking game statistics
+ * Persists game counts across all requests
+ */
+export class GameStats {
+  constructor(state, env) {
+    this.state = state;
+    this.env = env;
+  }
+
+  async fetch(request) {
+    const url = new URL(request.url);
+    const path = url.pathname;
+
+    // Handle CORS preflight
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { status: 200, headers: corsHeaders });
+    }
+
+    switch (path) {
+      case '/stats':
+        return this.getStats();
+      case '/stats/increment-started':
+        return this.incrementStarted();
+      case '/stats/increment-finished':
+        return this.incrementFinished();
+      default:
+        return new Response('Not Found', { status: 404, headers: corsHeaders });
+    }
+  }
+
+  async getStats() {
+    const gamesStarted = await this.state.storage.get('gamesStarted') || 0;
+    const gamesFinished = await this.state.storage.get('gamesFinished') || 0;
+    
+    return new Response(JSON.stringify({
+      gamesStarted,
+      gamesFinished,
+      timestamp: Date.now()
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+
+  async incrementStarted() {
+    const current = await this.state.storage.get('gamesStarted') || 0;
+    await this.state.storage.put('gamesStarted', current + 1);
+    
+    return new Response(JSON.stringify({
+      gamesStarted: current + 1,
+      success: true
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+
+  async incrementFinished() {
+    const current = await this.state.storage.get('gamesFinished') || 0;
+    await this.state.storage.put('gamesFinished', current + 1);
+    
+    return new Response(JSON.stringify({
+      gamesFinished: current + 1,
+      success: true
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+}
+
+/**
  * Durable Object class for managing a game room
  * Each room has its own persistent state and WebSocket connections
+ * Maximum 2 players per room enforced
  */
 export class GameRoom {
   constructor(state, env) {
@@ -45,6 +122,7 @@ export class GameRoom {
     this.env = env;
     this.sessions = new Map(); // playerId -> WebSocket
     this.players = new Map(); // playerId -> { lastSeen, messages: [] }
+    this.gameStarted = false; // Track if game has started (2 players connected)
   }
 
   async fetch(request) {
@@ -75,7 +153,8 @@ export class GameRoom {
       case '/status':
         return new Response(JSON.stringify({
           players: Array.from(this.players.keys()),
-          activeWebSockets: this.sessions.size
+          activeWebSockets: this.sessions.size,
+          gameStarted: this.gameStarted
         }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
@@ -92,6 +171,18 @@ export class GameRoom {
       if (!playerId) {
         return new Response(JSON.stringify({ error: 'Missing playerId' }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Check if room is full (max 2 players)
+      const existingPlayers = Array.from(this.players.keys()).filter(id => id !== playerId);
+      if (existingPlayers.length >= 2) {
+        return new Response(JSON.stringify({ 
+          error: 'Room is full', 
+          code: 'ROOM_FULL',
+          playerCount: this.players.size 
+        }), {
+          status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }
 
@@ -122,6 +213,19 @@ export class GameRoom {
               } catch (e) {}
             }
           }
+        }
+      }
+
+      // Track game start when 2 players are connected
+      if (this.players.size === 2 && !this.gameStarted) {
+        this.gameStarted = true;
+        // Increment game started counter
+        try {
+          const statsId = this.env.STATS.idFromName('global');
+          const statsObject = this.env.STATS.get(statsId);
+          await statsObject.fetch(new Request('https://internal/stats/increment-started', { method: 'POST' }));
+        } catch (e) {
+          console.error('Failed to increment game started counter:', e);
         }
       }
 
@@ -186,6 +290,17 @@ export class GameRoom {
 
       const message = { type: 'action', senderId, action };
 
+      // Track game finished when RESIGN or game end actions are sent
+      if (action.type === 'RESIGN' || action.type === 'ACCEPT_DRAW') {
+        try {
+          const statsId = this.env.STATS.idFromName('global');
+          const statsObject = this.env.STATS.get(statsId);
+          await statsObject.fetch(new Request('https://internal/stats/increment-finished', { method: 'POST' }));
+        } catch (e) {
+          console.error('Failed to increment game finished counter:', e);
+        }
+      }
+
       if (targetId) {
         // Send to specific player
         // Try WebSocket first
@@ -237,6 +352,18 @@ export class GameRoom {
       return new Response('Missing playerId', { status: 400, headers: corsHeaders });
     }
 
+    // Check if room is full (max 2 players) - only for new players
+    const existingPlayers = Array.from(this.players.keys()).filter(id => id !== playerId);
+    if (existingPlayers.length >= 2 && !this.players.has(playerId)) {
+      return new Response(JSON.stringify({ 
+        error: 'Room is full', 
+        code: 'ROOM_FULL' 
+      }), { 
+        status: 409, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      });
+    }
+
     // Create WebSocket pair
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
@@ -246,6 +373,8 @@ export class GameRoom {
     
     // Store the session
     this.sessions.set(playerId, server);
+    
+    const isNewPlayer = !this.players.has(playerId);
     
     // Also add to players map for polling compatibility
     if (!this.players.has(playerId)) {
@@ -264,8 +393,23 @@ export class GameRoom {
       }
     }
     
-    // Notify existing players about new player
-    this.broadcast({ type: 'peer_joined', peerId: playerId }, playerId);
+    // Notify existing players about new player (only if truly new)
+    if (isNewPlayer) {
+      this.broadcast({ type: 'peer_joined', peerId: playerId }, playerId);
+    }
+
+    // Track game start when 2 players are connected
+    if (this.players.size === 2 && !this.gameStarted) {
+      this.gameStarted = true;
+      // Increment game started counter
+      try {
+        const statsId = this.env.STATS.idFromName('global');
+        const statsObject = this.env.STATS.get(statsId);
+        await statsObject.fetch(new Request('https://internal/stats/increment-started', { method: 'POST' }));
+      } catch (e) {
+        console.error('Failed to increment game started counter:', e);
+      }
+    }
 
     // Handle messages
     server.addEventListener('message', async (event) => {
@@ -302,6 +446,17 @@ export class GameRoom {
         
       case 'send_action':
         if (data.targetId && data.action) {
+          // Track game finished when RESIGN or game end actions are sent
+          if (data.action.type === 'RESIGN' || data.action.type === 'ACCEPT_DRAW') {
+            try {
+              const statsId = this.env.STATS.idFromName('global');
+              const statsObject = this.env.STATS.get(statsId);
+              await statsObject.fetch(new Request('https://internal/stats/increment-finished', { method: 'POST' }));
+            } catch (e) {
+              console.error('Failed to increment game finished counter:', e);
+            }
+          }
+
           // Send via WebSocket
           const targetWs = this.sessions.get(data.targetId);
           if (targetWs) {
@@ -381,10 +536,17 @@ export default {
 
       // Global status endpoint
       if (path === '/status') {
-        return new Response(JSON.stringify({ status: 'running', version: '2.1', features: ['websocket', 'polling'] }), {
+        return new Response(JSON.stringify({ status: 'running', version: '2.2', features: ['websocket', 'polling', 'stats', 'room-limit'] }), {
           status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
+      }
+
+      // Game statistics endpoint
+      if (path === '/stats') {
+        const statsId = env.STATS.idFromName('global');
+        const statsObject = env.STATS.get(statsId);
+        return statsObject.fetch(new Request('https://internal/stats', { method: 'GET' }));
       }
 
       // Get roomId from query params or body
