@@ -22,6 +22,13 @@
  * These affect game balance and should be tuned carefully.
  */
 
+export const VERSION = {
+  MAIN: "BETA",
+  MAJOR: 0,
+  MINOR: 1,
+  INCREMENTAL: 0,
+} as const
+
 /**
  * Clock and Time Settings
  * Controls the chess clock and time-based mechanics.
@@ -365,6 +372,9 @@ export const TOGGLE_LAYOUT = {
   
   /** Label Y offset from center */
   LABEL_Y_OFFSET: -30,
+  
+  /** Gap between mode text and switch */
+  MODE_TEXT_GAP: 12,
 } as const;
 
 /**
@@ -771,7 +781,7 @@ export const RIGHT_PANEL_LAYOUT = {
 
 export const MOBILE_BAR_LAYOUT = {
   /** Icon size factor */
-  ICON_SIZE: 22,
+  ICON_SIZE: 55,
   
   /** Padding factor */
   PADDING: 12,
@@ -783,13 +793,16 @@ export const MOBILE_BAR_LAYOUT = {
   ICON_GAP: 6,
   
   /** Button scale factor */
-  BUTTON_SCALE: 0.7,
+  BUTTON_SCALE: 1,
   
   /** Button padding factor */
   BUTTON_PADDING: 8,
   
   /** Minimum button scale */
-  MIN_BUTTON_SCALE: 0.4,
+  MIN_BUTTON_SCALE: 0.3,
+  
+  /** Mode switch icon scale (relative to ICON_SIZE) */
+  MODE_ICON_SCALE: 1.3,
 } as const;
 
 /* ============================================

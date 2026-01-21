@@ -4,6 +4,7 @@
  * @module scenes/game/GameSceneUIFactory
  */
 
+import Phaser from 'phaser';
 import { CardHandComponent } from '../../components/CardHand';
 import { ChessBoardComponent } from '../../components/ChessBoard';
 import { ClockComponent } from '../../components/Clock';
@@ -340,6 +341,7 @@ export function createOpponentHand(this: GameScene, layout: GameLayout): void {
     'Opponent Hand',
     { fontSize: `${UI_FACTORY.HAND_LABEL_FONT_SIZE * layout.panelScale}px`, fontFamily: 'BoldPixels, Arial', color: '#cccccc' }
   ).setOrigin(0.5).setDepth(textDepth);
+  this.opponentHandLabelText.setVisible(false);
 
   this.opponentHandCountText = this.add.text(
     layout.opponentHandX,
@@ -347,6 +349,7 @@ export function createOpponentHand(this: GameScene, layout: GameLayout): void {
     '0',
     { fontSize: `${UI_FACTORY.HAND_LABEL_FONT_SIZE * layout.panelScale}px`, fontFamily: 'BoldPixels, Arial', color: '#ffffff' }
   ).setOrigin(0.5).setDepth(textDepth);
+  this.opponentHandCountText.setVisible(false);
 
   updateOpponentHandDisplay.call(this, this.opponentHandCount);
   positionOpponentHand.call(this, layout);
@@ -406,6 +409,7 @@ export function createCardCountIndicator(this: GameScene, layout: GameLayout): v
     layout.boardX, layout.boardY + layout.boardSize / 2 + CARD_HAND_LAYOUT.COUNT_Y_OFFSET * layout.panelScale, 'Hand: 0 / 7',
     { fontSize: `${CARD_HAND_LAYOUT.COUNT_FONT_SIZE * layout.panelScale}px`, fontFamily: 'BoldPixels, Arial', color: '#ffffff' }
   ).setOrigin(0.5).setDepth(10);
+  this.cardCountText.setVisible(false);
   positionCardCount.call(this, layout);
 }
 
@@ -463,26 +467,30 @@ export function createMobileBars(this: GameScene, layout: GameLayout): void {
   this.mobileTopBarBackground.setOrigin(0.5);
   this.mobileTopBar.add(this.mobileTopBarBackground);
 
+  /*
   this.mobileTopNameText = this.add.text(0, 0, this.opponentName, {
     fontSize: `${UI_FACTORY.MOBILE_STAT_FONT_SIZE * layout.panelScale}px`,
     fontFamily: 'BoldPixels, Arial',
     color: '#1a1a1a'
   }).setOrigin(0, 0.5);
   this.mobileTopBar.add(this.mobileTopNameText);
-
-  this.mobileTopClockIcon = this.add.image(0, 0, 'clock');
-  this.mobileTopStopwatchIcon = this.add.image(0, 0, 'stopwatch');
-  this.mobileTopEnergyIcon = this.add.image(0, 0, 'energy_circle');
-  this.mobileTopDisturbIcon = this.add.image(0, 0, 'switch_disturb');
+*/
+  this.mobileTopClockIcon = this.add.image(0, 0, 'chess_clock_mw');
+  this.mobileTopStopwatchIcon = this.add.image(0, 0, 'stopwatch_mw');
+  this.mobileTopEnergyIcon = this.add.image(0, 0, 'energy_icon');
+  this.mobileTopDisturbIcon = this.add.image(0, 0, 'disturb_icon');
+  this.mobileTopDeckIcon = this.add.image(0, 0, 'deck');
+  this.mobileTopDiscardIcon = this.add.image(0, 0, 'discard');
+  this.mobileTopHandIcon = this.add.image(0, 0, 'hand');
   this.mobileTopClockText = this.add.text(0, 0, '0:00', {
     fontSize: `${UI_FACTORY.MOBILE_STAT_FONT_SIZE * layout.panelScale}px`,
-    fontFamily: 'BoldPixels, Arial',
-    color: '#1a1a1a'
+    fontFamily: 'Digital7, "Courier New"',
+    color: '#000000'
   }).setOrigin(0, 0.5);
   this.mobileTopStopwatchText = this.add.text(0, 0, '00', {
     fontSize: `${UI_FACTORY.MOBILE_STAT_FONT_SIZE * layout.panelScale}px`,
-    fontFamily: 'BoldPixels, Arial',
-    color: '#1a1a1a'
+    fontFamily: 'Digital7, "Courier New"',
+    color: '#000000'
   }).setOrigin(0, 0.5);
   this.mobileTopEnergyText = this.add.text(0, 0, '0/0', {
     fontSize: `${UI_FACTORY.MOBILE_STAT_FONT_SIZE * layout.panelScale}px`,
@@ -494,14 +502,19 @@ export function createMobileBars(this: GameScene, layout: GameLayout): void {
     fontFamily: 'BoldPixels, Arial',
     color: '#1a1a1a'
   }).setOrigin(0, 0.5);
-  
-  // Deck and discard count texts for opponent
-  this.mobileTopDeckText = this.add.text(0, 0, 'D:60', {
+  this.mobileTopHandText = this.add.text(0, 0, '0', {
     fontSize: `${UI_FACTORY.MOBILE_STAT_FONT_SIZE * layout.panelScale}px`,
     fontFamily: 'BoldPixels, Arial',
     color: '#1a1a1a'
   }).setOrigin(0, 0.5);
-  this.mobileTopDiscardText = this.add.text(0, 0, 'X:0', {
+  
+  // Deck and discard count texts for opponent
+  this.mobileTopDeckText = this.add.text(0, 0, '60', {
+    fontSize: `${UI_FACTORY.MOBILE_STAT_FONT_SIZE * layout.panelScale}px`,
+    fontFamily: 'BoldPixels, Arial',
+    color: '#1a1a1a'
+  }).setOrigin(0, 0.5);
+  this.mobileTopDiscardText = this.add.text(0, 0, '0', {
     fontSize: `${UI_FACTORY.MOBILE_STAT_FONT_SIZE * layout.panelScale}px`,
     fontFamily: 'BoldPixels, Arial',
     color: '#1a1a1a'
@@ -516,8 +529,12 @@ export function createMobileBars(this: GameScene, layout: GameLayout): void {
     this.mobileTopEnergyText,
     this.mobileTopDisturbIcon,
     this.mobileTopDisturbText,
+    this.mobileTopDeckIcon,
     this.mobileTopDeckText,
-    this.mobileTopDiscardText
+    this.mobileTopDiscardIcon,
+    this.mobileTopDiscardText,
+    this.mobileTopHandIcon,
+    this.mobileTopHandText
   ]);
 
   // Bottom bar uses two rows: row 1 for stats, row 2 for buttons
@@ -526,26 +543,30 @@ export function createMobileBars(this: GameScene, layout: GameLayout): void {
   this.mobileBottomBarBackground.setOrigin(0.5);
   this.mobileBottomBar.add(this.mobileBottomBarBackground);
 
+  /*
   this.mobileBottomNameText = this.add.text(0, 0, this.playerName, {
     fontSize: `${UI_FACTORY.MOBILE_STAT_FONT_SIZE * layout.panelScale}px`,
     fontFamily: 'BoldPixels, Arial',
     color: '#1a1a1a'
   }).setOrigin(0, 0.5);
   this.mobileBottomBar.add(this.mobileBottomNameText);
-
-  this.mobileBottomClockIcon = this.add.image(0, 0, 'clock');
-  this.mobileBottomStopwatchIcon = this.add.image(0, 0, 'stopwatch');
-  this.mobileBottomEnergyIcon = this.add.image(0, 0, 'energy_circle');
-  this.mobileBottomDisturbIcon = this.add.image(0, 0, 'switch_disturb');
+*/
+  this.mobileBottomClockIcon = this.add.image(0, 0, 'chess_clock_mw');
+  this.mobileBottomStopwatchIcon = this.add.image(0, 0, 'stopwatch_mw');
+  this.mobileBottomEnergyIcon = this.add.image(0, 0, 'energy_icon');
+  this.mobileBottomDisturbIcon = this.add.image(0, 0, 'disturb_icon');
+  this.mobileBottomDeckIcon = this.add.image(0, 0, 'deck');
+  this.mobileBottomDiscardIcon = this.add.image(0, 0, 'discard');
+  this.mobileBottomHandIcon = this.add.image(0, 0, 'hand');
   this.mobileBottomClockText = this.add.text(0, 0, '0:00', {
     fontSize: `${UI_FACTORY.MOBILE_STAT_FONT_SIZE * layout.panelScale}px`,
-    fontFamily: 'BoldPixels, Arial',
-    color: '#1a1a1a'
+    fontFamily: 'Digital7, "Courier New"',
+    color: '#000000'
   }).setOrigin(0, 0.5);
   this.mobileBottomStopwatchText = this.add.text(0, 0, '00', {
     fontSize: `${UI_FACTORY.MOBILE_STAT_FONT_SIZE * layout.panelScale}px`,
-    fontFamily: 'BoldPixels, Arial',
-    color: '#1a1a1a'
+    fontFamily: 'Digital7, "Courier New"',
+    color: '#000000'
   }).setOrigin(0, 0.5);
   this.mobileBottomEnergyText = this.add.text(0, 0, '0/0', {
     fontSize: `${UI_FACTORY.MOBILE_STAT_FONT_SIZE * layout.panelScale}px`,
@@ -557,14 +578,19 @@ export function createMobileBars(this: GameScene, layout: GameLayout): void {
     fontFamily: 'BoldPixels, Arial',
     color: '#1a1a1a'
   }).setOrigin(0, 0.5);
-  
-  // Deck and discard count texts for player
-  this.mobileBottomDeckText = this.add.text(0, 0, 'D:60', {
+  this.mobileBottomHandText = this.add.text(0, 0, '0', {
     fontSize: `${UI_FACTORY.MOBILE_STAT_FONT_SIZE * layout.panelScale}px`,
     fontFamily: 'BoldPixels, Arial',
     color: '#1a1a1a'
   }).setOrigin(0, 0.5);
-  this.mobileBottomDiscardText = this.add.text(0, 0, 'X:0', {
+  
+  // Deck and discard count texts for player
+  this.mobileBottomDeckText = this.add.text(0, 0, '60', {
+    fontSize: `${UI_FACTORY.MOBILE_STAT_FONT_SIZE * layout.panelScale}px`,
+    fontFamily: 'BoldPixels, Arial',
+    color: '#1a1a1a'
+  }).setOrigin(0, 0.5);
+  this.mobileBottomDiscardText = this.add.text(0, 0, '0', {
     fontSize: `${UI_FACTORY.MOBILE_STAT_FONT_SIZE * layout.panelScale}px`,
     fontFamily: 'BoldPixels, Arial',
     color: '#1a1a1a'
@@ -579,18 +605,31 @@ export function createMobileBars(this: GameScene, layout: GameLayout): void {
     this.mobileBottomEnergyText,
     this.mobileBottomDisturbIcon,
     this.mobileBottomDisturbText,
+    this.mobileBottomDeckIcon,
     this.mobileBottomDeckText,
-    this.mobileBottomDiscardText
+    this.mobileBottomDiscardIcon,
+    this.mobileBottomDiscardText,
+    this.mobileBottomHandIcon,
+    this.mobileBottomHandText
   ]);
 
-  // Make bottom disturb icon clickable to toggle mode (local player only)
-  this.mobileBottomDisturbIcon.setInteractive({ useHandCursor: true });
-  this.mobileBottomDisturbIcon.on('pointerdown', () => {
+  this.mobileBottomModeText = this.add.text(0, 0, 'FOCUS', {
+    fontSize: `${UI_FACTORY.MOBILE_STAT_FONT_SIZE * layout.panelScale}px`,
+    fontFamily: 'BoldPixels, Arial',
+    color: '#1a1a1a'
+  }).setOrigin(0, 0.5);
+  this.mobileBottomModeIcon = this.add.image(0, 0, 'switch_focus');
+  this.mobileBottomBar.add([this.mobileBottomModeText, this.mobileBottomModeIcon]);
+
+  // Make mode switch clickable to toggle mode (local player only)
+  this.mobileBottomModeIcon.setInteractive({ useHandCursor: true });
+  this.mobileBottomModeIcon.on('pointerdown', () => {
     if (this.gameStateManager.isLocalPlayerTurn()) {
       this.playerFocusDisturb.toggle();
       // Update the icon to reflect the new mode
       const newMode = this.playerFocusDisturb.getMode();
-      this.mobileBottomDisturbIcon?.setTexture(newMode === 'focus' ? 'switch_focus' : 'switch_disturb');
+      this.mobileBottomModeIcon?.setTexture(newMode === 'focus' ? 'switch_focus' : 'switch_disturb');
+      this.mobileBottomModeText?.setText(newMode === 'focus' ? 'FOCUS' : 'DISTURB');
     }
   });
 

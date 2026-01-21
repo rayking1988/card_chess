@@ -84,6 +84,11 @@ const UI_ASSETS = {
   stopwatch: 'side_menu/stopwatch.png',
   energy: 'side_menu/energy.png',
   disturb: 'side_menu/disturb.png',
+  hand: 'side_menu/hand.png',
+  clock_mw: 'side_menu/chess_clock_mobileweb.png',
+  stopwatch_mw: 'side_menu/stopwatch_mobileweb.png',
+  discard: 'side_menu/discard.png',
+  deck: 'side_menu/deck.png',
   switches: {
     focus: 'button/switch_focus.png',
     disturb: 'button/switch_disturb.png'
@@ -92,7 +97,8 @@ const UI_ASSETS = {
     blue: { normal: 'button/blue_button.png', pressed: 'button/blue_button_pressed.png' },
     brown: { normal: 'button/brown_button.png', pressed: 'button/brown_button_pressed.png' },
     yellow: { normal: 'button/yellow_button.png', pressed: 'button/yellow_button_pressed.png' },
-    red: { normal: 'button/red_button.png', pressed: 'button/red_button_pressed.png' }
+    red: { normal: 'button/red_button.png', pressed: 'button/red_button_pressed.png' },
+    green: { normal: 'button/green_button.png', pressed: 'button/green_button_pressed.png' }
   }
 };
 
@@ -329,6 +335,12 @@ export class BootScene extends Phaser.Scene {
     // Clock and stopwatch displays
     this.load.image('chess_clock', UI_ASSETS.clock);
     this.load.image('stopwatch', UI_ASSETS.stopwatch);
+
+    this.load.image('hand', UI_ASSETS.hand);
+    this.load.image('deck', UI_ASSETS.deck);
+    this.load.image('discard', UI_ASSETS.discard);
+    this.load.image('stopwatch_mw', UI_ASSETS.stopwatch_mw);
+    this.load.image('chess_clock_mw', UI_ASSETS.clock_mw);
     
     // Energy and disturb icons
     this.load.image('energy_icon', UI_ASSETS.energy);
@@ -347,6 +359,8 @@ export class BootScene extends Phaser.Scene {
     this.load.image('yellow_button_pressed', UI_ASSETS.buttons.yellow.pressed);
     this.load.image('red_button', UI_ASSETS.buttons.red.normal);
     this.load.image('red_button_pressed', UI_ASSETS.buttons.red.pressed);
+    this.load.image('green_button', UI_ASSETS.buttons.green.normal);
+    this.load.image('green_button_pressed', UI_ASSETS.buttons.green.pressed);
     this.load.image('cross_close', 'button/cross_close.png');
   }
 

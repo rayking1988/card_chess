@@ -82,13 +82,15 @@ export function updateHandDisplay(this: GameScene): void {
  */
 export function updateCardCount(this: GameScene): void {
   const count = this.cardHand.getCardCount();
-  this.cardCountText.setText(`Hand: ${count} / ${MAX_HAND_SIZE}`);
-
-  if (count > MAX_HAND_SIZE) {
-    this.cardCountText.setColor('#ff6666');
-  } else if (count === MAX_HAND_SIZE) {
-    this.cardCountText.setColor('#ffff66');
-  } else {
-    this.cardCountText.setColor('#ffffff');
+  if (this.cardCountText) {
+    this.cardCountText.setText(`Hand: ${count} / ${MAX_HAND_SIZE}`);
+    if (count > MAX_HAND_SIZE) {
+      this.cardCountText.setColor('#ff6666');
+    } else if (count === MAX_HAND_SIZE) {
+      this.cardCountText.setColor('#ffff66');
+    } else {
+      this.cardCountText.setColor('#ffffff');
+    }
   }
+  this.mobileBottomHandText?.setText(`${count}`);
 }

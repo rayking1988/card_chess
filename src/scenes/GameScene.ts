@@ -468,6 +468,10 @@ export class GameScene extends Phaser.Scene {
   public mobileTopEnergyText?: Phaser.GameObjects.Text;
   public mobileTopDisturbIcon?: Phaser.GameObjects.Image;
   public mobileTopDisturbText?: Phaser.GameObjects.Text;
+  public mobileTopDeckIcon?: Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle;
+  public mobileTopDiscardIcon?: Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle;
+  public mobileTopHandIcon?: Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle;
+  public mobileTopHandText?: Phaser.GameObjects.Text;
 
   public mobileBottomClockIcon?: Phaser.GameObjects.Image;
   public mobileBottomClockText?: Phaser.GameObjects.Text;
@@ -477,6 +481,12 @@ export class GameScene extends Phaser.Scene {
   public mobileBottomEnergyText?: Phaser.GameObjects.Text;
   public mobileBottomDisturbIcon?: Phaser.GameObjects.Image;
   public mobileBottomDisturbText?: Phaser.GameObjects.Text;
+  public mobileBottomDeckIcon?: Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle;
+  public mobileBottomDiscardIcon?: Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle;
+  public mobileBottomHandIcon?: Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle;
+  public mobileBottomHandText?: Phaser.GameObjects.Text;
+  public mobileBottomModeIcon?: Phaser.GameObjects.Image;
+  public mobileBottomModeText?: Phaser.GameObjects.Text;
 
   public mobileEventLogButton?: Phaser.GameObjects.Container;
   public mobileControlledSquaresButton?: Phaser.GameObjects.Container;

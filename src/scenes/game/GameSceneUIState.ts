@@ -15,11 +15,32 @@ import { calculateControlPower } from '../../utils/controlPower';
 import { formatTime } from '../../components/Clock';
 import { hex } from '../../utils/colors';
 import { getPileLayerCount } from './GameUIHelpers';
-import { LEFT_PANEL_LAYOUT } from '../../config';
+import { CLOCK, CLOCK_COLORS, LEFT_PANEL_LAYOUT, STOPWATCH, STOPWATCH_COLORS } from '../../config';
+import { formatNameWithCounts } from './GameSceneUtils';
 
 function formatStopwatchTime(seconds: number): string {
   const safeSeconds = Math.max(0, Math.floor(seconds));
   return safeSeconds.toString().padStart(2, '0');
+}
+
+function getClockTextColor(seconds: number): string {
+  if (seconds <= 0) {
+    return CLOCK_COLORS.CRITICAL;
+  }
+  if (seconds <= CLOCK.LOW_TIME_THRESHOLD) {
+    return CLOCK_COLORS.WARNING;
+  }
+  return CLOCK_COLORS.NORMAL;
+}
+
+function getStopwatchTextColor(seconds: number): string {
+  if (seconds >= STOPWATCH.WARNING_THRESHOLDS.HIGH) {
+    return STOPWATCH_COLORS.HIGH;
+  }
+  if (seconds >= STOPWATCH.WARNING_THRESHOLDS.LOW) {
+    return STOPWATCH_COLORS.LOW;
+  }
+  return STOPWATCH_COLORS.BASE;
 }
 
 /**
@@ -92,6 +113,21 @@ export function updateUIFromState(this: GameScene, options: { sendStats?: boolea
   this.playerClock.setActive(isLocalTurn);
   this.opponentClock.setActive(!isLocalTurn);
   this.updateTurnOverlay(state.currentTurn);
+  const activeTint = hex(CLOCK_COLORS.ACTIVE_TINT);
+  if (this.mobileBottomClockIcon) {
+    if (isLocalTurn) {
+      this.mobileBottomClockIcon.setTint(activeTint);
+    } else {
+      this.mobileBottomClockIcon.clearTint();
+    }
+  }
+  if (this.mobileTopClockIcon) {
+    if (!isLocalTurn) {
+      this.mobileTopClockIcon.setTint(activeTint);
+    } else {
+      this.mobileTopClockIcon.clearTint();
+    }
+  }
 
   // Update stopwatches
   this.playerStopwatch.setTime(localPlayer.stopwatch);
@@ -105,10 +141,6 @@ export function updateUIFromState(this: GameScene, options: { sendStats?: boolea
   this.playerFocusDisturb.setMode(localPlayer.mode);
   this.opponentFocusDisturb.setMode(opponentMode);
 
-  // Update mobile disturb icons to reflect current mode
-  this.mobileBottomDisturbIcon?.setTexture(localPlayer.mode === 'focus' ? 'switch_focus' : 'switch_disturb');
-  this.mobileTopDisturbIcon?.setTexture(opponentMode === 'focus' ? 'switch_focus' : 'switch_disturb');
-
   // Update disturb counters
   this.playerDisturbCounter?.setValue(localPlayer.disturbTags);
   this.opponentDisturbCounter?.setValue(opponentDisturb);
@@ -118,6 +150,14 @@ export function updateUIFromState(this: GameScene, options: { sendStats?: boolea
 
   // Update player deck counts
   this.updatePlayerDeckCounts(localPlayer.deck.length, localPlayer.discard.length);
+
+  // Update clock labels with counts (desktop)
+  this.opponentClock.setLabel(
+    formatNameWithCounts(this.opponentName, opponentDeckCount, opponentDiscardCount, opponentHandCount)
+  );
+  this.playerClock.setLabel(
+    formatNameWithCounts(this.playerName, localPlayer.deck.length, localPlayer.discard.length, localPlayer.hand.length)
+  );
 
   // Only reposition left panel if deck/discard counts changed (performance optimization)
   const deckCountsChanged = !this.lastStateSnapshot ||
@@ -182,20 +222,36 @@ export function updateUIFromState(this: GameScene, options: { sendStats?: boolea
   if (this.mobileBottomNameText) {
     this.mobileBottomNameText.setText(this.playerName);
   }
-  this.mobileTopClockText?.setText(formatTime(opponentClock));
-  this.mobileBottomClockText?.setText(formatTime(localPlayer.clock));
-  this.mobileTopStopwatchText?.setText(formatStopwatchTime(opponentStopwatch));
-  this.mobileBottomStopwatchText?.setText(formatStopwatchTime(localPlayer.stopwatch));
+  if (this.mobileTopClockText) {
+    this.mobileTopClockText.setText(formatTime(opponentClock));
+    this.mobileTopClockText.setColor(getClockTextColor(opponentClock));
+  }
+  if (this.mobileBottomClockText) {
+    this.mobileBottomClockText.setText(formatTime(localPlayer.clock));
+    this.mobileBottomClockText.setColor(getClockTextColor(localPlayer.clock));
+  }
+  if (this.mobileTopStopwatchText) {
+    this.mobileTopStopwatchText.setText(formatStopwatchTime(opponentStopwatch));
+    this.mobileTopStopwatchText.setColor(getStopwatchTextColor(opponentStopwatch));
+  }
+  if (this.mobileBottomStopwatchText) {
+    this.mobileBottomStopwatchText.setText(formatStopwatchTime(localPlayer.stopwatch));
+    this.mobileBottomStopwatchText.setColor(getStopwatchTextColor(localPlayer.stopwatch));
+  }
   this.mobileTopEnergyText?.setText(`${opponentEnergy}/${opponentEnergyCap}`);
   this.mobileBottomEnergyText?.setText(`${localPlayer.energy}/${localPlayer.energyCap}`);
   this.mobileTopDisturbText?.setText(`${opponentDisturb}`);
   this.mobileBottomDisturbText?.setText(`${localPlayer.disturbTags}`);
+  this.mobileBottomModeText?.setText(localPlayer.mode === 'focus' ? 'FOCUS' : 'DISTURB');
+  this.mobileBottomModeIcon?.setTexture(localPlayer.mode === 'focus' ? 'switch_focus' : 'switch_disturb');
   
-  // Update mobile deck/discard counts
-  this.mobileTopDeckText?.setText(`D:${opponentDeckCount}`);
-  this.mobileTopDiscardText?.setText(`X:${opponentDiscardCount}`);
-  this.mobileBottomDeckText?.setText(`D:${localPlayer.deck.length}`);
-  this.mobileBottomDiscardText?.setText(`X:${localPlayer.discard.length}`);
+  // Update mobile deck/discard/hand counts
+  this.mobileTopDeckText?.setText(`${opponentDeckCount}`);
+  this.mobileTopDiscardText?.setText(`${opponentDiscardCount}`);
+  this.mobileTopHandText?.setText(`${opponentHandCount}`);
+  this.mobileBottomDeckText?.setText(`${localPlayer.deck.length}`);
+  this.mobileBottomDiscardText?.setText(`${localPlayer.discard.length}`);
+  this.mobileBottomHandText?.setText(`${localPlayer.hand.length}`);
 
   if (this.currentLayout) {
     this.positionMobileBars(this.currentLayout);
@@ -629,8 +685,14 @@ export function animateTimeTransfer(
       
       // Update mobile text as well
       if (layout.isMobile) {
-        mobileClockText?.setText(formatTime(currentClock));
-        mobileStopwatchText?.setText(formatStopwatchTime(currentStopwatch));
+        if (mobileClockText) {
+          mobileClockText.setText(formatTime(currentClock));
+          mobileClockText.setColor(getClockTextColor(currentClock));
+        }
+        if (mobileStopwatchText) {
+          mobileStopwatchText.setText(formatStopwatchTime(currentStopwatch));
+          mobileStopwatchText.setColor(getStopwatchTextColor(currentStopwatch));
+        }
       }
       
       const label = `-${remaining}s`;
@@ -643,8 +705,14 @@ export function animateTimeTransfer(
       
       // Update mobile text final values
       if (layout.isMobile) {
-        mobileClockText?.setText(formatTime(newClock));
-        mobileStopwatchText?.setText(formatStopwatchTime(newStopwatch));
+        if (mobileClockText) {
+          mobileClockText.setText(formatTime(newClock));
+          mobileClockText.setColor(getClockTextColor(newClock));
+        }
+        if (mobileStopwatchText) {
+          mobileStopwatchText.setText(formatStopwatchTime(newStopwatch));
+          mobileStopwatchText.setColor(getStopwatchTextColor(newStopwatch));
+        }
       }
       
       clockDelta.destroy();

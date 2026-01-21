@@ -299,6 +299,7 @@ export function positionMobileBars(this: GameScene, layout: GameLayout): void {
   const iconSize = MOBILE_BAR_LAYOUT.ICON_SIZE * scale;
   const padding = MOBILE_BAR_LAYOUT.PADDING * scale;
   const gap = MOBILE_BAR_LAYOUT.GAP * scale;
+  const modeIconSize = iconSize * MOBILE_BAR_LAYOUT.MODE_ICON_SCALE;
 
   this.mobileTopBar.setPosition(topBounds.centerX, topBounds.centerY);
   this.mobileBottomBar.setPosition(bottomBounds.centerX, bottomBounds.centerY);
@@ -320,18 +321,8 @@ export function positionMobileBars(this: GameScene, layout: GameLayout): void {
     this.mobileTopNameText.setPosition(topX, topY);
     topX += this.mobileTopNameText.width + gap;
   }
+  topX = layoutMobileCountRow(this, topX, topY, iconSize, gap, 'top');
   topX = layoutMobileStatRow(this, topX, topY, iconSize, gap, 'top');
-  
-  // Add deck/discard counts to top bar
-  if (this.mobileTopDeckText) {
-    this.mobileTopDeckText.setFontSize(MOBILE_BAR_LAYOUT.ICON_SIZE * scale * 0.65);
-    this.mobileTopDeckText.setPosition(topX, topY);
-    topX += this.mobileTopDeckText.width + gap * 0.5;
-  }
-  if (this.mobileTopDiscardText) {
-    this.mobileTopDiscardText.setFontSize(MOBILE_BAR_LAYOUT.ICON_SIZE * scale * 0.65);
-    this.mobileTopDiscardText.setPosition(topX, topY);
-  }
 
   // Bottom bar: two-row layout
   // Row 1: Stats (name, clock, stopwatch, energy, disturb, deck, discard)
@@ -343,18 +334,9 @@ export function positionMobileBars(this: GameScene, layout: GameLayout): void {
     this.mobileBottomNameText.setPosition(bottomX, row1Y);
     bottomX += this.mobileBottomNameText.width + gap;
   }
+  bottomX = layoutMobileCountRow(this, bottomX, row1Y, iconSize, gap, 'bottom');
   bottomX = layoutMobileStatRow(this, bottomX, row1Y, iconSize, gap, 'bottom');
-  
-  // Add deck/discard counts to bottom bar row 1
-  if (this.mobileBottomDeckText) {
-    this.mobileBottomDeckText.setFontSize(MOBILE_BAR_LAYOUT.ICON_SIZE * scale * 0.65);
-    this.mobileBottomDeckText.setPosition(bottomX, row1Y);
-    bottomX += this.mobileBottomDeckText.width + gap * 0.5;
-  }
-  if (this.mobileBottomDiscardText) {
-    this.mobileBottomDiscardText.setFontSize(MOBILE_BAR_LAYOUT.ICON_SIZE * scale * 0.65);
-    this.mobileBottomDiscardText.setPosition(bottomX, row1Y);
-  }
+  layoutMobileModeSwitch(this, bottomX, row1Y, modeIconSize, gap);
 
   // Row 2: Buttons (Offer Draw, Ctrl Squares, Event Log, Resign)
   const row2Y = rowHeight / 2;
@@ -384,6 +366,14 @@ export function positionMobileBars(this: GameScene, layout: GameLayout): void {
   }
 }
 
+function setIconSize(icon: Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle, size: number): void {
+  if (icon instanceof Phaser.GameObjects.Image) {
+    icon.setDisplaySize(size, size);
+  } else {
+    icon.setSize(size, size);
+  }
+}
+
 function layoutMobileStatRow(
   scene: GameScene,
   startX: number,
@@ -405,7 +395,7 @@ function layoutMobileStatRow(
   let x = startX;
   const place = (icon?: Phaser.GameObjects.Image | null, text?: Phaser.GameObjects.Text | null): void => {
     if (icon) {
-      icon.setDisplaySize(iconSize, iconSize);
+      setIconSize(icon, iconSize);
       icon.setPosition(x + iconSize / 2, centerY);
     }
     if (text) {
@@ -424,6 +414,75 @@ function layoutMobileStatRow(
   place(disturbIcon, disturbText);
 
   return x;
+}
+
+function layoutMobileCountRow(
+  scene: GameScene,
+  startX: number,
+  centerY: number,
+  iconSize: number,
+  gap: number,
+  side: 'top' | 'bottom'
+): number {
+  const iconGap = MOBILE_BAR_LAYOUT.ICON_GAP * (scene.currentLayout?.panelScale ?? 1);
+  const deckIcon = side === 'top' ? scene.mobileTopDeckIcon : scene.mobileBottomDeckIcon;
+  const deckText = side === 'top' ? scene.mobileTopDeckText : scene.mobileBottomDeckText;
+  const discardIcon = side === 'top' ? scene.mobileTopDiscardIcon : scene.mobileBottomDiscardIcon;
+  const discardText = side === 'top' ? scene.mobileTopDiscardText : scene.mobileBottomDiscardText;
+  const handIcon = side === 'top' ? scene.mobileTopHandIcon : scene.mobileBottomHandIcon;
+  const handText = side === 'top' ? scene.mobileTopHandText : scene.mobileBottomHandText;
+
+  let x = startX;
+  const place = (
+    icon?: Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle | null,
+    text?: Phaser.GameObjects.Text | null
+  ): void => {
+    if (icon) {
+      setIconSize(icon, iconSize);
+      icon.setPosition(x + iconSize / 2, centerY);
+    }
+    if (text) {
+      text.setFontSize(MOBILE_BAR_LAYOUT.ICON_SIZE * 0.65 * (scene.currentLayout?.panelScale ?? 1));
+      const textX = x + iconSize + iconGap;
+      text.setPosition(textX, centerY);
+      x = textX + text.width + gap;
+    } else {
+      x += iconSize + gap;
+    }
+  };
+
+  place(deckIcon, deckText);
+  place(discardIcon, discardText);
+  place(handIcon, handText);
+
+  return x;
+}
+
+function layoutMobileModeSwitch(
+  scene: GameScene,
+  startX: number,
+  centerY: number,
+  iconSize: number,
+  gap: number
+): number {
+  const iconGap = MOBILE_BAR_LAYOUT.ICON_GAP * (scene.currentLayout?.panelScale ?? 1);
+  if (scene.mobileBottomModeText) {
+    scene.mobileBottomModeText.setFontSize(MOBILE_BAR_LAYOUT.ICON_SIZE * 0.6 * (scene.currentLayout?.panelScale ?? 1));
+    scene.mobileBottomModeText.setPosition(startX, centerY);
+    const textWidth = scene.mobileBottomModeText.width;
+    if (scene.mobileBottomModeIcon) {
+      scene.mobileBottomModeIcon.setDisplaySize(iconSize, iconSize);
+      scene.mobileBottomModeIcon.setPosition(startX + textWidth + iconGap + iconSize / 2, centerY);
+      return startX + textWidth + iconGap + iconSize + gap;
+    }
+    return startX + textWidth + gap;
+  }
+  if (scene.mobileBottomModeIcon) {
+    scene.mobileBottomModeIcon.setDisplaySize(iconSize, iconSize);
+    scene.mobileBottomModeIcon.setPosition(startX + iconSize / 2, centerY);
+    return startX + iconSize + gap;
+  }
+  return startX;
 }
 
 /**

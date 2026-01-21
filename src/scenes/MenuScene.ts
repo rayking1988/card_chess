@@ -25,7 +25,7 @@
 import Phaser from 'phaser';
 import { NetworkManager, ConnectionState } from '../managers/NetworkManager';
 import type { PlayerColor } from '../managers/GameStateManager';
-import { NETWORK, DISPLAY, ANIMATION, SCALE } from '../config';
+import { NETWORK, DISPLAY, ANIMATION, SCALE, VERSION } from '../config';
 import { isElectron, quitApp } from '../utils/platform';
 
 /* ============================================
@@ -287,6 +287,15 @@ export class MenuScene extends Phaser.Scene {
       strokeThickness: 15
     }).setOrigin(0.5);
     this.uiContainer.add(title);
+
+    const sup_title = this.add.text(title.width/2, -BASE_HEIGHT * 0.39, `${VERSION.MAIN}-${VERSION.MAJOR}.${VERSION.MINOR}.${VERSION.INCREMENTAL}`, {
+      fontFamily: 'BoldPixels, Arial',
+      fontSize: '15px',
+      color: '#e7a20d',
+      stroke: '#000000',
+      strokeThickness: 15
+    }).setOrigin(0.5);
+    this.uiContainer.add(sup_title);
     
     // Subtitle
     const subtitle = this.add.text(0, -BASE_HEIGHT * 0.28, 'CHESS MEETS CARDS', {
@@ -391,10 +400,10 @@ export class MenuScene extends Phaser.Scene {
   private createHowToPlayButton(): void {
     this.howToPlayButton = this.createImageButton(
       0,
-      -BASE_HEIGHT * 0.02,
+      BASE_HEIGHT * 0.08,
       'HOW TO PLAY',
-      'yellow_button',
-      'yellow_button_pressed',
+      'green_button',
+      '_button_pressed',
       () => {
         void this.onHowToPlay();
       }
@@ -410,7 +419,7 @@ export class MenuScene extends Phaser.Scene {
   private createJoinButton(): void {
     this.joinButton = this.createImageButton(
       0,
-      BASE_HEIGHT * 0.07,
+      BASE_HEIGHT * 0.2,
       'JOIN THE QUEUE',
       'blue_button',
       'blue_button_pressed',
@@ -427,7 +436,7 @@ export class MenuScene extends Phaser.Scene {
   private createBugReportButton(): void {
     const btn = this.createImageButton(
       0,
-      BASE_HEIGHT * 0.20,
+      BASE_HEIGHT * 0.32,
       'REPORT A BUG',
       'yellow_button',
       'yellow_button_pressed',
@@ -460,7 +469,7 @@ export class MenuScene extends Phaser.Scene {
   private createKofiButton(): void {
     const btn = this.createImageButton(
       0,
-      BASE_HEIGHT * 0.32,
+      BASE_HEIGHT * 0.44,
       'SUPPORT ON KO-FI',
       'brown_button',
       'brown_button_pressed',
@@ -501,7 +510,7 @@ export class MenuScene extends Phaser.Scene {
    * @private
    */
   private createStatusText(): void {
-    this.statusText = this.add.text(0, BASE_HEIGHT * 0.42, '', {
+    this.statusText = this.add.text(0, BASE_HEIGHT * -0.01, '', {
       fontFamily: 'BoldPixels, Arial',
       fontSize: '30px',
       color: '#ffcc00'
@@ -517,7 +526,7 @@ export class MenuScene extends Phaser.Scene {
   private createCancelButton(): void {
     this.cancelButton = this.createImageButton(
       0,
-      BASE_HEIGHT * 0.07,
+      BASE_HEIGHT * 0.2,
       'CANCEL',
       'red_button',
       'red_button_pressed',

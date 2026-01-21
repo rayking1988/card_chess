@@ -106,6 +106,9 @@ export class FocusDisturbToggleComponent {
   
   /** Label text above the toggle */
   private labelText: Phaser.GameObjects.Text;
+
+  /** Mode text displayed left of the toggle */
+  private modeText: Phaser.GameObjects.Text;
   
   /** Current mode ('focus' or 'disturb') */
   private currentMode: ToggleMode = 'focus';
@@ -166,6 +169,13 @@ export class FocusDisturbToggleComponent {
     }).setOrigin(0.5);
     this.labelText.setVisible(this.labelText.text.trim().length > 0);
     this.container.add(this.labelText);
+
+    this.modeText = scene.add.text(-TOGGLE_WIDTH / 2 - TOGGLE_LAYOUT.MODE_TEXT_GAP, 0, '', {
+      fontSize: '14px',
+      fontFamily: 'BoldPixels, Arial',
+      color: '#cccccc'
+    }).setOrigin(1, 0.5);
+    this.container.add(this.modeText);
     
     this.updateVisuals();
     this.setupInteraction();
@@ -232,6 +242,11 @@ export class FocusDisturbToggleComponent {
       }).setOrigin(0.5);
       this.container.add(text);
     }
+
+    const modeLabel = this.currentMode === 'focus' ? 'FOCUS' : 'DISTURB';
+    const modeColor = this.currentMode === 'focus' ? TOGGLE_COLORS.FOCUS.TEXT : TOGGLE_COLORS.DISTURB.TEXT;
+    this.modeText.setText(modeLabel);
+    this.modeText.setColor(modeColor);
   }
 
   /**

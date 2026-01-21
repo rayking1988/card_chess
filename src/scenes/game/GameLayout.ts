@@ -43,6 +43,12 @@ function createBounds(x: number, y: number, width: number, height: number): Sect
 export function calculateLayout(width: number, height: number): GameLayout {
   const isMobile = width / height < MOBILE_RATIO_THRESHOLD;
 
+  const mobileBarHeight = isMobile
+    ? Math.max(MOBILE_BAR.MIN_HEIGHT, Math.min(MOBILE_BAR.MAX_HEIGHT, height * MOBILE_BAR.HEIGHT_FACTOR))
+    : 0;
+  // Bottom bar needs double height for two rows in mobile
+  const mobileBottomBarHeight = isMobile ? mobileBarHeight * 2 : 0;
+
   // Calculate horizontal section widths from percentages
   const leftPanelW = isMobile ? 0 : width * (SECTION.LEFT_PANEL_WIDTH / 100);
   const rightPanelW = isMobile ? 0 : width * (SECTION.RIGHT_PANEL_WIDTH / 100);
@@ -68,9 +74,24 @@ export function calculateLayout(width: number, height: number): GameLayout {
   
   // Board column sections (top bar, board, bottom bar) - share board width
   const boardColumnX = leftPanelW;
-  const topBar = createBounds(boardColumnX, 0, boardW, topBarH);
-  const board = createBounds(boardColumnX, topBarH, boardW, middleH);
-  const bottomBar = createBounds(boardColumnX, topBarH + middleH, boardW, bottomBarH);
+  let topBarHeight = topBarH;
+  let bottomBarHeight = bottomBarH;
+
+  if (isMobile) {
+    // Mobile bars live between hands and board; take their space from hand sections.
+    const handTotal = topBarH + bottomBarH;
+    const mobileBarTotal = mobileBarHeight + mobileBottomBarHeight;
+    const adjustedHandTotal = Math.max(0, handTotal - mobileBarTotal);
+    const topRatio = handTotal > 0 ? topBarH / handTotal : 0.5;
+    topBarHeight = adjustedHandTotal * topRatio;
+    bottomBarHeight = adjustedHandTotal - topBarHeight;
+  }
+
+  const topBar = createBounds(boardColumnX, 0, boardW, topBarHeight);
+  const mobileTopBar = createBounds(boardColumnX, topBar.y + topBar.height, boardW, mobileBarHeight);
+  const board = createBounds(boardColumnX, mobileTopBar.y + mobileTopBar.height, boardW, middleH);
+  const mobileBottomBar = createBounds(boardColumnX, board.y + board.height, boardW, mobileBottomBarHeight);
+  const bottomBar = createBounds(boardColumnX, mobileBottomBar.y + mobileBottomBar.height, boardW, bottomBarHeight);
 
   const eventLogBase = isMobile
     ? createBounds(boardColumnX, 0, boardW, height)
@@ -79,12 +100,6 @@ export function calculateLayout(width: number, height: number): GameLayout {
   const eventLogTop = createBounds(eventLogBase.x, eventLogBase.y, eventLogBase.width, eventLogTopH);
   const eventLogPreview = createBounds(eventLogBase.x, eventLogBase.y + eventLogTopH, eventLogBase.width, eventLogBase.height - eventLogTopH);
 
-  const mobileBarHeight = isMobile ? Math.max(MOBILE_BAR.MIN_HEIGHT, Math.min(MOBILE_BAR.MAX_HEIGHT, height * MOBILE_BAR.HEIGHT_FACTOR)) : 0;
-  // Bottom bar needs double height for two rows in mobile
-  const mobileBottomBarHeight = isMobile ? mobileBarHeight * 2 : 0;
-  const mobileTopBar = createBounds(boardColumnX, topBar.y + topBar.height - mobileBarHeight, boardW, mobileBarHeight);
-  const mobileBottomBar = createBounds(boardColumnX, bottomBar.y, boardW, mobileBottomBarHeight);
-  
   const sections = {
     leftPanel,
     board,
