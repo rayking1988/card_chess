@@ -11,7 +11,7 @@
 import { GameLayout, SectionBounds } from './GameTypes';
 import { GAME_LAYOUT } from '../../config';
 
-const { SECTION, RIGHT_PANEL_SPLIT, EVENT_LOG_SPLIT_TOP, MOBILE_RATIO_THRESHOLD, BASE_BOARD_SIZE, MOBILE_BAR } = GAME_LAYOUT;
+const { SECTION, RIGHT_PANEL_SPLIT, EVENT_LOG_SPLIT_TOP, MOBILE_RATIO_THRESHOLD, BASE_BOARD_SIZE, MOBILE_BAR, MOBILE_PREVIEW } = GAME_LAYOUT;
 
 /**
  * Creates a SectionBounds object from position and size
@@ -44,7 +44,7 @@ export function calculateLayout(width: number, height: number): GameLayout {
   const isMobile = width / height < MOBILE_RATIO_THRESHOLD;
 
   // Calculate horizontal section widths from percentages
-  const leftPanelW = width * (SECTION.LEFT_PANEL_WIDTH / 100);
+  const leftPanelW = isMobile ? 0 : width * (SECTION.LEFT_PANEL_WIDTH / 100);
   const rightPanelW = isMobile ? 0 : width * (SECTION.RIGHT_PANEL_WIDTH / 100);
   const eventLogW = isMobile ? 0 : width * (SECTION.EVENT_LOG_WIDTH / 100);
   const boardW = width - leftPanelW - rightPanelW - eventLogW;
@@ -72,14 +72,18 @@ export function calculateLayout(width: number, height: number): GameLayout {
   const board = createBounds(boardColumnX, topBarH, boardW, middleH);
   const bottomBar = createBounds(boardColumnX, topBarH + middleH, boardW, bottomBarH);
 
-  const eventLogBase = isMobile ? leftPanel : eventLog;
+  const eventLogBase = isMobile
+    ? createBounds(boardColumnX, 0, boardW, height)
+    : eventLog;
   const eventLogTopH = eventLogBase.height * EVENT_LOG_SPLIT_TOP;
   const eventLogTop = createBounds(eventLogBase.x, eventLogBase.y, eventLogBase.width, eventLogTopH);
   const eventLogPreview = createBounds(eventLogBase.x, eventLogBase.y + eventLogTopH, eventLogBase.width, eventLogBase.height - eventLogTopH);
 
   const mobileBarHeight = isMobile ? Math.max(MOBILE_BAR.MIN_HEIGHT, Math.min(MOBILE_BAR.MAX_HEIGHT, height * MOBILE_BAR.HEIGHT_FACTOR)) : 0;
+  // Bottom bar needs double height for two rows in mobile
+  const mobileBottomBarHeight = isMobile ? mobileBarHeight * 2 : 0;
   const mobileTopBar = createBounds(boardColumnX, topBar.y + topBar.height - mobileBarHeight, boardW, mobileBarHeight);
-  const mobileBottomBar = createBounds(boardColumnX, bottomBar.y, boardW, mobileBarHeight);
+  const mobileBottomBar = createBounds(boardColumnX, bottomBar.y, boardW, mobileBottomBarHeight);
   
   const sections = {
     leftPanel,
@@ -151,8 +155,12 @@ export function calculateLayout(width: number, height: number): GameLayout {
   const playerNameY = board.y + board.height - boardPadding;
   
   // Preview card: left side of board section
-  const previewX = eventLogPreview.centerX || (board.x + board.width * 0.1);
-  const previewY = eventLogPreview.centerY || (board.y + board.height * 0.7);
+  const previewX = isMobile
+    ? boardColumnX + Math.max(boardW * MOBILE_PREVIEW.X_FACTOR, MOBILE_PREVIEW.MIN_X)
+    : eventLogPreview.centerX || (board.x + board.width * 0.1);
+  const previewY = isMobile
+    ? Math.max(mobileBarHeight + MOBILE_PREVIEW.MIN_Y, height * MOBILE_PREVIEW.Y_FACTOR)
+    : eventLogPreview.centerY || (board.y + board.height * 0.7);
   
   // Turn banner: above board
   const turnBannerX = board.centerX;

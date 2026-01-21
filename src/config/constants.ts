@@ -697,9 +697,17 @@ export const GAME_LAYOUT = {
   
   /** Mobile bar height factors */
   MOBILE_BAR: {
-    MIN_HEIGHT: 24,
-    MAX_HEIGHT: 40,
-    HEIGHT_FACTOR: 0.055,
+    MIN_HEIGHT: 36,
+    MAX_HEIGHT: 64,
+    HEIGHT_FACTOR: 0.08,
+  },
+
+  /** Mobile preview positioning */
+  MOBILE_PREVIEW: {
+    X_FACTOR: 0.2,
+    Y_FACTOR: 0.18,
+    MIN_X: 150,
+    MIN_Y: 220,
   },
 } as const;
 
@@ -763,25 +771,25 @@ export const RIGHT_PANEL_LAYOUT = {
 
 export const MOBILE_BAR_LAYOUT = {
   /** Icon size factor */
-  ICON_SIZE: 16,
+  ICON_SIZE: 22,
   
   /** Padding factor */
-  PADDING: 8,
+  PADDING: 12,
   
   /** Gap between elements */
-  GAP: 10,
+  GAP: 14,
   
   /** Icon gap factor */
-  ICON_GAP: 4,
+  ICON_GAP: 6,
   
   /** Button scale factor */
-  BUTTON_SCALE: 0.55,
+  BUTTON_SCALE: 0.7,
   
   /** Button padding factor */
-  BUTTON_PADDING: 6,
+  BUTTON_PADDING: 8,
   
   /** Minimum button scale */
-  MIN_BUTTON_SCALE: 0.3,
+  MIN_BUTTON_SCALE: 0.4,
 } as const;
 
 /* ============================================
@@ -1105,7 +1113,7 @@ export const UI_FACTORY = {
   HAND_LABEL_FONT_SIZE: 12,
   
   /** Mobile stat font size */
-  MOBILE_STAT_FONT_SIZE: 12,
+  MOBILE_STAT_FONT_SIZE: 16,
   
   /** Right panel tint alpha */
   RIGHT_PANEL_TINT_ALPHA: 0.28,

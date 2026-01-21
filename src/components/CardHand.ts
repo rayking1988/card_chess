@@ -57,6 +57,9 @@ const PREVIEW_SCALE = 1.5;
 /** Margin from screen edge for preview card position */
 const PREVIEW_MARGIN = 20;
 
+/** Pixels of drag movement before hiding touch preview */
+const TOUCH_PREVIEW_HIDE_DISTANCE = 14;
+
 /* ============================================
  * TYPE DEFINITIONS
  * ============================================
@@ -145,6 +148,15 @@ export class CardHandComponent {
 
   /** Whether preview card should be shown */
   private previewEnabled: boolean = true;
+
+  /** Whether touch preview behavior is enabled */
+  private touchPreviewEnabled: boolean = false;
+
+  /** Whether touch preview is currently active */
+  private touchPreviewActive: boolean = false;
+
+  /** Pointer start position for touch preview */
+  private touchPreviewStart: { x: number; y: number } | null = null;
   
   /** Whether card interaction is enabled */
   private isInteractive: boolean = false;
@@ -1118,7 +1130,9 @@ export class CardHandComponent {
     card.setDepth(100); // Bring to front
     
     // Show preview
-    this.showPreview(cardData);
+    if (!this.touchPreviewEnabled) {
+      this.showPreview(cardData);
+    }
     
     // Notify callback
     if (this.onCardHover) {
@@ -1142,7 +1156,9 @@ export class CardHandComponent {
     this.hoveredCard = null;
     
     // Hide preview
-    this.hidePreview();
+    if (!this.touchPreviewEnabled) {
+      this.hidePreview();
+    }
     
     // Notify callback
     if (this.onCardHover) {
@@ -1197,8 +1213,14 @@ export class CardHandComponent {
     card.setScale(original.originalScale * HOVER_SCALE);
     card.setRotation(0);
     
-    // Hide preview while dragging
-    this.hidePreview();
+    if (this.touchPreviewEnabled && this.previewEnabled) {
+      this.touchPreviewActive = true;
+      this.touchPreviewStart = { x: pointer.x, y: pointer.y };
+      this.showPreview(cardData);
+    } else {
+      // Hide preview while dragging
+      this.hidePreview();
+    }
     
     // Start targeting mode with pointer position for offset calculation
     const pos = card.getPosition();
@@ -1223,6 +1245,15 @@ export class CardHandComponent {
   private handleCardDrag(pointer: Phaser.Input.Pointer): void {
     if (!this.draggingCard || !this.targeting) return;
     
+    if (this.touchPreviewEnabled && this.touchPreviewActive && this.touchPreviewStart) {
+      const dx = pointer.x - this.touchPreviewStart.x;
+      const dy = pointer.y - this.touchPreviewStart.y;
+      if (Math.hypot(dx, dy) > TOUCH_PREVIEW_HIDE_DISTANCE) {
+        this.hidePreview();
+        this.touchPreviewActive = false;
+      }
+    }
+
     // Update targeting position
     this.targeting.updateTargeting(pointer.x, pointer.y);
   }
@@ -1253,6 +1284,12 @@ export class CardHandComponent {
       this.resetCardPosition(card);
       this.draggingCard = null;
     }
+
+    if (this.touchPreviewActive) {
+      this.hidePreview();
+    }
+    this.touchPreviewActive = false;
+    this.touchPreviewStart = null;
     
     if (this.onCardDragEnd) {
       this.onCardDragEnd(cardData, pointer);
@@ -1428,6 +1465,21 @@ export class CardHandComponent {
     this.previewEnabled = enabled;
     if (!enabled) {
       this.hidePreview();
+      this.touchPreviewActive = false;
+      this.touchPreviewStart = null;
+    }
+  }
+
+  /**
+   * Enables or disables touch preview behavior
+   *
+   * @param enabled - Whether touch preview should show on drag start
+   */
+  setTouchPreviewEnabled(enabled: boolean): void {
+    this.touchPreviewEnabled = enabled;
+    if (!enabled) {
+      this.touchPreviewActive = false;
+      this.touchPreviewStart = null;
     }
   }
 

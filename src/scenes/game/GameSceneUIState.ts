@@ -105,6 +105,10 @@ export function updateUIFromState(this: GameScene, options: { sendStats?: boolea
   this.playerFocusDisturb.setMode(localPlayer.mode);
   this.opponentFocusDisturb.setMode(opponentMode);
 
+  // Update mobile disturb icons to reflect current mode
+  this.mobileBottomDisturbIcon?.setTexture(localPlayer.mode === 'focus' ? 'switch_focus' : 'switch_disturb');
+  this.mobileTopDisturbIcon?.setTexture(opponentMode === 'focus' ? 'switch_focus' : 'switch_disturb');
+
   // Update disturb counters
   this.playerDisturbCounter?.setValue(localPlayer.disturbTags);
   this.opponentDisturbCounter?.setValue(opponentDisturb);
@@ -186,6 +190,12 @@ export function updateUIFromState(this: GameScene, options: { sendStats?: boolea
   this.mobileBottomEnergyText?.setText(`${localPlayer.energy}/${localPlayer.energyCap}`);
   this.mobileTopDisturbText?.setText(`${opponentDisturb}`);
   this.mobileBottomDisturbText?.setText(`${localPlayer.disturbTags}`);
+  
+  // Update mobile deck/discard counts
+  this.mobileTopDeckText?.setText(`D:${opponentDeckCount}`);
+  this.mobileTopDiscardText?.setText(`X:${opponentDiscardCount}`);
+  this.mobileBottomDeckText?.setText(`D:${localPlayer.deck.length}`);
+  this.mobileBottomDiscardText?.setText(`X:${localPlayer.discard.length}`);
 
   if (this.currentLayout) {
     this.positionMobileBars(this.currentLayout);
@@ -520,36 +530,73 @@ export function animateTimeTransfer(
   clock.setTime(oldClock);
   stopwatch.setTime(oldStopwatch);
 
-  const clockContainer = clock.getContainer();
-  const stopwatchContainer = stopwatch.getContainer();
-  const clockScale = clockContainer.scaleX || 1;
-  const stopwatchScale = stopwatchContainer.scaleX || 1;
-  const clockDims = clock.getDimensions();
-  const stopwatchDims = stopwatch.getDimensions();
-  const clockPos = {
-    x: clockContainer.x + (clockDims.width / 2 + 18) * clockScale,
-    y: clockContainer.y - 6 * clockScale
-  };
-  const stopwatchPos = {
-    x: stopwatchContainer.x + (stopwatchDims.width / 2 + 18) * stopwatchScale,
-    y: stopwatchContainer.y - 6 * stopwatchScale
-  };
+  // For mobile, position delta text beside the mobile clock text
+  let clockDeltaX: number;
+  let clockDeltaY: number;
+  let stopwatchDeltaX: number;
+  let stopwatchDeltaY: number;
+  let fontSize: number;
 
-  const fontSize = 22 * layout.panelScale;
-  const clockDelta = this.add.text(clockPos.x, clockPos.y, `-${diff}s`, {
+  if (layout.isMobile) {
+    // Get mobile bar and clock text positions
+    const mobileBar = isLocal ? this.mobileBottomBar : this.mobileTopBar;
+    const clockText = isLocal ? this.mobileBottomClockText : this.mobileTopClockText;
+    const stopwatchText = isLocal ? this.mobileBottomStopwatchText : this.mobileTopStopwatchText;
+    
+    if (mobileBar && clockText && stopwatchText) {
+      // Position delta text to the right of the clock/stopwatch text
+      const barPos = mobileBar.getWorldTransformMatrix();
+      const clockTextBounds = clockText.getBounds();
+      const stopwatchTextBounds = stopwatchText.getBounds();
+      
+      clockDeltaX = clockTextBounds.right + 5;
+      clockDeltaY = barPos.ty;
+      stopwatchDeltaX = stopwatchTextBounds.right + 5;
+      stopwatchDeltaY = barPos.ty;
+      fontSize = 14 * layout.panelScale;
+    } else {
+      // Fallback to desktop positioning
+      const clockContainer = clock.getContainer();
+      const stopwatchContainer = stopwatch.getContainer();
+      const clockScale = clockContainer.scaleX || 1;
+      const stopwatchScale = stopwatchContainer.scaleX || 1;
+      const clockDims = clock.getDimensions();
+      const stopwatchDims = stopwatch.getDimensions();
+      clockDeltaX = clockContainer.x + (clockDims.width / 2 + 18) * clockScale;
+      clockDeltaY = clockContainer.y - 6 * clockScale;
+      stopwatchDeltaX = stopwatchContainer.x + (stopwatchDims.width / 2 + 18) * stopwatchScale;
+      stopwatchDeltaY = stopwatchContainer.y - 6 * stopwatchScale;
+      fontSize = 22 * layout.panelScale;
+    }
+  } else {
+    // Desktop positioning
+    const clockContainer = clock.getContainer();
+    const stopwatchContainer = stopwatch.getContainer();
+    const clockScale = clockContainer.scaleX || 1;
+    const stopwatchScale = stopwatchContainer.scaleX || 1;
+    const clockDims = clock.getDimensions();
+    const stopwatchDims = stopwatch.getDimensions();
+    clockDeltaX = clockContainer.x + (clockDims.width / 2 + 18) * clockScale;
+    clockDeltaY = clockContainer.y - 6 * clockScale;
+    stopwatchDeltaX = stopwatchContainer.x + (stopwatchDims.width / 2 + 18) * stopwatchScale;
+    stopwatchDeltaY = stopwatchContainer.y - 6 * stopwatchScale;
+    fontSize = 22 * layout.panelScale;
+  }
+
+  const clockDelta = this.add.text(clockDeltaX, clockDeltaY, `-${diff}s`, {
     fontFamily: 'BoldPixels, Arial',
     fontSize: `${fontSize}px`,
     color: '#ff4444',
     stroke: '#000000',
     strokeThickness: 3
-  }).setOrigin(0.5);
-  const stopwatchDelta = this.add.text(stopwatchPos.x, stopwatchPos.y, `-${diff}s`, {
+  }).setOrigin(0, 0.5);
+  const stopwatchDelta = this.add.text(stopwatchDeltaX, stopwatchDeltaY, `-${diff}s`, {
     fontFamily: 'BoldPixels, Arial',
     fontSize: `${fontSize}px`,
     color: '#ff4444',
     stroke: '#000000',
     strokeThickness: 3
-  }).setOrigin(0.5);
+  }).setOrigin(0, 0.5);
   clockDelta.setDepth(2000);
   stopwatchDelta.setDepth(2000);
 
@@ -561,6 +608,10 @@ export function animateTimeTransfer(
     this.opponentStopwatchDeltaText = stopwatchDelta;
   }
 
+  // Also update mobile text during animation
+  const mobileClockText = isLocal ? this.mobileBottomClockText : this.mobileTopClockText;
+  const mobileStopwatchText = isLocal ? this.mobileBottomStopwatchText : this.mobileTopStopwatchText;
+
   const duration = Math.min(5000, 600 + diff * 150);
   const tween = this.tweens.addCounter({
     from: 0,
@@ -570,8 +621,18 @@ export function animateTimeTransfer(
     onUpdate: (t) => {
       const value = Math.floor(t.getValue() ?? 0);
       const remaining = Math.max(0, diff - value);
-      clock.setTime(oldClock - value);
-      stopwatch.setTime(oldStopwatch + value);
+      const currentClock = oldClock - value;
+      const currentStopwatch = oldStopwatch + value;
+      
+      clock.setTime(currentClock);
+      stopwatch.setTime(currentStopwatch);
+      
+      // Update mobile text as well
+      if (layout.isMobile) {
+        mobileClockText?.setText(formatTime(currentClock));
+        mobileStopwatchText?.setText(formatStopwatchTime(currentStopwatch));
+      }
+      
       const label = `-${remaining}s`;
       clockDelta.setText(label);
       stopwatchDelta.setText(label);
@@ -579,6 +640,13 @@ export function animateTimeTransfer(
     onComplete: () => {
       clock.setTime(newClock);
       stopwatch.setTime(newStopwatch);
+      
+      // Update mobile text final values
+      if (layout.isMobile) {
+        mobileClockText?.setText(formatTime(newClock));
+        mobileStopwatchText?.setText(formatStopwatchTime(newStopwatch));
+      }
+      
       clockDelta.destroy();
       stopwatchDelta.destroy();
       if (isLocal) {
@@ -1026,6 +1094,11 @@ export function updateOpponentDeckCounts(this: GameScene, deckCount: number, dis
   this.opponentDiscardCount = discardCount;
   this.opponentDeckCountText.setText(`${deckCount}`);
   this.opponentDiscardCountText.setText(`${discardCount}`);
+  if (this.currentLayout?.isMobile) {
+    this.opponentDeckCountText.setVisible(false);
+    this.opponentDiscardCountText.setVisible(false);
+    return;
+  }
   this.opponentDeckCountText.setVisible(deckCount > 0);
   this.opponentDiscardCountText.setVisible(discardCount > 0);
 }
@@ -1039,6 +1112,11 @@ export function updateOpponentDeckCounts(this: GameScene, deckCount: number, dis
 export function updatePlayerDeckCounts(this: GameScene, deckCount: number, discardCount: number): void {
   this.playerDeckCountText.setText(`${deckCount}`);
   this.playerDiscardCountText.setText(`${discardCount}`);
+  if (this.currentLayout?.isMobile) {
+    this.playerDeckCountText.setVisible(false);
+    this.playerDiscardCountText.setVisible(false);
+    return;
+  }
   this.playerDeckCountText.setVisible(deckCount > 0);
   this.playerDiscardCountText.setVisible(discardCount > 0);
 }

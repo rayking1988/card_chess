@@ -312,6 +312,7 @@ export function positionMobileBars(this: GameScene, layout: GameLayout): void {
     this.mobileBottomBarBackground.setSize(bottomBounds.width, bottomBounds.height);
   }
 
+  // Top bar: single row layout
   let topX = -topBounds.width / 2 + padding;
   const topY = 0;
   if (this.mobileTopNameText) {
@@ -320,31 +321,66 @@ export function positionMobileBars(this: GameScene, layout: GameLayout): void {
     topX += this.mobileTopNameText.width + gap;
   }
   topX = layoutMobileStatRow(this, topX, topY, iconSize, gap, 'top');
+  
+  // Add deck/discard counts to top bar
+  if (this.mobileTopDeckText) {
+    this.mobileTopDeckText.setFontSize(MOBILE_BAR_LAYOUT.ICON_SIZE * scale * 0.65);
+    this.mobileTopDeckText.setPosition(topX, topY);
+    topX += this.mobileTopDeckText.width + gap * 0.5;
+  }
+  if (this.mobileTopDiscardText) {
+    this.mobileTopDiscardText.setFontSize(MOBILE_BAR_LAYOUT.ICON_SIZE * scale * 0.65);
+    this.mobileTopDiscardText.setPosition(topX, topY);
+  }
 
+  // Bottom bar: two-row layout
+  // Row 1: Stats (name, clock, stopwatch, energy, disturb, deck, discard)
+  const rowHeight = bottomBounds.height / 2;
+  const row1Y = -rowHeight / 2;
   let bottomX = -bottomBounds.width / 2 + padding;
-  const bottomY = 0;
   if (this.mobileBottomNameText) {
     this.mobileBottomNameText.setFontSize(MOBILE_BAR_LAYOUT.ICON_SIZE * scale * 0.75);
-    this.mobileBottomNameText.setPosition(bottomX, bottomY);
+    this.mobileBottomNameText.setPosition(bottomX, row1Y);
     bottomX += this.mobileBottomNameText.width + gap;
   }
-  bottomX = layoutMobileStatRow(this, bottomX, bottomY, iconSize, gap, 'bottom');
+  bottomX = layoutMobileStatRow(this, bottomX, row1Y, iconSize, gap, 'bottom');
+  
+  // Add deck/discard counts to bottom bar row 1
+  if (this.mobileBottomDeckText) {
+    this.mobileBottomDeckText.setFontSize(MOBILE_BAR_LAYOUT.ICON_SIZE * scale * 0.65);
+    this.mobileBottomDeckText.setPosition(bottomX, row1Y);
+    bottomX += this.mobileBottomDeckText.width + gap * 0.5;
+  }
+  if (this.mobileBottomDiscardText) {
+    this.mobileBottomDiscardText.setFontSize(MOBILE_BAR_LAYOUT.ICON_SIZE * scale * 0.65);
+    this.mobileBottomDiscardText.setPosition(bottomX, row1Y);
+  }
 
+  // Row 2: Buttons (Offer Draw, Ctrl Squares, Event Log, Resign)
+  const row2Y = rowHeight / 2;
   const buttonScale = Math.max(MOBILE_BAR_LAYOUT.MIN_BUTTON_SCALE, scale * MOBILE_BAR_LAYOUT.BUTTON_SCALE);
   const buttonPadding = MOBILE_BAR_LAYOUT.BUTTON_PADDING * scale;
-  const rightEdge = bottomBounds.width / 2 - buttonPadding;
-  if (this.mobileEventLogButton) {
-    this.mobileEventLogButton.setData('baseScale', buttonScale);
-    this.mobileEventLogButton.setScale(buttonScale);
-    const bounds = this.mobileEventLogButton.getBounds();
-    this.mobileEventLogButton.setPosition(rightEdge - bounds.width / 2, bottomY);
-  }
-  if (this.mobileControlledSquaresButton) {
-    this.mobileControlledSquaresButton.setData('baseScale', buttonScale);
-    this.mobileControlledSquaresButton.setScale(buttonScale);
-    const bounds = this.mobileControlledSquaresButton.getBounds();
-    const offset = this.mobileEventLogButton ? (this.mobileEventLogButton.getBounds().width + buttonPadding) : 0;
-    this.mobileControlledSquaresButton.setPosition(rightEdge - offset - bounds.width / 2, bottomY);
+  
+  // Calculate button positions - distribute evenly across the width
+  const buttons = [
+    this.mobileOfferDrawButton,
+    this.mobileControlledSquaresButton,
+    this.mobileEventLogButton,
+    this.mobileResignButton
+  ].filter(b => b !== undefined);
+  
+  if (buttons.length > 0) {
+    const totalWidth = bottomBounds.width - buttonPadding * 2;
+    const buttonSpacing = totalWidth / buttons.length;
+    const startX = -bottomBounds.width / 2 + buttonPadding + buttonSpacing / 2;
+    
+    buttons.forEach((button, index) => {
+      if (button) {
+        button.setData('baseScale', buttonScale);
+        button.setScale(buttonScale);
+        button.setPosition(startX + index * buttonSpacing, row2Y);
+      }
+    });
   }
 }
 
@@ -397,6 +433,25 @@ function layoutMobileStatRow(
  * @param layout - Current layout calculations
  */
 export function positionLeftPanel(this: GameScene, layout: GameLayout): void {
+  if (layout.isMobile) {
+    this.opponentDeckStack?.forEach((card) => card.setVisible(false));
+    this.opponentDiscardStack?.forEach((card) => card.setVisible(false));
+    this.playerDeckStack?.forEach((card) => card.setVisible(false));
+    this.playerDiscardStack?.forEach((card) => card.setVisible(false));
+    this.opponentDeckCountText?.setVisible(false);
+    this.opponentDiscardCountText?.setVisible(false);
+    this.playerDeckCountText?.setVisible(false);
+    this.playerDiscardCountText?.setVisible(false);
+    this.opponentDeckLabelText?.setVisible(false);
+    this.opponentDiscardLabelText?.setVisible(false);
+    this.playerDeckLabelText?.setVisible(false);
+    this.playerDiscardLabelText?.setVisible(false);
+    // Hide discard top cards in mobile view
+    this.opponentDiscardTopCard?.setVisible(false);
+    this.playerDiscardTopCard?.setVisible(false);
+    return;
+  }
+
   const scale = layout.panelScale;
   const leftX = layout.leftPanelX;
   const deckScale = LEFT_PANEL_LAYOUT.DECK_SCALE * scale;
@@ -472,6 +527,11 @@ export function positionLeftPanel(this: GameScene, layout: GameLayout): void {
     this.playerDeckCountText.setPosition(topPos.x, topPos.y);
     this.playerDeckCountText.setFontSize(countSize);
   }
+
+  this.opponentDeckCountText?.setVisible(this.opponentDeckCount > 0);
+  this.opponentDiscardCountText?.setVisible(this.opponentDiscardCount > 0);
+  this.playerDeckCountText?.setVisible(localDeckCount > 0);
+  this.playerDiscardCountText?.setVisible(localDiscardCount > 0);
 }
 
 /**
@@ -590,7 +650,8 @@ export function positionCardHand(this: GameScene, layout: GameLayout): void {
   this.cardHand.setScale(1);
   this.cardHand.setHandScale(layout.handScale);
   this.cardHand.setPreviewPosition(layout.previewX, layout.previewY);
-  this.cardHand.setPreviewEnabled(!layout.isMobile);
+  this.cardHand.setPreviewEnabled(true);
+  this.cardHand.setTouchPreviewEnabled(layout.isMobile);
   this.cardHand.setPlayZone({
     x: this.boardTopLeft.x,
     y: this.boardTopLeft.y,

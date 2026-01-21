@@ -480,6 +480,13 @@ export class GameScene extends Phaser.Scene {
 
   public mobileEventLogButton?: Phaser.GameObjects.Container;
   public mobileControlledSquaresButton?: Phaser.GameObjects.Container;
+  public mobileOfferDrawButton?: Phaser.GameObjects.Container;
+  public mobileResignButton?: Phaser.GameObjects.Container;
+
+  public mobileTopDeckText?: Phaser.GameObjects.Text;
+  public mobileTopDiscardText?: Phaser.GameObjects.Text;
+  public mobileBottomDeckText?: Phaser.GameObjects.Text;
+  public mobileBottomDiscardText?: Phaser.GameObjects.Text;
 
   public isMobileEventLogVisible: boolean = false;
   

@@ -494,6 +494,19 @@ export function createMobileBars(this: GameScene, layout: GameLayout): void {
     fontFamily: 'BoldPixels, Arial',
     color: '#1a1a1a'
   }).setOrigin(0, 0.5);
+  
+  // Deck and discard count texts for opponent
+  this.mobileTopDeckText = this.add.text(0, 0, 'D:60', {
+    fontSize: `${UI_FACTORY.MOBILE_STAT_FONT_SIZE * layout.panelScale}px`,
+    fontFamily: 'BoldPixels, Arial',
+    color: '#1a1a1a'
+  }).setOrigin(0, 0.5);
+  this.mobileTopDiscardText = this.add.text(0, 0, 'X:0', {
+    fontSize: `${UI_FACTORY.MOBILE_STAT_FONT_SIZE * layout.panelScale}px`,
+    fontFamily: 'BoldPixels, Arial',
+    color: '#1a1a1a'
+  }).setOrigin(0, 0.5);
+  
   this.mobileTopBar.add([
     this.mobileTopClockIcon,
     this.mobileTopClockText,
@@ -502,9 +515,12 @@ export function createMobileBars(this: GameScene, layout: GameLayout): void {
     this.mobileTopEnergyIcon,
     this.mobileTopEnergyText,
     this.mobileTopDisturbIcon,
-    this.mobileTopDisturbText
+    this.mobileTopDisturbText,
+    this.mobileTopDeckText,
+    this.mobileTopDiscardText
   ]);
 
+  // Bottom bar uses two rows: row 1 for stats, row 2 for buttons
   this.mobileBottomBar = this.add.container(bottomBounds.centerX, bottomBounds.centerY).setDepth(60);
   this.mobileBottomBarBackground = this.add.rectangle(0, 0, bottomBounds.width, bottomBounds.height, hex('#9a9a9a'), 0.6);
   this.mobileBottomBarBackground.setOrigin(0.5);
@@ -541,6 +557,19 @@ export function createMobileBars(this: GameScene, layout: GameLayout): void {
     fontFamily: 'BoldPixels, Arial',
     color: '#1a1a1a'
   }).setOrigin(0, 0.5);
+  
+  // Deck and discard count texts for player
+  this.mobileBottomDeckText = this.add.text(0, 0, 'D:60', {
+    fontSize: `${UI_FACTORY.MOBILE_STAT_FONT_SIZE * layout.panelScale}px`,
+    fontFamily: 'BoldPixels, Arial',
+    color: '#1a1a1a'
+  }).setOrigin(0, 0.5);
+  this.mobileBottomDiscardText = this.add.text(0, 0, 'X:0', {
+    fontSize: `${UI_FACTORY.MOBILE_STAT_FONT_SIZE * layout.panelScale}px`,
+    fontFamily: 'BoldPixels, Arial',
+    color: '#1a1a1a'
+  }).setOrigin(0, 0.5);
+  
   this.mobileBottomBar.add([
     this.mobileBottomClockIcon,
     this.mobileBottomClockText,
@@ -549,14 +578,38 @@ export function createMobileBars(this: GameScene, layout: GameLayout): void {
     this.mobileBottomEnergyIcon,
     this.mobileBottomEnergyText,
     this.mobileBottomDisturbIcon,
-    this.mobileBottomDisturbText
+    this.mobileBottomDisturbText,
+    this.mobileBottomDeckText,
+    this.mobileBottomDiscardText
   ]);
+
+  // Make bottom disturb icon clickable to toggle mode (local player only)
+  this.mobileBottomDisturbIcon.setInteractive({ useHandCursor: true });
+  this.mobileBottomDisturbIcon.on('pointerdown', () => {
+    if (this.gameStateManager.isLocalPlayerTurn()) {
+      this.playerFocusDisturb.toggle();
+      // Update the icon to reflect the new mode
+      const newMode = this.playerFocusDisturb.getMode();
+      this.mobileBottomDisturbIcon?.setTexture(newMode === 'focus' ? 'switch_focus' : 'switch_disturb');
+    }
+  });
+
+  // Create buttons for bottom bar (row 2)
+  this.mobileOfferDrawButton = createImageButton(
+    this,
+    0,
+    0,
+    'Offer Draw',
+    'yellow_button',
+    'yellow_button_pressed',
+    () => this.handleOfferDraw()
+  );
 
   this.mobileControlledSquaresButton = createImageButton(
     this,
     0,
     0,
-    'Controlled Squares',
+    'Ctrl. Squares',
     'blue_button',
     'blue_button_pressed',
     () => {
@@ -577,5 +630,20 @@ export function createMobileBars(this: GameScene, layout: GameLayout): void {
     () => this.toggleMobileEventLog()
   );
 
-  this.mobileBottomBar.add([this.mobileControlledSquaresButton, this.mobileEventLogButton]);
+  this.mobileResignButton = createImageButton(
+    this,
+    0,
+    0,
+    'Resign',
+    'red_button',
+    'red_button_pressed',
+    () => this.handleResignClick()
+  );
+
+  this.mobileBottomBar.add([
+    this.mobileOfferDrawButton,
+    this.mobileControlledSquaresButton,
+    this.mobileEventLogButton,
+    this.mobileResignButton
+  ]);
 }

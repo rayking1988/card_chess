@@ -48,6 +48,21 @@ const BUG_REPORT_URL = NETWORK.BUG_REPORT_URL;
 /** Base design height for UI scaling calculations */
 const BASE_HEIGHT = DISPLAY.GAME_HEIGHT;
 
+/** How-to-play content configuration path */
+const HOW_TO_PLAY_CONFIG_URL = 'how-to-play/config.json';
+
+interface HowToPlayTabConfig {
+  id: string;
+  label: string;
+  markdown: string;
+}
+
+interface HowToPlayConfig {
+  title?: string;
+  defaultTabId?: string;
+  tabs: HowToPlayTabConfig[];
+}
+
 /* ============================================
  * MENU SCENE CLASS
  * ============================================ */
@@ -104,6 +119,41 @@ export class MenuScene extends Phaser.Scene {
   /** Whether the client is waiting for a match */
   private isWaitingForMatch: boolean = false;
 
+  /** How To Play button */
+  private howToPlayButton!: Phaser.GameObjects.Container;
+
+  /** How To Play overlay root */
+  private howToPlayOverlay: HTMLDivElement | null = null;
+
+  /** How To Play panel element */
+  private howToPlayPanel: HTMLDivElement | null = null;
+
+  /** How To Play tabs container */
+  private howToPlayTabs: HTMLDivElement | null = null;
+
+  /** How To Play content container */
+  private howToPlayContent: HTMLDivElement | null = null;
+
+  /** How To Play close button */
+  private howToPlayCloseButton: HTMLButtonElement | null = null;
+
+  /** How To Play style tag */
+  private howToPlayStyleTag: HTMLStyleElement | null = null;
+
+  /** Cached How To Play config */
+  private howToPlayConfig: HowToPlayConfig | null = null;
+
+  /** Tab buttons by ID */
+  private howToPlayTabButtons: Map<string, HTMLButtonElement> = new Map();
+
+  /** Active tab ID */
+  private activeHowToPlayTabId: string | null = null;
+
+  /** Gets the active how-to-play tab ID */
+  public getActiveHowToPlayTabId(): string | null {
+    return this.activeHowToPlayTabId;
+  }
+
   constructor() {
     super({ key: 'MenuScene' });
   }
@@ -115,6 +165,12 @@ export class MenuScene extends Phaser.Scene {
    */
   create(): void {
     const { width, height } = this.scale;
+
+    this.isWaitingForMatch = false;
+    this.connectionState = 'disconnected';
+    this.localColor = null;
+    this.dotCount = 0;
+    this.stopWaitingAnimation();
     
     // Add room background - scale to cover entire viewport
     if (this.textures.exists('room_background')) {
@@ -132,11 +188,13 @@ export class MenuScene extends Phaser.Scene {
     // Create UI elements (positioned relative to center, using base dimensions)
     this.createTitle();
     this.createNameInput();
+    this.createHowToPlayButton();
     this.createJoinButton();
     this.createBugReportButton();
     this.createBottomButton(); // Ko-fi or Exit depending on platform
     this.createStatusText();
     this.createCancelButton();
+    this.setWaitingState(false);
     
     // Initialize network manager
     this.networkManager = new NetworkManager();
@@ -187,6 +245,7 @@ export class MenuScene extends Phaser.Scene {
     
     // Reposition HTML input
     this.positionNameInput();
+    this.positionHowToPlayOverlay();
   }
 
   /**
@@ -325,6 +384,25 @@ export class MenuScene extends Phaser.Scene {
   }
 
   /**
+   * Creates the How To Play button
+   *
+   * @private
+   */
+  private createHowToPlayButton(): void {
+    this.howToPlayButton = this.createImageButton(
+      0,
+      -BASE_HEIGHT * 0.02,
+      'HOW TO PLAY',
+      'yellow_button',
+      'yellow_button_pressed',
+      () => {
+        void this.onHowToPlay();
+      }
+    );
+    this.uiContainer.add(this.howToPlayButton);
+  }
+
+  /**
    * Creates the Join Queue button
    * 
    * @private
@@ -447,6 +525,501 @@ export class MenuScene extends Phaser.Scene {
     );
     this.cancelButton.setVisible(false);
     this.uiContainer.add(this.cancelButton);
+  }
+
+  /**
+   * Opens the How To Play window
+   * 
+   * @private
+   */
+  private async onHowToPlay(): Promise<void> {
+    this.createHowToPlayOverlay();
+    this.setHowToPlayVisible(true);
+    await this.loadHowToPlayConfig();
+  }
+
+  /**
+   * Creates the How To Play overlay elements
+   *
+   * @private
+   */
+  private createHowToPlayOverlay(): void {
+    if (this.howToPlayOverlay) {
+      this.positionHowToPlayOverlay();
+      return;
+    }
+
+    const overlay = document.createElement('div');
+    overlay.id = 'how-to-play-overlay';
+    overlay.style.cssText = `
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 0;
+      height: 0;
+      display: none;
+      z-index: 1000;
+      pointer-events: auto;
+    `;
+
+    const backdrop = document.createElement('div');
+    backdrop.className = 'howto-backdrop';
+    backdrop.addEventListener('click', () => this.setHowToPlayVisible(false));
+
+    const panel = document.createElement('div');
+    panel.className = 'howto-panel';
+    panel.style.cssText = `
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      background-color: #23211f;
+      border: 4px solid #000000;
+      border-radius: 10px;
+      box-shadow:
+        inset 0 0 0 2px #2a1a0a,
+        inset 0 0 0 4px #1d1b1a,
+        6px 6px 0 0 #1a0a00;
+      color: #f0eee7;
+      font-family: 'BoldPixels', Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      padding: 12px;
+      box-sizing: border-box;
+    `;
+    panel.addEventListener('click', (event) => event.stopPropagation());
+
+    const header = document.createElement('div');
+    header.style.cssText = `
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    `;
+
+    const tabs = document.createElement('div');
+    tabs.className = 'howto-tabs';
+
+    const closeButton = document.createElement('button');
+    closeButton.className = 'howto-close';
+    closeButton.textContent = 'CLOSE';
+    closeButton.addEventListener('click', () => this.setHowToPlayVisible(false));
+
+    header.appendChild(tabs);
+    header.appendChild(closeButton);
+
+    const content = document.createElement('div');
+    content.className = 'howto-content';
+    content.textContent = 'Loading...';
+
+    panel.appendChild(header);
+    panel.appendChild(content);
+    overlay.appendChild(backdrop);
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+
+    this.howToPlayOverlay = overlay;
+    this.howToPlayPanel = panel;
+    this.howToPlayTabs = tabs;
+    this.howToPlayContent = content;
+    this.howToPlayCloseButton = closeButton;
+
+    this.ensureHowToPlayStyles();
+    this.positionHowToPlayOverlay();
+  }
+
+  /**
+   * Injects How To Play styles once
+   *
+   * @private
+   */
+  private ensureHowToPlayStyles(): void {
+    if (document.getElementById('how-to-play-style')) return;
+    const styleTag = document.createElement('style');
+    styleTag.id = 'how-to-play-style';
+    styleTag.textContent = `
+      #how-to-play-overlay .howto-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.6);
+      }
+      #how-to-play-overlay .howto-tabs {
+        display: flex;
+        gap: 6px;
+        overflow-x: auto;
+        flex: 1;
+        padding-bottom: 4px;
+      }
+      #how-to-play-overlay .howto-tabs::-webkit-scrollbar {
+        height: 6px;
+      }
+      #how-to-play-overlay .howto-tab {
+        background: #3a2e1a;
+        color: #f0eee7;
+        border: 2px solid #000000;
+        border-radius: 6px;
+        padding: 6px 10px;
+        font-family: 'BoldPixels', Arial, sans-serif;
+        cursor: pointer;
+        box-shadow: 3px 3px 0 0 #1a0a00;
+        white-space: nowrap;
+      }
+      #how-to-play-overlay .howto-tab[data-active="true"] {
+        background: #dba616;
+        color: #1a0a00;
+        box-shadow: inset 0 0 0 2px #2a1a0a, 3px 3px 0 0 #1a0a00;
+      }
+      #how-to-play-overlay .howto-close {
+        background: #772525;
+        color: #ffffff;
+        border: 2px solid #000000;
+        border-radius: 6px;
+        padding: 6px 10px;
+        font-family: 'BoldPixels', Arial, sans-serif;
+        cursor: pointer;
+        box-shadow: 3px 3px 0 0 #1a0a00;
+      }
+      #how-to-play-overlay .howto-content {
+        flex: 1;
+        overflow-y: auto;
+        background: #1d1b1a;
+        border: 3px solid #000000;
+        border-radius: 8px;
+        padding: 10px 12px;
+        box-sizing: border-box;
+        color: #f0eee7;
+        line-height: 1.4;
+      }
+      #how-to-play-overlay .howto-content h1,
+      #how-to-play-overlay .howto-content h2,
+      #how-to-play-overlay .howto-content h3 {
+        margin: 0 0 8px 0;
+        color: #ffcc66;
+      }
+      #how-to-play-overlay .howto-content p {
+        margin: 0 0 10px 0;
+      }
+      #how-to-play-overlay .howto-content ul {
+        margin: 0 0 12px 18px;
+        padding: 0;
+      }
+      #how-to-play-overlay .howto-content li {
+        margin-bottom: 6px;
+      }
+      #how-to-play-overlay .howto-content img {
+        max-width: 100%;
+        height: auto;
+        display: block;
+        margin: 10px auto;
+        border: 2px solid #000000;
+        box-shadow: 4px 4px 0 0 #1a0a00;
+      }
+      #how-to-play-overlay .howto-content code {
+        background: #23211f;
+        border: 1px solid #000000;
+        border-radius: 4px;
+        padding: 1px 4px;
+      }
+      #how-to-play-overlay .howto-content a {
+        color: #dba616;
+      }
+    `;
+    document.head.appendChild(styleTag);
+    this.howToPlayStyleTag = styleTag;
+  }
+
+  /**
+   * Positions the How To Play overlay to match the canvas
+   *
+   * @private
+   */
+  private positionHowToPlayOverlay(): void {
+    if (!this.howToPlayOverlay || !this.howToPlayPanel) return;
+    const canvas = this.game.canvas;
+    const canvasRect = canvas.getBoundingClientRect();
+    const { width, height } = this.scale;
+    const scaleX = canvasRect.width / width;
+    const scaleY = canvasRect.height / height;
+    const panelWidth = Math.min(width * 0.9, 920);
+    const panelHeight = Math.min(height * 0.8, 680);
+
+    this.howToPlayOverlay.style.left = `${canvasRect.left}px`;
+    this.howToPlayOverlay.style.top = `${canvasRect.top}px`;
+    this.howToPlayOverlay.style.width = `${canvasRect.width}px`;
+    this.howToPlayOverlay.style.height = `${canvasRect.height}px`;
+    this.howToPlayPanel.style.width = `${panelWidth * scaleX}px`;
+    this.howToPlayPanel.style.height = `${panelHeight * scaleY}px`;
+
+    const contentFontSize = Math.max(12, Math.round(14 * scaleY));
+    if (this.howToPlayContent) {
+      this.howToPlayContent.style.fontSize = `${contentFontSize}px`;
+    }
+    if (this.howToPlayTabs) {
+      this.howToPlayTabs.style.fontSize = `${Math.max(11, Math.round(12 * scaleY))}px`;
+    }
+    if (this.howToPlayCloseButton) {
+      this.howToPlayCloseButton.style.fontSize = `${Math.max(11, Math.round(12 * scaleY))}px`;
+    }
+  }
+
+  /**
+   * Toggles How To Play overlay visibility
+   *
+   * @param visible - Whether to show the overlay
+   * @private
+   */
+  private setHowToPlayVisible(visible: boolean): void {
+    if (!this.howToPlayOverlay) return;
+    this.howToPlayOverlay.style.display = visible ? 'block' : 'none';
+  }
+
+  /**
+   * Loads the How To Play tab configuration and builds tabs
+   *
+   * @private
+   */
+  private async loadHowToPlayConfig(): Promise<void> {
+    if (!this.howToPlayContent || !this.howToPlayTabs) return;
+    this.howToPlayContent.textContent = 'Loading...';
+    this.howToPlayTabs.innerHTML = '';
+    this.howToPlayTabButtons.clear();
+    this.activeHowToPlayTabId = null;
+
+    try {
+      const response = await fetch(HOW_TO_PLAY_CONFIG_URL, { cache: 'no-store' });
+      if (!response.ok) {
+        throw new Error(`Failed to load config (${response.status})`);
+      }
+      const rawConfig = await response.json();
+      const rawTabs = Array.isArray(rawConfig?.tabs) ? rawConfig.tabs : [];
+      const tabs: HowToPlayTabConfig[] = rawTabs
+        .map((tab: HowToPlayTabConfig) => ({
+          id: String(tab.id ?? '').trim(),
+          label: String(tab.label ?? tab.id ?? '').trim(),
+          markdown: String(tab.markdown ?? '').trim()
+        }))
+        .filter((tab: HowToPlayTabConfig) => tab.id.length > 0 && tab.label.length > 0 && tab.markdown.length > 0);
+
+      if (tabs.length === 0) {
+        throw new Error('No tabs defined in config');
+      }
+
+      this.howToPlayConfig = {
+        title: rawConfig?.title,
+        defaultTabId: rawConfig?.defaultTabId,
+        tabs
+      };
+
+      for (const tab of tabs) {
+        const button = document.createElement('button');
+        button.className = 'howto-tab';
+        button.textContent = tab.label;
+        button.addEventListener('click', () => {
+          void this.selectHowToPlayTab(tab.id);
+        });
+        this.howToPlayTabs.appendChild(button);
+        this.howToPlayTabButtons.set(tab.id, button);
+      }
+
+      const defaultTabId = this.howToPlayConfig.defaultTabId;
+      const initialTabId = defaultTabId && this.howToPlayTabButtons.has(defaultTabId)
+        ? defaultTabId
+        : tabs[0].id;
+      await this.selectHowToPlayTab(initialTabId);
+    } catch (error) {
+      console.error('Failed to load How To Play config:', error);
+      this.howToPlayContent.textContent = 'Failed to load How To Play content.';
+    }
+  }
+
+  /**
+   * Switches to the selected How To Play tab
+   *
+   * @param tabId - Tab identifier to load
+   * @private
+   */
+  private async selectHowToPlayTab(tabId: string): Promise<void> {
+    if (!this.howToPlayConfig || !this.howToPlayContent) return;
+    const tab = this.howToPlayConfig.tabs.find((entry) => entry.id === tabId);
+    if (!tab) return;
+
+    this.activeHowToPlayTabId = tabId;
+    for (const [id, button] of this.howToPlayTabButtons.entries()) {
+      button.dataset.active = id === tabId ? 'true' : 'false';
+    }
+
+    this.howToPlayContent.textContent = 'Loading...';
+    try {
+      const configUrl = new URL(HOW_TO_PLAY_CONFIG_URL, window.location.href);
+      const markdownUrl = new URL(tab.markdown, configUrl).toString();
+      const response = await fetch(markdownUrl, { cache: 'no-store' });
+      if (!response.ok) {
+        throw new Error(`Failed to load tab (${response.status})`);
+      }
+      const markdown = await response.text();
+      this.howToPlayContent.innerHTML = this.renderHowToPlayMarkdown(markdown, markdownUrl);
+      this.howToPlayContent.scrollTop = 0;
+    } catch (error) {
+      console.error('Failed to load How To Play tab:', error);
+      this.howToPlayContent.textContent = 'Failed to load this tab.';
+    }
+  }
+
+  /**
+   * Renders markdown content into HTML
+   *
+   * @param markdown - Markdown source
+   * @param baseUrl - Base URL for resolving assets
+   * @returns Rendered HTML string
+   * @private
+   */
+  private renderHowToPlayMarkdown(markdown: string, baseUrl: string): string {
+    const lines = markdown.replace(/\r/g, '').split('\n');
+    const html: string[] = [];
+    let inList = false;
+
+    const closeList = () => {
+      if (inList) {
+        html.push('</ul>');
+        inList = false;
+      }
+    };
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line) {
+        closeList();
+        continue;
+      }
+
+      const headingMatch = line.match(/^(#{1,3})\s+(.*)$/);
+      if (headingMatch) {
+        closeList();
+        const level = headingMatch[1].length;
+        html.push(`<h${level}>${this.renderMarkdownInline(headingMatch[2], baseUrl)}</h${level}>`);
+        continue;
+      }
+
+      if (/^[-*+]\s+/.test(line)) {
+        if (!inList) {
+          html.push('<ul>');
+          inList = true;
+        }
+        html.push(`<li>${this.renderMarkdownInline(line.replace(/^[-*+]\s+/, ''), baseUrl)}</li>`);
+        continue;
+      }
+
+      if (/^(-{3,}|\*{3,})$/.test(line)) {
+        closeList();
+        html.push('<hr />');
+        continue;
+      }
+
+      closeList();
+      html.push(`<p>${this.renderMarkdownInline(line, baseUrl)}</p>`);
+    }
+
+    closeList();
+    return html.join('');
+  }
+
+  /**
+   * Renders inline markdown elements for a line of text
+   *
+   * @param text - Inline markdown content
+   * @param baseUrl - Base URL for resolving links/images
+   * @returns HTML string
+   * @private
+   */
+  private renderMarkdownInline(text: string, baseUrl: string): string {
+    const segments: string[] = [];
+    const tokenRegex = /!\[([^\]]*)\]\(([^)]+)\)|\[([^\]]+)\]\(([^)]+)\)/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    const renderText = (segment: string): string => {
+      let html = this.escapeHtml(segment);
+      html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+      html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+      html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+      return html;
+    };
+
+    while ((match = tokenRegex.exec(text)) !== null) {
+      segments.push(renderText(text.slice(lastIndex, match.index)));
+      if (match[1] !== undefined) {
+        const altText = this.escapeHtml(match[1]);
+        const url = this.resolveHowToPlayUrl(match[2], baseUrl);
+        segments.push(`<img src="${this.escapeHtml(url)}" alt="${altText}" />`);
+      } else if (match[3] !== undefined) {
+        const label = renderText(match[3]);
+        const url = this.resolveHowToPlayUrl(match[4], baseUrl);
+        segments.push(`<a href="${this.escapeHtml(url)}" target="_blank" rel="noopener">${label}</a>`);
+      }
+      lastIndex = match.index + match[0].length;
+    }
+
+    segments.push(renderText(text.slice(lastIndex)));
+    return segments.join('');
+  }
+
+  /**
+   * Escapes HTML entities
+   *
+   * @param value - Raw text
+   * @returns Escaped text
+   * @private
+   */
+  private escapeHtml(value: string): string {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  /**
+   * Resolves relative URLs in markdown to absolute URLs
+   *
+   * @param url - Raw URL from markdown
+   * @param baseUrl - Base URL for the markdown file
+   * @returns Resolved URL string
+   * @private
+   */
+  private resolveHowToPlayUrl(url: string, baseUrl: string): string {
+    const trimmed = url.trim();
+    if (/^(https?:|data:|blob:|\/)/.test(trimmed)) {
+      return trimmed;
+    }
+    try {
+      return new URL(trimmed, baseUrl).toString();
+    } catch {
+      return trimmed;
+    }
+  }
+
+  /**
+   * Cleans up How To Play overlay elements
+   *
+   * @private
+   */
+  private cleanupHowToPlayOverlay(): void {
+    if (this.howToPlayOverlay) {
+      this.howToPlayOverlay.remove();
+      this.howToPlayOverlay = null;
+    }
+    this.howToPlayPanel = null;
+    this.howToPlayTabs = null;
+    this.howToPlayContent = null;
+    this.howToPlayCloseButton = null;
+    this.howToPlayConfig = null;
+    this.howToPlayTabButtons.clear();
+    this.activeHowToPlayTabId = null;
+    if (this.howToPlayStyleTag) {
+      this.howToPlayStyleTag.remove();
+      this.howToPlayStyleTag = null;
+    }
   }
 
   /**
@@ -723,6 +1296,7 @@ export class MenuScene extends Phaser.Scene {
       this.nameInput.remove();
       this.nameInput = null;
     }
+    this.cleanupHowToPlayOverlay();
     this.scale.off('resize', this.handleResize, this);
   }
 

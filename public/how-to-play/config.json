@@ -1,0 +1,16 @@
+{
+  "title": "How To Play",
+  "defaultTabId": "basics",
+  "tabs": [
+    {
+      "id": "basics",
+      "label": "Basics",
+      "markdown": "tabs/basics.md"
+    },
+    {
+      "id": "cards",
+      "label": "Cards",
+      "markdown": "tabs/cards.md"
+    }
+  ]
+}

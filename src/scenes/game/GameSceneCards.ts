@@ -366,6 +366,11 @@ export function setDiscardTopCard(this: GameScene, side: 'local' | 'opponent', c
   topCard.setDepth(MAX_PILE_LAYERS + 8);
   topCard.getContainer().setPosition(layout.leftPanelX, positionY);
   makeCardComponentClickable(topCard, () => this.showDiscardViewer(side));
+  
+  // Hide in mobile view
+  if (layout.isMobile) {
+    topCard.setVisible(false);
+  }
 
   if (isOpponent) {
     this.opponentDiscardTopCard = topCard;
