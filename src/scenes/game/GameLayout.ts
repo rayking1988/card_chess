@@ -118,10 +118,13 @@ export function calculateLayout(width: number, height: number): GameLayout {
   
   // Calculate scales based on section sizes
   const baseScale = Math.min(width / 1920, height / 1080);
-  const panelScale = Math.max(0.5, Math.min(1.2, baseScale));
+  const minPanelScale = isMobile ? 0.35 : 0.5;
+  const maxPanelScale = isMobile ? 1.0 : 1.2;
+  const panelScale = Math.max(minPanelScale, Math.min(maxPanelScale, baseScale));
   
   // Board size: fit within board section with some padding
-  const boardPadding = Math.min(board.width, board.height) * 0.05;
+  const boardPadding = isMobile ? 0 : Math.min(board.width, board.height) * 0.05;
+  const nameplatePadding = isMobile ? Math.min(board.width, board.height) * 0.02 : boardPadding;
   const maxBoardSize = Math.min(board.width, board.height) - boardPadding * 2;
   const boardSize = Math.min(maxBoardSize, BASE_BOARD_SIZE * 1.5);
   const boardScale = boardSize / BASE_BOARD_SIZE;
@@ -165,9 +168,9 @@ export function calculateLayout(width: number, height: number): GameLayout {
   
   // Nameplates: above/below board
   const opponentNameX = board.centerX;
-  const opponentNameY = board.y + boardPadding;
+  const opponentNameY = board.y + nameplatePadding;
   const playerNameX = board.centerX;
-  const playerNameY = board.y + board.height - boardPadding;
+  const playerNameY = board.y + board.height - nameplatePadding;
   
   // Preview card: left side of board section
   const previewX = isMobile
@@ -179,7 +182,7 @@ export function calculateLayout(width: number, height: number): GameLayout {
   
   // Turn banner: above board
   const turnBannerX = board.centerX;
-  const turnBannerY = board.y + boardPadding * 2;
+  const turnBannerY = board.y + nameplatePadding * 2;
   
   // Played card display: left side of board section
   const playedCardX = board.x + board.width * 0.12;

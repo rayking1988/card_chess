@@ -106,6 +106,12 @@ export class MenuScene extends Phaser.Scene {
   
   /** Container for all UI elements (for centering) */
   private uiContainer!: Phaser.GameObjects.Container;
+
+  /** Cached UI bounds for responsive scaling */
+  private uiBounds: { width: number; height: number } | null = null;
+
+  /** Current UI scale factor */
+  private uiScale: number = 1;
   
   /** Join queue button */
   private joinButton!: Phaser.GameObjects.Container;
@@ -195,6 +201,11 @@ export class MenuScene extends Phaser.Scene {
     this.createStatusText();
     this.createCancelButton();
     this.setWaitingState(false);
+
+    this.cacheUiBounds();
+    this.updateUiScale();
+    this.positionNameInput();
+    this.positionHowToPlayOverlay();
     
     // Initialize network manager
     this.networkManager = new NetworkManager();
@@ -224,6 +235,33 @@ export class MenuScene extends Phaser.Scene {
     this.background.setScale(scale);
     this.background.setPosition(width / 2, height / 2);
   }
+
+  private cacheUiBounds(): void {
+    if (!this.uiContainer) return;
+    const previousScale = this.uiContainer.scaleX;
+    this.uiContainer.setScale(1);
+    const bounds = this.uiContainer.getBounds();
+    this.uiBounds = { width: bounds.width, height: bounds.height };
+    this.uiContainer.setScale(previousScale);
+  }
+
+  private updateUiScale(): void {
+    if (!this.uiContainer) return;
+    if (!this.uiBounds) {
+      this.cacheUiBounds();
+    }
+    if (!this.uiBounds) return;
+
+    const { width, height } = this.scale;
+    const padding = 24;
+    const availableWidth = Math.max(1, width - padding * 2);
+    const availableHeight = Math.max(1, height - padding * 2);
+    const scaleX = availableWidth / this.uiBounds.width;
+    const scaleY = availableHeight / this.uiBounds.height;
+
+    this.uiScale = Math.min(1, scaleX, scaleY);
+    this.uiContainer.setScale(this.uiScale);
+  }
   
   /**
    * Handles window resize events
@@ -240,6 +278,8 @@ export class MenuScene extends Phaser.Scene {
     
     // Reposition UI container to center
     if (this.uiContainer) {
+      this.uiContainer.setPosition(width / 2, height / 2);
+      this.updateUiScale();
       this.uiContainer.setPosition(width / 2, height / 2);
     }
     
@@ -386,10 +426,14 @@ export class MenuScene extends Phaser.Scene {
     
     // Input is at center + offset
     const inputX = width / 2;
-    const inputY = height / 2 - BASE_HEIGHT * 0.08;
+    const inputY = height / 2 - BASE_HEIGHT * 0.08 * this.uiScale;
     
-    this.nameInput.style.left = `${canvasRect.left + (inputX / width) * canvasRect.width - 160}px`;
-    this.nameInput.style.top = `${canvasRect.top + (inputY / height) * canvasRect.height - 30}px`;
+    const left = canvasRect.left + (inputX / width) * canvasRect.width;
+    const top = canvasRect.top + (inputY / height) * canvasRect.height;
+    this.nameInput.style.left = `${left}px`;
+    this.nameInput.style.top = `${top}px`;
+    this.nameInput.style.transformOrigin = 'center';
+    this.nameInput.style.transform = `translate(-50%, -50%) scale(${this.uiScale})`;
   }
 
   /**

@@ -98,4 +98,30 @@ const config: Phaser.Types.Core.GameConfig = {
  * 3. Starts the game loop
  * 4. Automatically transitions to BootScene
  */
-new Phaser.Game(config);
+const game = new Phaser.Game(config);
+
+const syncScaleToContainer = (): void => {
+  const container = game.canvas?.parentElement;
+  if (!container) return;
+  const { clientWidth, clientHeight } = container;
+  if (clientWidth > 0 && clientHeight > 0) {
+    game.scale.resize(clientWidth, clientHeight);
+  }
+};
+
+if (typeof window !== 'undefined') {
+  const scheduleScaleSync = (): void => {
+    window.setTimeout(syncScaleToContainer, 0);
+  };
+
+  window.addEventListener('resize', scheduleScaleSync);
+  window.visualViewport?.addEventListener('resize', scheduleScaleSync);
+
+  if ('ResizeObserver' in window) {
+    const observer = new ResizeObserver(scheduleScaleSync);
+    const container = document.getElementById('game-container');
+    if (container) {
+      observer.observe(container);
+    }
+  }
+}

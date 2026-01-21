@@ -186,7 +186,9 @@ export function handleGameEnd(this: GameScene, winner: PlayerColor | null, reaso
   }
 
   const layout = this.currentLayout ?? calculateLayout(this.scale.width, this.scale.height);
-  this.isMobileEventLogVisible = true;
+  if (!layout.isMobile) {
+    this.isMobileEventLogVisible = true;
+  }
   this.positionEventLog(layout);
   this.interactionBlockersActive = true;
   this.interactionBlockersAllowPreview = true;

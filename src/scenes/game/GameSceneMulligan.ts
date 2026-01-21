@@ -119,7 +119,9 @@ export function showMulliganUI(this: GameScene): void {
     height: layout.sections.leftPanel.height
   });
 
-  this.isMobileEventLogVisible = true;
+  if (!layout.isMobile) {
+    this.isMobileEventLogVisible = true;
+  }
   this.positionEventLog(layout);
   this.interactionBlockersActive = true;
   this.interactionBlockersAllowPreview = true;

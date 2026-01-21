@@ -840,7 +840,7 @@ export const OPPONENT_HAND_LAYOUT = {
   ARC_DEPTH_FACTOR: 0.08,
   
   /** Visible height factor */
-  VISIBLE_HEIGHT_FACTOR: 1.2,
+  VISIBLE_HEIGHT_FACTOR: 1.8,
   
   /** Label Y factor */
   LABEL_Y_FACTOR: 0.85,

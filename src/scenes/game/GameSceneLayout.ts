@@ -33,9 +33,13 @@ export { positionTurnBanner, positionTurnOverlay, positionOverlays } from './Gam
  */
 export function handleResize(this: GameScene): void {
   const { width, height } = this.scale;
+  const wasMobile = this.currentLayout?.isMobile ?? false;
 
   // Recalculate layout
   const layout = calculateLayout(width, height);
+  if (layout.isMobile && !wasMobile) {
+    this.isMobileEventLogVisible = false;
+  }
   this.currentLayout = layout;
 
   // Reposition and rescale background to cover
@@ -349,26 +353,41 @@ export function positionMobileBars(this: GameScene, layout: GameLayout): void {
     this.mobileControlledSquaresButton,
     this.mobileEventLogButton,
     this.mobileResignButton
-  ].filter(b => b !== undefined);
+  ].filter((button): button is Phaser.GameObjects.Container => !!button);
   
   if (buttons.length > 0) {
     const totalWidth = bottomBounds.width - buttonPadding * 2;
+    const maxButtonWidth = Math.max(
+      1,
+      ...buttons.map((button) => button.width || button.getBounds().width)
+    );
+    const maxButtonHeight = Math.max(
+      1,
+      ...buttons.map((button) => button.height || button.getBounds().height)
+    );
+    const maxScaleForWidth = totalWidth / (buttons.length * maxButtonWidth);
+    const maxScaleForHeight = rowHeight / maxButtonHeight;
+    const finalScale = Math.max(
+      MOBILE_BAR_LAYOUT.MIN_BUTTON_SCALE,
+      Math.min(buttonScale, maxScaleForWidth, maxScaleForHeight)
+    );
     const buttonSpacing = totalWidth / buttons.length;
     const startX = -bottomBounds.width / 2 + buttonPadding + buttonSpacing / 2;
     
     buttons.forEach((button, index) => {
-      if (button) {
-        button.setData('baseScale', buttonScale);
-        button.setScale(buttonScale);
-        button.setPosition(startX + index * buttonSpacing, row2Y);
-      }
+      button.setData('baseScale', finalScale);
+      button.setScale(finalScale);
+      button.setPosition(startX + index * buttonSpacing, row2Y);
     });
   }
 }
 
 function setIconSize(icon: Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle, size: number): void {
   if (icon instanceof Phaser.GameObjects.Image) {
-    icon.setDisplaySize(size, size);
+    const baseWidth = Math.max(1, icon.width);
+    const baseHeight = Math.max(1, icon.height);
+    const scale = size / Math.max(baseWidth, baseHeight);
+    icon.setScale(scale);
   } else {
     icon.setSize(size, size);
   }
@@ -471,14 +490,14 @@ function layoutMobileModeSwitch(
     scene.mobileBottomModeText.setPosition(startX, centerY);
     const textWidth = scene.mobileBottomModeText.width;
     if (scene.mobileBottomModeIcon) {
-      scene.mobileBottomModeIcon.setDisplaySize(iconSize, iconSize);
+      setIconSize(scene.mobileBottomModeIcon, iconSize);
       scene.mobileBottomModeIcon.setPosition(startX + textWidth + iconGap + iconSize / 2, centerY);
       return startX + textWidth + iconGap + iconSize + gap;
     }
     return startX + textWidth + gap;
   }
   if (scene.mobileBottomModeIcon) {
-    scene.mobileBottomModeIcon.setDisplaySize(iconSize, iconSize);
+    setIconSize(scene.mobileBottomModeIcon, iconSize);
     scene.mobileBottomModeIcon.setPosition(startX + iconSize / 2, centerY);
     return startX + iconSize + gap;
   }
@@ -699,14 +718,19 @@ export function positionCardHand(this: GameScene, layout: GameLayout): void {
   
   const section = layout.sections.bottomBar;
   const usableHeight = section.height;
-  this.cardHand.setSectionSize(
-    section.centerX,
-    section.centerY + CARD_HAND_LAYOUT.CENTER_Y_OFFSET,
-    section.width,
-    usableHeight
-  );
+  const centerYOffset = layout.isMobile
+    ? CARD_HAND_LAYOUT.CENTER_Y_OFFSET * layout.panelScale
+    : CARD_HAND_LAYOUT.CENTER_Y_OFFSET;
+  const centerX = section.centerX;
+  const centerY = section.centerY + centerYOffset;
+  this.cardHand.setSectionSize(centerX, centerY, section.width, usableHeight);
   
-  this.cardHand.setScale(1);
+  const containerScale = layout.isMobile ? Math.min(1, layout.handScale * 1.4) : 1;
+  this.cardHand.setScale(containerScale);
+  this.cardHand.getContainer().setPosition(
+    (1 - containerScale) * centerX,
+    (1 - containerScale) * centerY
+  );
   this.cardHand.setHandScale(layout.handScale);
   this.cardHand.setPreviewPosition(layout.previewX, layout.previewY);
   this.cardHand.setPreviewEnabled(true);

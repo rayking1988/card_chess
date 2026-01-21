@@ -935,12 +935,12 @@ export class CardHandComponent {
     const totalWidthNeeded = baseCardWidth + (cardCount - 1) * baseCardWidth * overlapFactor;
     
     // Calculate scale to fit within section width
-    const widthPadding = this.sectionWidth * 0.05;
+    const widthPadding = this.sectionWidth * 0.02;
     const availableWidth = this.sectionWidth - widthPadding * 2;
     const scaleForWidth = availableWidth / totalWidthNeeded;
     
     // Calculate scale to fit within section height (use more padding for smaller cards)
-    const heightPadding = this.sectionHeight * 0.15;
+    const heightPadding = this.sectionHeight * 0.12;
     const availableHeight = this.sectionHeight - heightPadding * 2;
     const scaleForHeight = availableHeight / baseCardHeight;
     
@@ -948,8 +948,8 @@ export class CardHandComponent {
     const constrainedScale = Math.min(scaleForWidth, scaleForHeight);
     
     // Apply a reduction factor to make cards smaller overall
-    const reductionFactor = 0.7;
-    return Math.max(0.8, Math.min(0.5, constrainedScale * this.handScale * reductionFactor));
+    const reductionFactor = 0.85;
+    return Math.max(0.5, Math.min(0.95, constrainedScale * this.handScale * reductionFactor));
   }
 
   /**
@@ -980,8 +980,8 @@ export class CardHandComponent {
     let totalSpread: number;
 
     if (this.sectionWidth > 0) {
-      const maxSpread = Math.max(0, (this.sectionWidth - cardWidth) * 0.8);
-      const spacing = this.sectionWidth / (MAX_HAND_SIZE + 1);
+      const maxSpread = Math.max(0, (this.sectionWidth - cardWidth) * 0.95);
+      const spacing = this.sectionWidth / (cardCount + 1);
       totalSpread = Math.min(spacing * (cardCount - 1), maxSpread);
     } else {
       const spacing = cardWidth * 0.6;
