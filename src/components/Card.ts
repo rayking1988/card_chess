@@ -115,6 +115,21 @@ const FRAME_SCALE = 0.3;
 /** Scale factor for card back (same as frame) */
 const BACK_SCALE = 0.3;
 
+let cachedTimeTextSize: { width: number; height: number } | null = null;
+
+function getTimeTextSize(scene: Phaser.Scene): { width: number; height: number } {
+  if (cachedTimeTextSize) return cachedTimeTextSize;
+  const sample = scene.add.text(0, 0, '888', {
+    fontSize: `${Math.round(80 * FRAME_SCALE)}px`,
+    fontFamily: 'Digital7, "Courier New"',
+    color: '#ffffff',
+    fontStyle: 'normal'
+  });
+  cachedTimeTextSize = { width: sample.width, height: sample.height };
+  sample.destroy();
+  return cachedTimeTextSize;
+}
+
 /* ============================================
  * CARD COMPONENT CLASS
  * ============================================
@@ -429,6 +444,9 @@ export class CardComponent {
           fontStyle: 'normal'
         }
       ).setOrigin(0.5);
+      const timeTextSize = getTimeTextSize(this.scene);
+      this.timeText.setFixedSize(timeTextSize.width, timeTextSize.height);
+      this.timeText.setStyle({ align: 'center' });
       this.container.add(this.timeText);
     }
     

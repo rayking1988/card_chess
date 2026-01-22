@@ -747,12 +747,12 @@ export class GameStateManager {
     };
     
     for (let i = 0; i < count; i++) {
-      if (respectCap && playerState.hand.length >= MAX_HAND_SIZE) break;
       if (playerState.deck.length === 0) {
         applyEmptyDeckPenalty();
         appliedEmptyPenalty = true;
         break;
       }
+      if (respectCap && playerState.hand.length >= MAX_HAND_SIZE) break;
       
       const card = playerState.deck.pop();
       if (card) {

@@ -784,13 +784,19 @@ export const MOBILE_BAR_LAYOUT = {
   ICON_SIZE: 55,
   
   /** Padding factor */
-  PADDING: 12,
+  PADDING: 10,
   
   /** Gap between elements */
-  GAP: 14,
+  GAP: 12,
   
   /** Icon gap factor */
-  ICON_GAP: 6,
+  ICON_GAP: 5,
+
+  /** Scale boost for mobile bar content */
+  SCALE_BOOST: 1.5,
+
+  /** Maximum scale for mobile bar content */
+  MAX_SCALE: 1.1,
   
   /** Button scale factor */
   BUTTON_SCALE: 1,
@@ -858,6 +864,9 @@ export const OPPONENT_HAND_LAYOUT = {
 export const CARD_HAND_LAYOUT = {
   /** Center Y offset */
   CENTER_Y_OFFSET: 50,
+
+  /** Center Y offset for mobile */
+  MOBILE_CENTER_Y_OFFSET: 20,
   
   /** Card count Y offset factor */
   COUNT_Y_OFFSET: 18,
@@ -896,6 +905,12 @@ export const OVERLAY_LAYOUT = {
   
   /** Game end title font size */
   GAME_END_TITLE_FONT_SIZE: 30,
+
+  /** Mobile overlay scale boost */
+  MOBILE_SCALE_BOOST: 1.4,
+
+  /** Minimum overlay scale on mobile */
+  MOBILE_MIN_SCALE: 0.6,
   
   /** Game end button X offset */
   GAME_END_BUTTON_X_OFFSET: 180,
@@ -1037,6 +1052,9 @@ export const EVENT_LOG_LAYOUT = {
   
   /** Entry border radius */
   ENTRY_BORDER_RADIUS: 4,
+
+  /** Max number of log entries to keep */
+  MAX_ENTRIES: 200,
   
   /** Panel border radius */
   PANEL_BORDER_RADIUS: 10,

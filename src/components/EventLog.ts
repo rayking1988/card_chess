@@ -61,6 +61,8 @@ const QUICK_CHAT_OPTION_PADDING = EVENT_LOG_LAYOUT.QUICK_CHAT_OPTION_PADDING;
 
 const ENTRY_FONT_SIZE = EVENT_LOG_LAYOUT.ENTRY_FONT_SIZE;
 
+const MAX_ENTRIES = EVENT_LOG_LAYOUT.MAX_ENTRIES;
+
 /** Background colors for different player entries */
 const ENTRY_BACKGROUNDS = {
   white: hex('#121006'),
@@ -659,6 +661,34 @@ export class EventLogComponent {
     this.scrollDownButton.setAlpha(this.scrollOffset < maxScroll ? 1 : 0.3);
   }
 
+  /**
+   * Trims stored entries to the max allowed and shifts visuals accordingly.
+   */
+  private trimEntriesToMax(): void {
+    const removeCount = this.entries.length - MAX_ENTRIES;
+    if (removeCount <= 0) return;
+
+    const firstY = this.entryYPositions[0] ?? 0;
+    const nextY = this.entryYPositions[removeCount] ?? firstY;
+    const shift = nextY - firstY;
+
+    this.entries.splice(0, removeCount);
+    const removedTexts = this.entryTexts.splice(0, removeCount);
+    const removedBackgrounds = this.entryBackgrounds.splice(0, removeCount);
+    this.entryYPositions.splice(0, removeCount);
+
+    removedTexts.forEach(text => text.destroy());
+    removedBackgrounds.forEach(bg => bg.destroy());
+
+    if (shift !== 0) {
+      this.entryYPositions = this.entryYPositions.map(y => y - shift);
+      this.entryTexts.forEach(text => text.setY(text.y - shift));
+      this.entryBackgrounds.forEach(bg => { bg.y -= shift; });
+    }
+
+    this.scrollOffset = Math.max(0, this.scrollOffset - removeCount);
+  }
+
   /* ============================================
    * PUBLIC ENTRY MANAGEMENT METHODS
    * ============================================
@@ -692,6 +722,7 @@ export class EventLogComponent {
     
     this.entries.push(entry);
     this.createEntryText(entry, this.entries.length - 1);
+    this.trimEntriesToMax();
     
     // Auto-scroll to bottom when new entry is added
     this.scrollToBottom();
@@ -749,7 +780,10 @@ export class EventLogComponent {
    */
   importEntries(entries: LogEntry[]): void {
     this.clear();
-    entries.forEach((entry, index) => {
+    const trimmed = entries.length > MAX_ENTRIES
+      ? entries.slice(entries.length - MAX_ENTRIES)
+      : entries;
+    trimmed.forEach((entry, index) => {
       this.entries.push(entry);
       this.createEntryText(entry, index);
     });

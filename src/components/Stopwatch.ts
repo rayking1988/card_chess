@@ -90,6 +90,14 @@ export class StopwatchComponent {
       color: '#ffffff',
       fontStyle: 'normal'
     }).setOrigin(0.5);
+    const maxStopwatchText = '88';
+    const initialStopwatchText = this.timeText.text;
+    this.timeText.setText(maxStopwatchText);
+    const stopwatchTextWidth = this.timeText.width;
+    const stopwatchTextHeight = this.timeText.height;
+    this.timeText.setText(initialStopwatchText);
+    this.timeText.setFixedSize(stopwatchTextWidth, stopwatchTextHeight);
+    this.timeText.setStyle({ align: 'center' });
     this.container.add(this.timeText);
     
     this.updateDisplay();

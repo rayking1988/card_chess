@@ -11,6 +11,7 @@ import type { Card } from '../../managers/GameStateManager';
 import { drawTargetArrow } from './GameUIHelpers';
 import { hex } from '../../utils/colors';
 import type { GameScene } from '../GameScene';
+import { CARD_LAYOUT } from '../../config';
 
 /**
  * Converts a chess square to pixel coordinates
@@ -83,7 +84,11 @@ export function animateCardPlay(
     }
   }
 
-  const displayScale = 0.9 * layout.panelScale;
+  const baseCardWidth = CARD_LAYOUT.HIT_AREA_WIDTH * CARD_LAYOUT.FRAME_SCALE;
+  const mobileDisplayScale = (this.boardSquareSize * 3) / baseCardWidth;
+  const displayScale = layout.isMobile
+    ? Math.min(1.1, mobileDisplayScale)
+    : 0.9 * layout.panelScale;
   // Always show card face-up (not face-down) during animation
   const animCard = new CardComponent(this, startX, startY, cardData, false, displayScale);
   animCard.setDepth(50);

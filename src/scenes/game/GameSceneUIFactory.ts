@@ -460,6 +460,17 @@ export function createTurnOverlay(this: GameScene, _layout: GameLayout): void {
 export function createMobileBars(this: GameScene, layout: GameLayout): void {
   const topBounds = layout.sections.mobileTopBar;
   const bottomBounds = layout.sections.mobileBottomBar;
+  const bindDiscardViewer = (
+    icon: Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle | undefined,
+    text: Phaser.GameObjects.Text | undefined,
+    side: 'local' | 'opponent'
+  ): void => {
+    const handler = () => this.showDiscardViewer(side);
+    icon?.setInteractive({ useHandCursor: true });
+    icon?.on('pointerdown', handler);
+    text?.setInteractive({ useHandCursor: true });
+    text?.on('pointerdown', handler);
+  };
 
   this.mobileTopBar = this.add.container(topBounds.centerX, topBounds.centerY).setDepth(60);
   this.mobileTopBarBackground = this.add.rectangle(0, 0, topBounds.width, topBounds.height, hex('#9a9a9a'), 0.6);
@@ -535,6 +546,7 @@ export function createMobileBars(this: GameScene, layout: GameLayout): void {
     this.mobileTopHandIcon,
     this.mobileTopHandText
   ]);
+  bindDiscardViewer(this.mobileTopDiscardIcon, this.mobileTopDiscardText, 'opponent');
 
   // Bottom bar uses two rows: row 1 for stats, row 2 for buttons
   this.mobileBottomBar = this.add.container(bottomBounds.centerX, bottomBounds.centerY).setDepth(60);
@@ -611,6 +623,7 @@ export function createMobileBars(this: GameScene, layout: GameLayout): void {
     this.mobileBottomHandIcon,
     this.mobileBottomHandText
   ]);
+  bindDiscardViewer(this.mobileBottomDiscardIcon, this.mobileBottomDiscardText, 'local');
 
   this.mobileBottomModeText = this.add.text(0, 0, 'FOCUS', {
     fontSize: `${UI_FACTORY.MOBILE_STAT_FONT_SIZE * layout.panelScale}px`,

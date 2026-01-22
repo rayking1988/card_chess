@@ -166,6 +166,12 @@ export class CardHandComponent {
   
   /** Scale factor for cards in hand */
   private handScale: number = 1;
+
+  /** Multiplier for fan spread width */
+  private fanSpreadFactor: number = 1;
+
+  /** Arc height factor for fan layout */
+  private fanArcHeightFactor: number = 0.2;
   
   /** Targeting component for drag/arrow mechanics */
   private targeting: CardTargetingComponent | null = null;
@@ -980,8 +986,9 @@ export class CardHandComponent {
     let totalSpread: number;
 
     if (this.sectionWidth > 0) {
-      const maxSpread = Math.max(0, (this.sectionWidth - cardWidth) * 0.95);
-      const spacing = this.sectionWidth / (cardCount + 1);
+      const spreadWidth = this.sectionWidth * this.fanSpreadFactor;
+      const maxSpread = Math.max(0, (spreadWidth - cardWidth) * 0.95);
+      const spacing = spreadWidth / (cardCount + 1);
       totalSpread = Math.min(spacing * (cardCount - 1), maxSpread);
     } else {
       const spacing = cardWidth * 0.6;
@@ -1002,7 +1009,7 @@ export class CardHandComponent {
       const radians = (angle * Math.PI) / 180;
       
       const x = startX + i * spacing;
-      const arcHeight = this.sectionHeight > 0 ? this.sectionHeight * 0.2 : 20;
+      const arcHeight = this.sectionHeight > 0 ? this.sectionHeight * this.fanArcHeightFactor : 20;
       const y = this.centerY + Math.abs(angle / MAX_FAN_ANGLE) * arcHeight;
       
       positions.push({
@@ -1223,9 +1230,11 @@ export class CardHandComponent {
     }
     
     // Start targeting mode with pointer position for offset calculation
-    const pos = card.getPosition();
     if (this.targeting) {
-      this.targeting.startTargeting(cardData, card, pos.x, pos.y, pointer.x, pointer.y);
+      const matrix = card.getContainer().getWorldTransformMatrix();
+      const point = new Phaser.Math.Vector2();
+      matrix.transformPoint(0, 0, point);
+      this.targeting.startTargeting(cardData, card, point.x, point.y, pointer.x, pointer.y);
     }
     
     if (this.onCardDragStart) {
@@ -1494,6 +1503,23 @@ export class CardHandComponent {
    */
   setHandScale(scale: number): void {
     this.handScale = scale;
+    this.rebuildHand();
+  }
+
+  /**
+   * Sets fan layout tuning for spread width and arc depth.
+   *
+   * @param spreadFactor - Multiplier for total fan width
+   * @param arcHeightFactor - Height factor for the fan arc
+   */
+  setFanLayout(spreadFactor: number, arcHeightFactor: number): void {
+    const nextSpread = Math.max(0.5, spreadFactor);
+    const nextArc = Math.max(0, arcHeightFactor);
+    if (nextSpread === this.fanSpreadFactor && nextArc === this.fanArcHeightFactor) {
+      return;
+    }
+    this.fanSpreadFactor = nextSpread;
+    this.fanArcHeightFactor = nextArc;
     this.rebuildHand();
   }
 

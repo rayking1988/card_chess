@@ -111,7 +111,9 @@ export function clearInteractionBlockers(this: GameScene): void {
 export function showMulliganUI(this: GameScene): void {
   const { width, height } = this.scale;
   const layout = this.currentLayout ?? calculateLayout(width, height);
-  const scale = layout.panelScale;
+  const overlayScale = layout.isMobile
+    ? Math.max(layout.panelScale * OVERLAY_LAYOUT.MOBILE_SCALE_BOOST, OVERLAY_LAYOUT.MOBILE_MIN_SCALE)
+    : layout.panelScale;
   this.cardHand.setExtraPlayZone({
     x: layout.sections.leftPanel.x,
     y: layout.sections.leftPanel.y,
@@ -141,15 +143,15 @@ export function showMulliganUI(this: GameScene): void {
 
   if (!this.mulliganTitleText) {
     this.mulliganTitleText = this.add.text(overlayX, overlayY - overlayHeight * OVERLAY_LAYOUT.TITLE_Y_OFFSET_FACTOR, `RE-DRAW HAND WITH COST OF ${MULLIGAN_TIME_BASE_COST} SECONDS?`, {
-      fontSize: `${OVERLAY_LAYOUT.MULLIGAN_TITLE_FONT_SIZE * scale}px`,
+      fontSize: `${OVERLAY_LAYOUT.MULLIGAN_TITLE_FONT_SIZE * overlayScale}px`,
       fontFamily: 'BoldPixels, Arial',
       color: '#ffffff'
     }).setOrigin(0.5).setDepth(121);
   }
 
-  const buttonScale = scale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR;
+  const buttonScale = overlayScale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR;
   const buttonY = buttonLayout.overlayY + buttonLayout.overlayHeight * OVERLAY_LAYOUT.BUTTON_Y_OFFSET_FACTOR;
-  const buttonOffset = Math.min(OVERLAY_LAYOUT.BUTTON_X_OFFSET * scale, buttonLayout.overlayWidth * 0.25);
+  const buttonOffset = Math.min(OVERLAY_LAYOUT.BUTTON_X_OFFSET * overlayScale, buttonLayout.overlayWidth * 0.25);
 
   if (!this.mulliganButton) {
     this.mulliganButton = createImageButton(

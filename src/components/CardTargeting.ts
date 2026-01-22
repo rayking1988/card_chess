@@ -349,6 +349,16 @@ export class CardTargetingComponent {
     }
   }
 
+  private getLocalPointerPosition(x: number, y: number): { x: number; y: number } {
+    const container = this.activeCardComponent?.getContainer();
+    const parent = container?.parentContainer;
+    if (!parent) return { x, y };
+    const matrix = parent.getWorldTransformMatrix();
+    const point = new Phaser.Math.Vector2();
+    matrix.applyInverse(x, y, point);
+    return { x: point.x, y: point.y };
+  }
+
   /* ============================================
    * TARGETING LIFECYCLE METHODS
    * ============================================
@@ -385,12 +395,16 @@ export class CardTargetingComponent {
     this.activeCardComponent = cardComponent;
     this.startX = startX;
     this.startY = startY;
-    this.currentX = pointerX ?? startX;
-    this.currentY = pointerY ?? startY;
+    const pointerWorldX = pointerX ?? startX;
+    const pointerWorldY = pointerY ?? startY;
+    this.currentX = pointerWorldX;
+    this.currentY = pointerWorldY;
     
     // Calculate offset from pointer to card center to prevent jump on drag
-    this.dragOffsetX = startX - this.currentX;
-    this.dragOffsetY = startY - this.currentY;
+    const localPointer = this.getLocalPointerPosition(pointerWorldX, pointerWorldY);
+    const localCardPos = cardComponent.getPosition();
+    this.dragOffsetX = localCardPos.x - localPointer.x;
+    this.dragOffsetY = localCardPos.y - localPointer.y;
     
     this.lastUpdateX = null;
     this.lastUpdateY = null;
@@ -450,7 +464,8 @@ export class CardTargetingComponent {
       
       // For drag mode, always update card position to keep it responsive
       if (this.isDragging && this.activeCardComponent) {
-        this.activeCardComponent.setPosition(x + this.dragOffsetX, y + this.dragOffsetY);
+        const localPointer = this.getLocalPointerPosition(x, y);
+        this.activeCardComponent.setPosition(localPointer.x + this.dragOffsetX, localPointer.y + this.dragOffsetY);
       }
       return;
     }
@@ -466,7 +481,8 @@ export class CardTargetingComponent {
       this.drawTargetingArrow();
     } else if (this.isDragging && this.activeCardComponent) {
       // Drag-to-play - move card with cursor, applying offset to prevent jump
-      this.activeCardComponent.setPosition(x + this.dragOffsetX, y + this.dragOffsetY);
+      const localPointer = this.getLocalPointerPosition(x, y);
+      this.activeCardComponent.setPosition(localPointer.x + this.dragOffsetX, localPointer.y + this.dragOffsetY);
       
       // Update play zone highlight based on position
       this.updatePlayZoneHighlight(x, y);

@@ -168,6 +168,9 @@ export class ChessBoardComponent {
   
   /** Whether piece dragging is enabled */
   private dragEnabled: boolean;
+
+  /** Whether click-to-move selection is enabled */
+  private clickMoveEnabled: boolean;
   
   /** Squares that are blocked from being selected/moved (e.g., deployed pieces this turn) */
   private blockedSquares: Set<string>;
@@ -224,6 +227,7 @@ export class ChessBoardComponent {
     this.draggedPiece = null;
     this.draggedFromSquare = null;
     this.dragEnabled = true;
+    this.clickMoveEnabled = false;
     this.pieceSprites = new Map();
     this.blockedSquares = new Set();
     
@@ -343,12 +347,28 @@ export class ChessBoardComponent {
   }
 
   /**
+   * Enables or disables click-to-move selection.
+   *
+   * @param enabled - Whether click-based moves are allowed
+   */
+  setClickMoveEnabled(enabled: boolean): void {
+    this.clickMoveEnabled = enabled;
+  }
+
+  /**
    * Checks if piece dragging is enabled
    * 
    * @returns True if drag-and-drop is enabled
    */
   isDragEnabled(): boolean {
     return this.dragEnabled;
+  }
+
+  /**
+   * Checks if click-to-move selection is enabled.
+   */
+  isClickMoveEnabled(): boolean {
+    return this.clickMoveEnabled;
   }
 
   /**
@@ -870,6 +890,8 @@ export class ChessBoardComponent {
    * @private
    */
   private handleSquareClick(square: Square): void {
+    if (!this.clickMoveEnabled) return;
+
     // Ignore clicks while dragging
     if (this.draggedPiece) return;
     

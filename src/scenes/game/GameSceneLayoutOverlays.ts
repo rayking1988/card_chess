@@ -10,6 +10,13 @@ import { buildDiscardViewerCards, layoutDiscardViewer } from './GameSceneDiscard
 import { getBoardOverlayMetrics, getPreviewOverlayMetrics } from './GameSceneOverlays';
 import { OVERLAY_LAYOUT, TURN_OVERLAY } from '../../config';
 
+function getOverlayScale(layout: GameLayout): number {
+  if (!layout.isMobile) {
+    return layout.panelScale;
+  }
+  return Math.max(layout.panelScale * OVERLAY_LAYOUT.MOBILE_SCALE_BOOST, OVERLAY_LAYOUT.MOBILE_MIN_SCALE);
+}
+
 /**
  * Updates turn banner position
  *
@@ -47,6 +54,7 @@ export function positionOverlays(this: GameScene, layout: GameLayout): void {
   const { width, height } = layout;
   const boardOverlay = getBoardOverlayMetrics(this, layout);
   const previewOverlay = getPreviewOverlayMetrics(this, layout);
+  const overlayScale = getOverlayScale(layout);
 
   if (this.mulliganBannerRect) {
     this.mulliganBannerRect.setPosition(boardOverlay.overlayX, boardOverlay.overlayY);
@@ -57,19 +65,19 @@ export function positionOverlays(this: GameScene, layout: GameLayout): void {
       boardOverlay.overlayX,
       boardOverlay.overlayY - boardOverlay.overlayHeight * OVERLAY_LAYOUT.TITLE_Y_OFFSET_FACTOR
     );
-    this.mulliganTitleText.setFontSize(OVERLAY_LAYOUT.MULLIGAN_TITLE_FONT_SIZE * layout.panelScale);
+    this.mulliganTitleText.setFontSize(OVERLAY_LAYOUT.MULLIGAN_TITLE_FONT_SIZE * overlayScale);
   }
-  const mulliganButtonOffset = Math.min(OVERLAY_LAYOUT.BUTTON_X_OFFSET * layout.panelScale, previewOverlay.overlayWidth * 0.25);
+  const mulliganButtonOffset = Math.min(OVERLAY_LAYOUT.BUTTON_X_OFFSET * overlayScale, previewOverlay.overlayWidth * 0.25);
   const mulliganButtonY = previewOverlay.overlayY + previewOverlay.overlayHeight * OVERLAY_LAYOUT.BUTTON_Y_OFFSET_FACTOR;
   if (this.mulliganButton) {
     this.mulliganButton.setPosition(previewOverlay.overlayX - mulliganButtonOffset, mulliganButtonY);
-    this.mulliganButton.setData('baseScale', layout.panelScale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR);
-    this.mulliganButton.setScale(layout.panelScale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR);
+    this.mulliganButton.setData('baseScale', overlayScale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR);
+    this.mulliganButton.setScale(overlayScale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR);
   }
   if (this.readyButton) {
     this.readyButton.setPosition(previewOverlay.overlayX + mulliganButtonOffset, mulliganButtonY);
-    this.readyButton.setData('baseScale', layout.panelScale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR);
-    this.readyButton.setScale(layout.panelScale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR);
+    this.readyButton.setData('baseScale', overlayScale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR);
+    this.readyButton.setScale(overlayScale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR);
   }
 
   if (this.gameEndBannerRect) {
@@ -81,30 +89,30 @@ export function positionOverlays(this: GameScene, layout: GameLayout): void {
       boardOverlay.overlayX,
       boardOverlay.overlayY - boardOverlay.overlayHeight * OVERLAY_LAYOUT.TITLE_Y_OFFSET_FACTOR
     );
-    this.gameEndBannerText.setFontSize(OVERLAY_LAYOUT.GAME_END_TITLE_FONT_SIZE * layout.panelScale);
+    this.gameEndBannerText.setFontSize(OVERLAY_LAYOUT.GAME_END_TITLE_FONT_SIZE * overlayScale);
   }
   const isViewingBoard = this.isViewingBoard === true;
   const gameEndButtonArea = isViewingBoard ? previewOverlay : boardOverlay;
   const gameEndButtonOffset = Math.min(
-    OVERLAY_LAYOUT.GAME_END_BUTTON_X_OFFSET * layout.panelScale,
+    OVERLAY_LAYOUT.GAME_END_BUTTON_X_OFFSET * overlayScale,
     gameEndButtonArea.overlayWidth * 0.3
   );
   const gameEndButtonY = gameEndButtonArea.overlayY + gameEndButtonArea.overlayHeight * OVERLAY_LAYOUT.BUTTON_Y_OFFSET_FACTOR;
   if (this.gameEndRematchButton) {
     this.gameEndRematchButton.setPosition(gameEndButtonArea.overlayX - gameEndButtonOffset, gameEndButtonY);
-    this.gameEndRematchButton.setData('baseScale', layout.panelScale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR);
-    this.gameEndRematchButton.setScale(layout.panelScale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR);
+    this.gameEndRematchButton.setData('baseScale', overlayScale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR);
+    this.gameEndRematchButton.setScale(overlayScale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR);
   }
   if (this.gameEndMenuButton) {
     this.gameEndMenuButton.setPosition(gameEndButtonArea.overlayX + gameEndButtonOffset, gameEndButtonY);
-    this.gameEndMenuButton.setData('baseScale', layout.panelScale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR);
-    this.gameEndMenuButton.setScale(layout.panelScale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR);
+    this.gameEndMenuButton.setData('baseScale', overlayScale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR);
+    this.gameEndMenuButton.setScale(overlayScale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR);
   }
   if (this.gameEndViewBoardButton) {
     const viewBoardY = boardOverlay.overlayY + boardOverlay.overlayHeight * 0.35;
     this.gameEndViewBoardButton.setPosition(boardOverlay.overlayX, viewBoardY);
-    this.gameEndViewBoardButton.setData('baseScale', layout.panelScale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR);
-    this.gameEndViewBoardButton.setScale(layout.panelScale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR);
+    this.gameEndViewBoardButton.setData('baseScale', overlayScale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR);
+    this.gameEndViewBoardButton.setScale(overlayScale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR);
     this.gameEndViewBoardButton.setVisible(!isViewingBoard);
   }
 
@@ -115,7 +123,7 @@ export function positionOverlays(this: GameScene, layout: GameLayout): void {
   }
   if (this.discardPromptText) {
     this.discardPromptText.setPosition(width / 2, height / 2 - OVERLAY_LAYOUT.DISCARD_PROMPT_Y_OFFSET * layout.panelScale);
-    this.discardPromptText.setFontSize(OVERLAY_LAYOUT.DISCARD_PROMPT_FONT_SIZE * layout.panelScale);
+    this.discardPromptText.setFontSize(OVERLAY_LAYOUT.DISCARD_PROMPT_FONT_SIZE * overlayScale);
   }
 
   if (this.connectionOverlay && this.connectionOverlayBackground) {
@@ -126,12 +134,12 @@ export function positionOverlays(this: GameScene, layout: GameLayout): void {
   }
   if (this.connectionOverlayText) {
     this.connectionOverlayText.setPosition(width / 2, height / 2 - OVERLAY_LAYOUT.CONNECTION_TEXT_Y_OFFSET * layout.panelScale);
-    this.connectionOverlayText.setFontSize(24 * layout.panelScale);
+    this.connectionOverlayText.setFontSize(24 * overlayScale);
   }
   if (this.connectionOverlayButton) {
     this.connectionOverlayButton.setPosition(width / 2, height / 2 + OVERLAY_LAYOUT.CONNECTION_BUTTON_Y_OFFSET * layout.panelScale);
-    this.connectionOverlayButton.setData('baseScale', layout.panelScale);
-    this.connectionOverlayButton.setScale(layout.panelScale);
+    this.connectionOverlayButton.setData('baseScale', overlayScale);
+    this.connectionOverlayButton.setScale(overlayScale);
   }
 
   if (this.discardViewer) {

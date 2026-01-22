@@ -170,22 +170,28 @@ export function checkCardPlayEndConditions(this: GameScene): void {
  * @param reason - Text description of how game ended
  */
 export function handleGameEnd(this: GameScene, winner: PlayerColor | null, reason: string): void {
-  if (this.gameStateManager.getPhase() === 'ended') return;
+  const alreadyEnded = this.gameStateManager.getPhase() === 'ended';
+  if (alreadyEnded && this.gameEndBannerRect) return;
 
-  this.gameStateManager.endGame();
-  if (this.networkManager?.getIsHost() && !this.hasReportedGameFinish) {
-    this.hasReportedGameFinish = true;
-    this.networkManager.reportGameFinished();
-  }
+  if (!alreadyEnded) {
+    this.gameStateManager.endGame();
+    if (this.networkManager?.getIsHost() && !this.hasReportedGameFinish) {
+      this.hasReportedGameFinish = true;
+      this.networkManager.reportGameFinished();
+    }
 
-  this.logEvent('system', reason);
+    this.logEvent('system', reason);
 
-  if (winner) {
-    const isLocalWin = winner === this.localColor;
-    this.logEvent('system', isLocalWin ? 'You win!' : 'You lose!');
+    if (winner) {
+      const isLocalWin = winner === this.localColor;
+      this.logEvent('system', isLocalWin ? 'You win!' : 'You lose!');
+    }
   }
 
   const layout = this.currentLayout ?? calculateLayout(this.scale.width, this.scale.height);
+  const overlayScale = layout.isMobile
+    ? Math.max(layout.panelScale * OVERLAY_LAYOUT.MOBILE_SCALE_BOOST, OVERLAY_LAYOUT.MOBILE_MIN_SCALE)
+    : layout.panelScale;
   if (!layout.isMobile) {
     this.isMobileEventLogVisible = true;
   }
@@ -213,13 +219,13 @@ export function handleGameEnd(this: GameScene, winner: PlayerColor | null, reaso
 
   if (!this.gameEndBannerText) {
     this.gameEndBannerText = this.add.text(overlayX, overlayY - overlayHeight * OVERLAY_LAYOUT.TITLE_Y_OFFSET_FACTOR, bannerText, {
-      fontSize: `${OVERLAY_LAYOUT.GAME_END_TITLE_FONT_SIZE * layout.panelScale}px`,
+      fontSize: `${OVERLAY_LAYOUT.GAME_END_TITLE_FONT_SIZE * overlayScale}px`,
       fontFamily: 'BoldPixels, Arial',
       color: '#ffffff'
     }).setOrigin(0.5).setDepth(141);
   } else {
     this.gameEndBannerText.setPosition(overlayX, overlayY - overlayHeight * OVERLAY_LAYOUT.TITLE_Y_OFFSET_FACTOR);
-    this.gameEndBannerText.setFontSize(OVERLAY_LAYOUT.GAME_END_TITLE_FONT_SIZE * layout.panelScale);
+    this.gameEndBannerText.setFontSize(OVERLAY_LAYOUT.GAME_END_TITLE_FONT_SIZE * overlayScale);
     this.gameEndBannerText.setText(bannerText);
   }
 
@@ -227,9 +233,9 @@ export function handleGameEnd(this: GameScene, winner: PlayerColor | null, reaso
   this.opponentRematchRequested = false;
   this.isViewingBoard = false;
 
-  const buttonScale = layout.panelScale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR;
+  const buttonScale = overlayScale * OVERLAY_LAYOUT.BUTTON_SCALE_FACTOR;
   const buttonY = buttonLayout.overlayY + buttonLayout.overlayHeight * OVERLAY_LAYOUT.BUTTON_Y_OFFSET_FACTOR;
-  const buttonOffset = Math.min(OVERLAY_LAYOUT.GAME_END_BUTTON_X_OFFSET * layout.panelScale, buttonLayout.overlayWidth * 0.3) * 3 / 2;
+  const buttonOffset = Math.min(OVERLAY_LAYOUT.GAME_END_BUTTON_X_OFFSET * overlayScale, buttonLayout.overlayWidth * 0.3) * 3 / 2;
   const viewBoardY = overlayY + overlayHeight * 0.35;
 
   if (!this.gameEndViewBoardButton) {

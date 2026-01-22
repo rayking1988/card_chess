@@ -46,8 +46,8 @@ export function calculateLayout(width: number, height: number): GameLayout {
   const mobileBarHeight = isMobile
     ? Math.max(MOBILE_BAR.MIN_HEIGHT, Math.min(MOBILE_BAR.MAX_HEIGHT, height * MOBILE_BAR.HEIGHT_FACTOR))
     : 0;
-  // Bottom bar needs double height for two rows in mobile
-  const mobileBottomBarHeight = isMobile ? mobileBarHeight * 2 : 0;
+  // Bottom bar needs triple height for three rows in mobile
+  const mobileBottomBarHeight = isMobile ? mobileBarHeight * 3 : 0;
 
   // Calculate horizontal section widths from percentages
   const leftPanelW = isMobile ? 0 : width * (SECTION.LEFT_PANEL_WIDTH / 100);

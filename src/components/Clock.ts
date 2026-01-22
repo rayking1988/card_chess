@@ -154,6 +154,14 @@ export class ClockComponent {
       color: TIME_COLORS.normal,
       fontStyle: 'normal'
     }).setOrigin(0.5);
+    const maxClockText = '88:88';
+    const initialClockText = this.timeText.text;
+    this.timeText.setText(maxClockText);
+    const clockTextWidth = this.timeText.width;
+    const clockTextHeight = this.timeText.height;
+    this.timeText.setText(initialClockText);
+    this.timeText.setFixedSize(clockTextWidth, clockTextHeight);
+    this.timeText.setStyle({ align: 'center' });
     this.container.add(this.timeText);
     
     // Add optional label text above the clock

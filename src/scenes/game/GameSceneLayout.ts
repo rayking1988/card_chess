@@ -41,6 +41,7 @@ export function handleResize(this: GameScene): void {
     this.isMobileEventLogVisible = false;
   }
   this.currentLayout = layout;
+  this.cameras.main.roundPixels = layout.isMobile;
 
   // Reposition and rescale background to cover
   scaleBackgroundToCover.call(this);
@@ -299,7 +300,7 @@ export function positionMobileBars(this: GameScene, layout: GameLayout): void {
 
   const topBounds = layout.sections.mobileTopBar;
   const bottomBounds = layout.sections.mobileBottomBar;
-  const scale = layout.panelScale;
+  const scale = Math.min(layout.panelScale * MOBILE_BAR_LAYOUT.SCALE_BOOST, MOBILE_BAR_LAYOUT.MAX_SCALE);
   const iconSize = MOBILE_BAR_LAYOUT.ICON_SIZE * scale;
   const padding = MOBILE_BAR_LAYOUT.PADDING * scale;
   const gap = MOBILE_BAR_LAYOUT.GAP * scale;
@@ -321,29 +322,29 @@ export function positionMobileBars(this: GameScene, layout: GameLayout): void {
   let topX = -topBounds.width / 2 + padding;
   const topY = 0;
   if (this.mobileTopNameText) {
-    this.mobileTopNameText.setFontSize(MOBILE_BAR_LAYOUT.ICON_SIZE * scale * 0.75);
+    this.mobileTopNameText.setFontSize(MOBILE_BAR_LAYOUT.ICON_SIZE * scale * 0.8);
     this.mobileTopNameText.setPosition(topX, topY);
     topX += this.mobileTopNameText.width + gap;
   }
   topX = layoutMobileCountRow(this, topX, topY, iconSize, gap, 'top');
   topX = layoutMobileStatRow(this, topX, topY, iconSize, gap, 'top');
 
-  // Bottom bar: two-row layout
-  // Row 1: Stats (name, clock, stopwatch, energy, disturb, deck, discard)
-  const rowHeight = bottomBounds.height / 2;
-  const row1Y = -rowHeight / 2;
-  let bottomX = -bottomBounds.width / 2 + padding;
-  if (this.mobileBottomNameText) {
-    this.mobileBottomNameText.setFontSize(MOBILE_BAR_LAYOUT.ICON_SIZE * scale * 0.75);
-    this.mobileBottomNameText.setPosition(bottomX, row1Y);
-    bottomX += this.mobileBottomNameText.width + gap;
-  }
-  bottomX = layoutMobileCountRow(this, bottomX, row1Y, iconSize, gap, 'bottom');
-  bottomX = layoutMobileStatRow(this, bottomX, row1Y, iconSize, gap, 'bottom');
-  layoutMobileModeSwitch(this, bottomX, row1Y, modeIconSize, gap);
+  // Bottom bar: three-row layout
+  // Row 1: Deck / Discard / Hand / Clock / Stopwatch
+  const rowHeight = bottomBounds.height / 3;
+  const row1Y = -rowHeight;
+  let row1X = -bottomBounds.width / 2 + padding;
+  row1X = layoutMobileCountRow(this, row1X, row1Y, iconSize, gap, 'bottom');
+  row1X = layoutMobileTimeRow(this, row1X, row1Y, iconSize, gap, 'bottom');
 
-  // Row 2: Buttons (Offer Draw, Ctrl Squares, Event Log, Resign)
-  const row2Y = rowHeight / 2;
+  // Row 2: Energy / Disturb / Mode switch
+  const row2Y = 0;
+  let row2X = -bottomBounds.width / 2 + padding;
+  row2X = layoutMobileEnergyRow(this, row2X, row2Y, iconSize, gap, 'bottom');
+  layoutMobileModeSwitch(this, row2X, row2Y, modeIconSize, gap);
+
+  // Row 3: Buttons (Offer Draw, Ctrl Squares, Event Log, Resign)
+  const row3Y = rowHeight;
   const buttonScale = Math.max(MOBILE_BAR_LAYOUT.MIN_BUTTON_SCALE, scale * MOBILE_BAR_LAYOUT.BUTTON_SCALE);
   const buttonPadding = MOBILE_BAR_LAYOUT.BUTTON_PADDING * scale;
   
@@ -377,7 +378,7 @@ export function positionMobileBars(this: GameScene, layout: GameLayout): void {
     buttons.forEach((button, index) => {
       button.setData('baseScale', finalScale);
       button.setScale(finalScale);
-      button.setPosition(startX + index * buttonSpacing, row2Y);
+      button.setPosition(startX + index * buttonSpacing, row3Y);
     });
   }
 }
@@ -401,7 +402,8 @@ function layoutMobileStatRow(
   gap: number,
   side: 'top' | 'bottom'
 ): number {
-  const iconGap = MOBILE_BAR_LAYOUT.ICON_GAP * (scene.currentLayout?.panelScale ?? 1);
+  const scale = iconSize / MOBILE_BAR_LAYOUT.ICON_SIZE;
+  const iconGap = MOBILE_BAR_LAYOUT.ICON_GAP * scale;
   const clockIcon = side === 'top' ? scene.mobileTopClockIcon : scene.mobileBottomClockIcon;
   const clockText = side === 'top' ? scene.mobileTopClockText : scene.mobileBottomClockText;
   const stopwatchIcon = side === 'top' ? scene.mobileTopStopwatchIcon : scene.mobileBottomStopwatchIcon;
@@ -418,7 +420,7 @@ function layoutMobileStatRow(
       icon.setPosition(x + iconSize / 2, centerY);
     }
     if (text) {
-      text.setFontSize(MOBILE_BAR_LAYOUT.ICON_SIZE * 0.75 * (scene.currentLayout?.panelScale ?? 1));
+      text.setFontSize(iconSize * 0.8);
       const textX = x + iconSize + iconGap;
       text.setPosition(textX, centerY);
       x = textX + text.width + gap;
@@ -435,6 +437,80 @@ function layoutMobileStatRow(
   return x;
 }
 
+function layoutMobileTimeRow(
+  scene: GameScene,
+  startX: number,
+  centerY: number,
+  iconSize: number,
+  gap: number,
+  side: 'top' | 'bottom'
+): number {
+  const scale = iconSize / MOBILE_BAR_LAYOUT.ICON_SIZE;
+  const iconGap = MOBILE_BAR_LAYOUT.ICON_GAP * scale;
+  const clockIcon = side === 'top' ? scene.mobileTopClockIcon : scene.mobileBottomClockIcon;
+  const clockText = side === 'top' ? scene.mobileTopClockText : scene.mobileBottomClockText;
+  const stopwatchIcon = side === 'top' ? scene.mobileTopStopwatchIcon : scene.mobileBottomStopwatchIcon;
+  const stopwatchText = side === 'top' ? scene.mobileTopStopwatchText : scene.mobileBottomStopwatchText;
+
+  let x = startX;
+  const place = (icon?: Phaser.GameObjects.Image | null, text?: Phaser.GameObjects.Text | null): void => {
+    if (icon) {
+      setIconSize(icon, iconSize);
+      icon.setPosition(x + iconSize / 2, centerY);
+    }
+    if (text) {
+      text.setFontSize(iconSize * 0.8);
+      const textX = x + iconSize + iconGap;
+      text.setPosition(textX, centerY);
+      x = textX + text.width + gap;
+    } else {
+      x += iconSize + gap;
+    }
+  };
+
+  place(clockIcon, clockText);
+  place(stopwatchIcon, stopwatchText);
+
+  return x;
+}
+
+function layoutMobileEnergyRow(
+  scene: GameScene,
+  startX: number,
+  centerY: number,
+  iconSize: number,
+  gap: number,
+  side: 'top' | 'bottom'
+): number {
+  const scale = iconSize / MOBILE_BAR_LAYOUT.ICON_SIZE;
+  const iconGap = MOBILE_BAR_LAYOUT.ICON_GAP * scale;
+  const energyIcon = side === 'top' ? scene.mobileTopEnergyIcon : scene.mobileBottomEnergyIcon;
+  const energyText = side === 'top' ? scene.mobileTopEnergyText : scene.mobileBottomEnergyText;
+  const disturbIcon = side === 'top' ? scene.mobileTopDisturbIcon : scene.mobileBottomDisturbIcon;
+  const disturbText = side === 'top' ? scene.mobileTopDisturbText : scene.mobileBottomDisturbText;
+
+  let x = startX;
+  const place = (icon?: Phaser.GameObjects.Image | null, text?: Phaser.GameObjects.Text | null): void => {
+    if (icon) {
+      setIconSize(icon, iconSize);
+      icon.setPosition(x + iconSize / 2, centerY);
+    }
+    if (text) {
+      text.setFontSize(iconSize * 0.8);
+      const textX = x + iconSize + iconGap;
+      text.setPosition(textX, centerY);
+      x = textX + text.width + gap;
+    } else {
+      x += iconSize + gap;
+    }
+  };
+
+  place(energyIcon, energyText);
+  place(disturbIcon, disturbText);
+
+  return x;
+}
+
 function layoutMobileCountRow(
   scene: GameScene,
   startX: number,
@@ -443,7 +519,8 @@ function layoutMobileCountRow(
   gap: number,
   side: 'top' | 'bottom'
 ): number {
-  const iconGap = MOBILE_BAR_LAYOUT.ICON_GAP * (scene.currentLayout?.panelScale ?? 1);
+  const scale = iconSize / MOBILE_BAR_LAYOUT.ICON_SIZE;
+  const iconGap = MOBILE_BAR_LAYOUT.ICON_GAP * scale;
   const deckIcon = side === 'top' ? scene.mobileTopDeckIcon : scene.mobileBottomDeckIcon;
   const deckText = side === 'top' ? scene.mobileTopDeckText : scene.mobileBottomDeckText;
   const discardIcon = side === 'top' ? scene.mobileTopDiscardIcon : scene.mobileBottomDiscardIcon;
@@ -461,7 +538,7 @@ function layoutMobileCountRow(
       icon.setPosition(x + iconSize / 2, centerY);
     }
     if (text) {
-      text.setFontSize(MOBILE_BAR_LAYOUT.ICON_SIZE * 0.65 * (scene.currentLayout?.panelScale ?? 1));
+      text.setFontSize(iconSize * 0.7);
       const textX = x + iconSize + iconGap;
       text.setPosition(textX, centerY);
       x = textX + text.width + gap;
@@ -484,9 +561,11 @@ function layoutMobileModeSwitch(
   iconSize: number,
   gap: number
 ): number {
-  const iconGap = MOBILE_BAR_LAYOUT.ICON_GAP * (scene.currentLayout?.panelScale ?? 1);
+  const baseIconSize = iconSize / MOBILE_BAR_LAYOUT.MODE_ICON_SCALE;
+  const scale = baseIconSize / MOBILE_BAR_LAYOUT.ICON_SIZE;
+  const iconGap = MOBILE_BAR_LAYOUT.ICON_GAP * scale;
   if (scene.mobileBottomModeText) {
-    scene.mobileBottomModeText.setFontSize(MOBILE_BAR_LAYOUT.ICON_SIZE * 0.6 * (scene.currentLayout?.panelScale ?? 1));
+    scene.mobileBottomModeText.setFontSize(baseIconSize * 0.7);
     scene.mobileBottomModeText.setPosition(startX, centerY);
     const textWidth = scene.mobileBottomModeText.width;
     if (scene.mobileBottomModeIcon) {
@@ -714,10 +793,14 @@ export function positionCardHand(this: GameScene, layout: GameLayout): void {
   
   const section = layout.sections.bottomBar;
   const usableHeight = section.height;
-  const centerYOffset = layout.isMobile ? 0 : CARD_HAND_LAYOUT.CENTER_Y_OFFSET;
+  const centerYOffset = layout.isMobile ? CARD_HAND_LAYOUT.MOBILE_CENTER_Y_OFFSET : CARD_HAND_LAYOUT.CENTER_Y_OFFSET;
   const centerX = section.centerX;
   const centerY = section.centerY + centerYOffset;
   this.cardHand.setSectionSize(centerX, centerY, section.width, usableHeight);
+
+  const fanSpreadFactor = layout.isMobile ? 1.2 : 1;
+  const fanArcHeightFactor = layout.isMobile ? 0.26 : 0.2;
+  this.cardHand.setFanLayout(fanSpreadFactor, fanArcHeightFactor);
   
   const handScale = layout.isMobile ? Math.max(0.35, layout.handScale * 0.85) : layout.handScale;
   const containerScale = layout.isMobile ? Math.min(1, handScale * 1.2) : 1;
