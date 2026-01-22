@@ -40,6 +40,8 @@
       user-select: none;
       /* Prevent touch callout */
       -webkit-touch-callout: none;
+      /* Prevent tap highlight overlay */
+      -webkit-tap-highlight-color: transparent;
     }
     #game-container {
       width: 100%;
@@ -49,12 +51,15 @@
       align-items: center;
       /* Safe area insets for notched devices */
       padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+      touch-action: none;
+      -webkit-tap-highlight-color: transparent;
     }
     /* Ensure canvas fills container properly */
     #game-container canvas {
-      max-width: 100%;
-      max-height: 100%;
+      width: 100%;
+      height: 100%;
       touch-action: none;
+      -webkit-tap-highlight-color: transparent;
     }
     /* Hidden element to preload fonts */
     .font-preload {

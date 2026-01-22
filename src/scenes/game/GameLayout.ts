@@ -57,7 +57,7 @@ export function calculateLayout(width: number, height: number): GameLayout {
   
   // Calculate vertical section heights for board column
   const topBarH = height * (SECTION.TOP_BAR_HEIGHT / 100);
-  const middleH = height * (SECTION.MIDDLE_HEIGHT / 100);
+  let middleH = height * (SECTION.MIDDLE_HEIGHT / 100);
   const bottomBarH = height * (SECTION.BOTTOM_BAR_HEIGHT / 100);
   
   // Left panel, right panel, event log: full height
@@ -80,11 +80,14 @@ export function calculateLayout(width: number, height: number): GameLayout {
   if (isMobile) {
     // Mobile bars live between hands and board; take their space from hand sections.
     const handTotal = topBarH + bottomBarH;
-    const mobileBarTotal = mobileBarHeight + mobileBottomBarHeight;
-    const adjustedHandTotal = Math.max(0, handTotal - mobileBarTotal);
     const topRatio = handTotal > 0 ? topBarH / handTotal : 0.5;
-    topBarHeight = adjustedHandTotal * topRatio;
-    bottomBarHeight = adjustedHandTotal - topBarHeight;
+    const mobileBarTotal = mobileBarHeight + mobileBottomBarHeight;
+    const availableHeight = Math.max(0, height - mobileBarTotal);
+    const boardHeight = Math.min(boardW, availableHeight);
+    const remainingForHands = Math.max(0, availableHeight - boardHeight);
+    topBarHeight = remainingForHands * topRatio;
+    bottomBarHeight = remainingForHands - topBarHeight;
+    middleH = boardHeight;
   }
 
   const topBar = createBounds(boardColumnX, 0, boardW, topBarHeight);

@@ -103,9 +103,13 @@ const game = new Phaser.Game(config);
 const syncScaleToContainer = (): void => {
   const container = game.canvas?.parentElement;
   if (!container) return;
-  const { clientWidth, clientHeight } = container;
-  if (clientWidth > 0 && clientHeight > 0) {
-    game.scale.resize(clientWidth, clientHeight);
+  const styles = window.getComputedStyle(container);
+  const paddingX = parseFloat(styles.paddingLeft) + parseFloat(styles.paddingRight);
+  const paddingY = parseFloat(styles.paddingTop) + parseFloat(styles.paddingBottom);
+  const width = container.clientWidth - paddingX;
+  const height = container.clientHeight - paddingY;
+  if (width > 0 && height > 0) {
+    game.scale.resize(width, height);
   }
 };
 

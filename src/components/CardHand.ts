@@ -21,7 +21,7 @@
  */
 
 import Phaser from 'phaser';
-import { Card as CardData, MAX_HAND_SIZE } from '../managers/GameStateManager';
+import { Card as CardData } from '../managers/GameStateManager';
 import { CardComponent, CARD_WIDTH, CARD_HEIGHT } from './Card';
 import { CardTargetingComponent, TargetValidator, PlayZoneBounds } from './CardTargeting';
 import { Square } from 'chess.js';

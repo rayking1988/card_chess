@@ -12,6 +12,9 @@ import { CardComponent } from '../../components/Card';
 import { DECK_SIZE } from '../../managers/DeckManager';
 import { MAX_PILE_LAYERS } from './GameConstants';
 
+const PILE_STACK_OFFSET_X = -1.8;
+const PILE_STACK_OFFSET_Y = -3.2;
+
 /**
  * Creates an image-based button with hover and press states
  * 
@@ -158,8 +161,8 @@ export function layoutPileStack(
   alpha: number
 ): void {
   const layers = getPileLayerCount(count);
-  const offsetX = -1.8 * scale;
-  const offsetY = -3.2 * scale;
+  const offsetX = PILE_STACK_OFFSET_X * scale;
+  const offsetY = PILE_STACK_OFFSET_Y * scale;
   
   for (let i = 0; i < stack.length; i++) {
     const card = stack[i];
@@ -174,6 +177,34 @@ export function layoutPileStack(
       card.setVisible(false);
     }
   }
+}
+
+/**
+ * Gets the top-most card position for a pile stack.
+ *
+ * @param x - Base X position for pile center
+ * @param y - Base Y position for pile bottom
+ * @param scale - Scale factor for card images
+ * @param count - Number of cards in the pile
+ * @returns Top-most card position for the pile
+ */
+export function getPileTopPosition(
+  x: number,
+  y: number,
+  scale: number,
+  count: number
+): { x: number; y: number } {
+  const layers = getPileLayerCount(count);
+  if (layers <= 0) {
+    return { x, y };
+  }
+  const offsetX = PILE_STACK_OFFSET_X * scale;
+  const offsetY = PILE_STACK_OFFSET_Y * scale;
+  const offsetIndex = Math.max(0, layers - 1);
+  return {
+    x: x + offsetIndex * offsetX,
+    y: y + offsetIndex * offsetY
+  };
 }
 
 /**

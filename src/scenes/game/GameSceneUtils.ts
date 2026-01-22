@@ -8,24 +8,13 @@ import type { Card, PlayerColor } from '../../managers/GameStateManager';
 import { CARD_DEFINITIONS } from '../../data/cards';
 import type { GameScene } from '../GameScene';
 
-export function formatNameWithCounts(name: string, deckCount: number, discardCount: number, handCount: number): string {
-  return `${name} [D]${deckCount} [X]${discardCount} [H]${handCount}`;
-}
-
 /**
  * Refreshes all name displays (clocks, stopwatches, nameplates)
  * Called when opponent name is received via network
  */
 export function refreshNameDisplays(this: GameScene): void {
-  const opponentColor = this.localColor === 'white' ? 'black' : 'white';
-  const localPlayer = this.gameStateManager?.getPlayer(this.localColor);
-  const opponentPlayer = this.gameStateManager?.getPlayer(opponentColor);
-  const localLabel = localPlayer
-    ? formatNameWithCounts(this.playerName, localPlayer.deck.length, localPlayer.discard.length, localPlayer.hand.length)
-    : this.playerName;
-  const opponentLabel = opponentPlayer
-    ? formatNameWithCounts(this.opponentName, opponentPlayer.deck.length, opponentPlayer.discard.length, opponentPlayer.hand.length)
-    : this.opponentName;
+  const localLabel = this.playerName;
+  const opponentLabel = this.opponentName;
 
   if (this.opponentClock) {
     this.opponentClock.setLabel(opponentLabel);

@@ -9,7 +9,7 @@ import type { GameScene } from '../GameScene';
 import { MAX_HAND_SIZE } from './GameConstants';
 import { calculateLayout } from './GameLayout';
 import type { GameLayout } from './GameTypes';
-import { getPileLayerCount, layoutPileStack } from './GameUIHelpers';
+import { getPileTopPosition, layoutPileStack } from './GameUIHelpers';
 import { scaleBackgroundToCover } from './GameSceneBackground';
 import { updateDebugOverlays } from './GameSceneDebug';
 import {
@@ -536,19 +536,8 @@ export function positionLeftPanel(this: GameScene, layout: GameLayout): void {
   const topCardScale = LEFT_PANEL_LAYOUT.TOP_CARD_SCALE * scale;
   const labelSize = LEFT_PANEL_LAYOUT.LABEL_FONT_SIZE * scale;
   const countSize = LEFT_PANEL_LAYOUT.COUNT_FONT_SIZE * scale;
-  const offsetX = -1.8 * deckScale;
-  const offsetY = -3.2 * deckScale;
-
-  const getPileTop = (x: number, y: number, count: number): { x: number; y: number } => {
-    const layers = getPileLayerCount(count);
-    if (layers <= 0) {
-      return { x, y };
-    }
-    return {
-      x: x + (layers - 1) * offsetX,
-      y: y + (layers - 1) * offsetY
-    };
-  };
+  const baseCardHeight = this.opponentDeckStack[0]?.height ?? this.playerDeckStack[0]?.height ?? 0;
+  const countYOffset = baseCardHeight * deckScale * 0.38;
 
   layoutPileStack(this.opponentDeckStack, leftX, layout.opponentDeckY, deckScale, this.opponentDeckCount, 1);
   if (this.opponentDeckLabelText) {
@@ -556,14 +545,14 @@ export function positionLeftPanel(this: GameScene, layout: GameLayout): void {
     this.opponentDeckLabelText.setFontSize(labelSize);
   }
   if (this.opponentDeckCountText) {
-    const topPos = getPileTop(leftX, layout.opponentDeckY, this.opponentDeckCount);
-    this.opponentDeckCountText.setPosition(topPos.x, topPos.y);
+    const topPos = getPileTopPosition(leftX, layout.opponentDeckY, deckScale, this.opponentDeckCount);
+    this.opponentDeckCountText.setPosition(topPos.x, topPos.y + countYOffset);
     this.opponentDeckCountText.setFontSize(countSize);
   }
 
   layoutPileStack(this.opponentDiscardStack, leftX, layout.opponentDiscardY, deckScale, this.opponentDiscardCount, 1);
   if (this.opponentDiscardTopCard) {
-    const topPos = getPileTop(leftX, layout.opponentDiscardY, this.opponentDiscardCount);
+    const topPos = getPileTopPosition(leftX, layout.opponentDiscardY, deckScale, this.opponentDiscardCount);
     this.opponentDiscardTopCard.setPosition(topPos.x, topPos.y);
     this.opponentDiscardTopCard.setScale(topCardScale);
   }
@@ -572,15 +561,15 @@ export function positionLeftPanel(this: GameScene, layout: GameLayout): void {
     this.opponentDiscardLabelText.setFontSize(labelSize);
   }
   if (this.opponentDiscardCountText) {
-    const topPos = getPileTop(leftX, layout.opponentDiscardY, this.opponentDiscardCount);
-    this.opponentDiscardCountText.setPosition(topPos.x, topPos.y);
+    const topPos = getPileTopPosition(leftX, layout.opponentDiscardY, deckScale, this.opponentDiscardCount);
+    this.opponentDiscardCountText.setPosition(topPos.x, topPos.y + countYOffset);
     this.opponentDiscardCountText.setFontSize(countSize);
   }
 
   const localDiscardCount = this.gameStateManager ? this.gameStateManager.getPlayer(this.localColor).discard.length : 0;
   layoutPileStack(this.playerDiscardStack, leftX, layout.playerDiscardY, deckScale, localDiscardCount, 1);
   if (this.playerDiscardTopCard) {
-    const topPos = getPileTop(leftX, layout.playerDiscardY, localDiscardCount);
+    const topPos = getPileTopPosition(leftX, layout.playerDiscardY, deckScale, localDiscardCount);
     this.playerDiscardTopCard.setPosition(topPos.x, topPos.y);
     this.playerDiscardTopCard.setScale(topCardScale);
   }
@@ -589,8 +578,8 @@ export function positionLeftPanel(this: GameScene, layout: GameLayout): void {
     this.playerDiscardLabelText.setFontSize(labelSize);
   }
   if (this.playerDiscardCountText) {
-    const topPos = getPileTop(leftX, layout.playerDiscardY, localDiscardCount);
-    this.playerDiscardCountText.setPosition(topPos.x, topPos.y);
+    const topPos = getPileTopPosition(leftX, layout.playerDiscardY, deckScale, localDiscardCount);
+    this.playerDiscardCountText.setPosition(topPos.x, topPos.y + countYOffset);
     this.playerDiscardCountText.setFontSize(countSize);
   }
 
@@ -601,8 +590,8 @@ export function positionLeftPanel(this: GameScene, layout: GameLayout): void {
     this.playerDeckLabelText.setFontSize(labelSize);
   }
   if (this.playerDeckCountText) {
-    const topPos = getPileTop(leftX, layout.playerDeckY, localDeckCount);
-    this.playerDeckCountText.setPosition(topPos.x, topPos.y);
+    const topPos = getPileTopPosition(leftX, layout.playerDeckY, deckScale, localDeckCount);
+    this.playerDeckCountText.setPosition(topPos.x, topPos.y + countYOffset);
     this.playerDeckCountText.setFontSize(countSize);
   }
 
@@ -622,9 +611,7 @@ export function positionOpponentHand(this: GameScene, layout: GameLayout): void 
   if (!this.opponentHandContainer) return;
   
   const section = layout.sections.topBar;
-  const visibleHeight = section.height;
-  const maskY = section.y + section.height - visibleHeight;
-  this.opponentHandContainer.setPosition(section.centerX, maskY - visibleHeight * OPPONENT_HAND_LAYOUT.VISIBLE_HEIGHT_FACTOR);
+  this.opponentHandContainer.setPosition(section.centerX, section.centerY);
   
   this.opponentHandLabelText.setPosition(section.centerX, section.y + section.height * OPPONENT_HAND_LAYOUT.LABEL_Y_FACTOR);
   this.opponentHandLabelText.setFontSize(LEFT_PANEL_LAYOUT.COUNT_FONT_SIZE * layout.panelScale);
@@ -632,6 +619,15 @@ export function positionOpponentHand(this: GameScene, layout: GameLayout): void 
   this.opponentHandCountText.setFontSize(LEFT_PANEL_LAYOUT.COUNT_FONT_SIZE * layout.panelScale);
 
   updateOpponentHandDisplay.call(this, this.opponentHandCount);
+
+  if (this.opponentHandCards.length > 0) {
+    const bounds = this.opponentHandContainer.getBounds();
+    const desiredBottom = section.y + section.height;
+    const offset = desiredBottom - bounds.bottom;
+    if (Math.abs(offset) > 0.5) {
+      this.opponentHandContainer.y += offset;
+    }
+  }
 }
 
 /**
@@ -718,20 +714,28 @@ export function positionCardHand(this: GameScene, layout: GameLayout): void {
   
   const section = layout.sections.bottomBar;
   const usableHeight = section.height;
-  const centerYOffset = layout.isMobile
-    ? CARD_HAND_LAYOUT.CENTER_Y_OFFSET * layout.panelScale
-    : CARD_HAND_LAYOUT.CENTER_Y_OFFSET;
+  const centerYOffset = layout.isMobile ? 0 : CARD_HAND_LAYOUT.CENTER_Y_OFFSET;
   const centerX = section.centerX;
   const centerY = section.centerY + centerYOffset;
   this.cardHand.setSectionSize(centerX, centerY, section.width, usableHeight);
   
-  const containerScale = layout.isMobile ? Math.min(1, layout.handScale * 1.4) : 1;
+  const handScale = layout.isMobile ? Math.max(0.35, layout.handScale * 0.85) : layout.handScale;
+  const containerScale = layout.isMobile ? Math.min(1, handScale * 1.2) : 1;
   this.cardHand.setScale(containerScale);
   this.cardHand.getContainer().setPosition(
     (1 - containerScale) * centerX,
     (1 - containerScale) * centerY
   );
-  this.cardHand.setHandScale(layout.handScale);
+
+  if (layout.isMobile && this.cardHand.getCardCount() > 0) {
+    const bounds = this.cardHand.getContainer().getBounds();
+    const desiredTop = section.y;
+    const offset = desiredTop - bounds.top;
+    if (Math.abs(offset) > 0.5) {
+      this.cardHand.getContainer().y += offset;
+    }
+  }
+  this.cardHand.setHandScale(handScale);
   this.cardHand.setPreviewPosition(layout.previewX, layout.previewY);
   this.cardHand.setPreviewEnabled(true);
   this.cardHand.setTouchPreviewEnabled(layout.isMobile);

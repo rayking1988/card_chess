@@ -9,7 +9,7 @@ import { MAX_HAND_SIZE } from './GameConstants';
 import type { GameScene } from '../GameScene';
 import { CLOCK, LEFT_PANEL_LAYOUT } from '../../config';
 import { calculateLayout } from './GameLayout';
-import { getPileLayerCount } from './GameUIHelpers';
+import { getPileTopPosition } from './GameUIHelpers';
 
 /**
  * Initializes the game state
@@ -45,13 +45,12 @@ export function initializeGame(this: GameScene): void {
   const hand = this.gameStateManager.getHand(this.localColor);
   const layout = this.currentLayout ?? calculateLayout(this.scale.width, this.scale.height);
   const deckScale = LEFT_PANEL_LAYOUT.DECK_SCALE * layout.panelScale;
-  const offsetX = -1.8 * deckScale;
-  const offsetY = -3.2 * deckScale;
-  const layers = getPileLayerCount(DECK_SIZE - INITIAL_DRAW_COUNT);
-  const deckPos = {
-    x: layout.leftPanelX + Math.max(0, layers - 1) * offsetX,
-    y: layout.playerDeckY + Math.max(0, layers - 1) * offsetY
-  };
+  const deckPos = getPileTopPosition(
+    layout.leftPanelX,
+    layout.playerDeckY,
+    deckScale,
+    DECK_SIZE - INITIAL_DRAW_COUNT
+  );
   this.cardHand.queueDrawCards(hand, deckPos);
 
   // Show mulligan UI

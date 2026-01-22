@@ -4,7 +4,6 @@
  * @module scenes/game/GameSceneUIFactory
  */
 
-import Phaser from 'phaser';
 import { CardHandComponent } from '../../components/CardHand';
 import { ChessBoardComponent } from '../../components/ChessBoard';
 import { ClockComponent } from '../../components/Clock';

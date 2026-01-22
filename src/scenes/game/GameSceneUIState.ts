@@ -14,9 +14,8 @@ import type { PlayerColor } from '../../managers/GameStateManager';
 import { calculateControlPower } from '../../utils/controlPower';
 import { formatTime } from '../../components/Clock';
 import { hex } from '../../utils/colors';
-import { getPileLayerCount } from './GameUIHelpers';
+import { getPileTopPosition } from './GameUIHelpers';
 import { CLOCK, CLOCK_COLORS, LEFT_PANEL_LAYOUT, STOPWATCH, STOPWATCH_COLORS } from '../../config';
-import { formatNameWithCounts } from './GameSceneUtils';
 
 function formatStopwatchTime(seconds: number): string {
   const safeSeconds = Math.max(0, Math.floor(seconds));
@@ -152,12 +151,8 @@ export function updateUIFromState(this: GameScene, options: { sendStats?: boolea
   this.updatePlayerDeckCounts(localPlayer.deck.length, localPlayer.discard.length);
 
   // Update clock labels with counts (desktop)
-  this.opponentClock.setLabel(
-    formatNameWithCounts(this.opponentName, opponentDeckCount, opponentDiscardCount, opponentHandCount)
-  );
-  this.playerClock.setLabel(
-    formatNameWithCounts(this.playerName, localPlayer.deck.length, localPlayer.discard.length, localPlayer.hand.length)
-  );
+  this.opponentClock.setLabel(this.opponentName);
+  this.playerClock.setLabel(this.playerName);
 
   // Only reposition left panel if deck/discard counts changed (performance optimization)
   const deckCountsChanged = !this.lastStateSnapshot ||
@@ -189,13 +184,12 @@ export function updateUIFromState(this: GameScene, options: { sendStats?: boolea
         if (layout) {
           const previousDeckCount = this.lastStateSnapshot?.localDeck ?? localPlayer.deck.length;
           const deckScale = LEFT_PANEL_LAYOUT.DECK_SCALE * layout.panelScale;
-          const offsetX = -1.8 * deckScale;
-          const offsetY = -3.2 * deckScale;
-          const layers = getPileLayerCount(previousDeckCount);
-          const deckPos = {
-            x: layout.leftPanelX + Math.max(0, layers - 1) * offsetX,
-            y: layout.playerDeckY + Math.max(0, layers - 1) * offsetY
-          };
+          const deckPos = getPileTopPosition(
+            layout.leftPanelX,
+            layout.playerDeckY,
+            deckScale,
+            previousDeckCount
+          );
           this.cardHand.queueDrawCards(added, deckPos);
         } else {
           this.updateHandDisplay();
@@ -510,13 +504,12 @@ export function animateCardDraw(this: GameScene, side: 'local' | 'opponent', cou
 
   const previousDeckCount = this.lastStateSnapshot?.opponentDeck ?? this.opponentDeckCount;
   const deckScale = LEFT_PANEL_LAYOUT.DECK_SCALE * layout.panelScale;
-  const offsetX = -1.8 * deckScale;
-  const offsetY = -3.2 * deckScale;
-  const layers = getPileLayerCount(previousDeckCount);
-  const deckPos = {
-    x: layout.leftPanelX + Math.max(0, layers - 1) * offsetX,
-    y: layout.opponentDeckY + Math.max(0, layers - 1) * offsetY
-  };
+  const deckPos = getPileTopPosition(
+    layout.leftPanelX,
+    layout.opponentDeckY,
+    deckScale,
+    previousDeckCount
+  );
 
   const targetCards = this.opponentHandCards.slice(-count);
   targetCards.forEach(card => card.setAlpha(0));
@@ -989,8 +982,7 @@ export function animateDisturbConversion(
  * @param count - Number of cards being discarded
  */
 export function animateCardDiscard(this: GameScene, _side: 'local' | 'opponent', count: number): void {
-  const layout = this.currentLayout;
-  if (!layout || count <= 0) return;
+  if (count <= 0) return;
   // Discard fly-in animation removed to avoid showing card backs.
   return;
 }
