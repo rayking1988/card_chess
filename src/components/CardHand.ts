@@ -290,65 +290,13 @@ export class CardHandComponent {
     // When a non-targeted card is played (dragged to play zone)
     // Requirement 9.3: Drag card to board area to play
     this.targeting.onCardPlayed = (card: CardData) => {
-      // Clear dragging reference immediately
-      const draggedCard = this.draggingCard ?? this.targeting?.getActiveCardComponent() ?? null;
-      this.draggingCard = null;
-      
-      if (draggedCard) {
-        draggedCard.disableInteraction();
-      }
-
-      const outcome = normalizeCardPlayOutcome(this.onCardPlayed?.(card));
-      if (draggedCard) {
-        if (outcome === 'cancelled') {
-          this.resetCardPosition(draggedCard);
-          draggedCard.enableInteraction(true);
-          draggedCard.setVisible(true); // Ensure card is visible when rejected
-        } else if (outcome === 'continue') {
-          this.resetCardPosition(draggedCard);
-          draggedCard.disableInteraction();
-          draggedCard.setVisible(true);
-        } else {
-          draggedCard.setVisible(false);
-        }
-      }
-      
-      if (outcome === 'cancelled' && this.onTargetingCancel) {
-        this.onTargetingCancel(card);
-      }
-      return outcome;
+      return this.resolveCardPlayOutcome(card, () => this.onCardPlayed?.(card));
     };
     
     // When a targeted card hits a valid target
     // Requirement 9.5: Resolve effect when arrow released on valid target
     this.targeting.onCardTargeted = (card: CardData, target: Square) => {
-      // Clear dragging reference immediately
-      const draggedCard = this.draggingCard ?? this.targeting?.getActiveCardComponent() ?? null;
-      this.draggingCard = null;
-      
-      if (draggedCard) {
-        draggedCard.disableInteraction();
-      }
-
-      const outcome = normalizeCardPlayOutcome(this.onCardTargeted?.(card, target));
-      if (draggedCard) {
-        if (outcome === 'cancelled') {
-          this.resetCardPosition(draggedCard);
-          draggedCard.enableInteraction(true);
-          draggedCard.setVisible(true); // Ensure card is visible when rejected
-        } else if (outcome === 'continue') {
-          this.resetCardPosition(draggedCard);
-          draggedCard.disableInteraction();
-          draggedCard.setVisible(true);
-        } else {
-          draggedCard.setVisible(false);
-        }
-      }
-      
-      if (outcome === 'cancelled' && this.onTargetingCancel) {
-        this.onTargetingCancel(card);
-      }
-      return outcome;
+      return this.resolveCardPlayOutcome(card, () => this.onCardTargeted?.(card, target));
     };
     
     // When targeting is cancelled (invalid target or released outside)
@@ -362,6 +310,46 @@ export class CardHandComponent {
     };
   }
 
+  /**
+   * Resolves a card play outcome and updates the dragged card visual state.
+   *
+   * @param card - Card being resolved
+   * @param getOutcome - Callback that returns the play outcome
+   * @returns Normalized play outcome
+   * @private
+   */
+  private resolveCardPlayOutcome(
+    card: CardData,
+    getOutcome: () => CardPlayOutcome | boolean | void
+  ): CardPlayOutcome {
+    const draggedCard = this.draggingCard ?? this.targeting?.getActiveCardComponent() ?? null;
+    this.draggingCard = null;
+
+    if (draggedCard) {
+      draggedCard.disableInteraction();
+    }
+
+    const outcome = normalizeCardPlayOutcome(getOutcome());
+    if (draggedCard) {
+      if (outcome === 'cancelled') {
+        this.resetCardPosition(draggedCard);
+        draggedCard.enableInteraction(true);
+        draggedCard.setVisible(true);
+      } else if (outcome === 'continue') {
+        this.resetCardPosition(draggedCard);
+        draggedCard.disableInteraction();
+        draggedCard.setVisible(true);
+      } else {
+        draggedCard.setVisible(false);
+      }
+    }
+
+    if (outcome === 'cancelled' && this.onTargetingCancel) {
+      this.onTargetingCancel(card);
+    }
+
+    return outcome;
+  }
   /**
    * Resets the dragging card to its original fan position
    * 
@@ -749,6 +737,12 @@ export class CardHandComponent {
     return this.isDrawAnimating || this.drawQueue.length > 0;
   }
 
+  /**
+   * Processes the queued draw animations in sequence.
+   *
+   * @param token - Sequence token used to invalidate stale animations
+   * @private
+   */
   private processDrawQueue(token: number): void {
     if (token !== this.drawSequenceToken) return;
 
@@ -765,6 +759,14 @@ export class CardHandComponent {
     this.animateDrawCard(next.card, next.origin, token);
   }
 
+  /**
+   * Animates a single card draw into the hand.
+   *
+   * @param card - Card data to animate
+   * @param origin - Starting position for the animation
+   * @param token - Sequence token used to invalidate stale animations
+   * @private
+   */
   private animateDrawCard(card: CardData, origin: { x: number; y: number }, token: number): void {
     if (token !== this.drawSequenceToken) return;
 

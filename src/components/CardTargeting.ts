@@ -77,6 +77,9 @@ export type TargetValidator = (square: Square, card: CardData) => boolean;
 
 export type CardPlayOutcome = 'played' | 'continue' | 'cancelled';
 
+/**
+ * Normalizes a card play callback result into a consistent outcome string.
+ */
 export function normalizeCardPlayOutcome(outcome: CardPlayOutcome | boolean | void): CardPlayOutcome {
   if (outcome === 'continue') return 'continue';
   if (outcome === 'cancelled' || outcome === false) return 'cancelled';
@@ -257,6 +260,9 @@ export class CardTargetingComponent {
 
   /** Pause targeting updates (used for modal overlays) */
   private paused: boolean = false;
+
+  /** Reusable vector to avoid per-move allocations when transforming pointer coordinates */
+  private localPointerBuffer: Phaser.Math.Vector2 = new Phaser.Math.Vector2();
   
   /** Minimum ms between update calls to prevent glitches from fast movement */
   private static readonly UPDATE_THROTTLE_MS = 8; // ~120fps max
@@ -375,14 +381,19 @@ export class CardTargetingComponent {
     }
   }
 
-  private getLocalPointerPosition(x: number, y: number): { x: number; y: number } {
+  /**
+   * Converts a world pointer position to the active card's local space (if nested in a container).
+   */
+  private getLocalPointerPosition(x: number, y: number): Phaser.Math.Vector2 {
     const container = this.activeCardComponent?.getContainer();
     const parent = container?.parentContainer;
-    if (!parent) return { x, y };
+    if (!parent) {
+      this.localPointerBuffer.set(x, y);
+      return this.localPointerBuffer;
+    }
     const matrix = parent.getWorldTransformMatrix();
-    const point = new Phaser.Math.Vector2();
-    matrix.applyInverse(x, y, point);
-    return { x: point.x, y: point.y };
+    matrix.applyInverse(x, y, this.localPointerBuffer);
+    return this.localPointerBuffer;
   }
 
   /* ============================================
@@ -763,6 +774,9 @@ export class CardTargetingComponent {
     this.cancelTargeting();
   }
 
+  /**
+   * Determines whether this component should process scene-level input events.
+   */
   private shouldHandleSceneInput(): boolean {
     return (this.useSceneInputHandlers || this.followPointer) && !this.paused;
   }
@@ -798,6 +812,9 @@ export class CardTargetingComponent {
     );
   }
 
+  /**
+   * Draws a curved arrow between two points.
+   */
   private drawArrow(
     graphics: Phaser.GameObjects.Graphics,
     startX: number,
@@ -1002,14 +1019,6 @@ export class CardTargetingComponent {
     return this.coordsToSquare(col, row);
   }
 
-  /**
-   * Checks if the pointer is within the active card bounds
-   * 
-   * @param x - Screen X coordinate
-   * @param y - Screen Y coordinate
-   * @returns True if pointer is over the active card
-   * @private
-   */
   /**
    * Converts board coordinates to square notation
    * 

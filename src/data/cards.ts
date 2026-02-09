@@ -5,10 +5,10 @@
  * utility functions for creating cards and decks.
  * 
  * Deck Composition (60 cards total):
- * - Energy cards (24): Resource generation
- * - Piece cards (22): Deploy chess pieces
- *   - Pawn (10), Knight (4), Bishop (4), Rook (4), Queen (1)
- * - Spell cards (14): Various effects
+ * - Energy cards (22): Resource generation
+ * - Piece cards (25): Deploy chess pieces
+ *   - Pawn (10), Twin Pawn (4), Knight (4), Bishop (4), Rook (2), Queen (1)
+ * - Spell cards (13): Various effects
  *   - Ponder (4), Growth (4), Slash (4), Deep Analysis (1)
  * 
  * Requirements addressed:
@@ -67,19 +67,20 @@ export interface CardDefinition {
  * 
  * Card Categories:
  * 
- * ENERGY CARDS (24 total):
+ * ENERGY CARDS (22 total):
  * - Energy: The core resource card. Playing it increases your energy cap
  *   by 1 and immediately grants 1 energy. Only one can be played per turn.
  * 
- * PIECE CARDS (22 total):
- * - Pawn (10): Cheapest piece, costs 1 energy and 10 seconds
- * - Knight (4): Costs 2 energy and 15 seconds
+ * PIECE CARDS (25 total):
+ * - Pawn (10): Cheapest piece, costs 0 energy and 10 seconds
+ * - Twin Pawn (4): Deploy two pawns, costs 1 energy and 15 seconds
+ * - Knight (4): Costs 2 energy and 20 seconds
  * - Bishop (4): Costs 4 energy and 25 seconds
- * - Rook (4): Costs 5 energy and 30 seconds
+ * - Rook (2): Costs 5 energy and 30 seconds
  * - Queen (1): Most expensive, costs 9 energy and 50 seconds
  * 
- * SPELL CARDS (14 total):
- * - Ponder (4): Draw 2 cards for 3 energy and 30 seconds
+ * SPELL CARDS (13 total):
+ * - Ponder (4): Draw 2 cards for 3 energy and 40 seconds
  * - Growth (4): Increase energy cap by 1 for 2 energy and 25 seconds
  * - Slash (4): Destroy a piece on a controlled square for 5 energy and 55 seconds
  * - Deep Analysis (1): Draw 4 cards for 7 energy and 110 seconds

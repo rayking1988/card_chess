@@ -12,6 +12,23 @@ import { effectRequiresTarget, normalizeCardEffects } from '../../managers/GameS
 import type { GameScene } from '../GameScene';
 
 /**
+ * Sends the local player's name and initial state/event log sync if host.
+ */
+function sendInitialSync(scene: GameScene): void {
+  const network = scene.networkManager;
+  if (!network) return;
+
+  network.sendPlayerName(scene.playerName);
+  if (network.getIsHost()) {
+    network.sendStateSync(scene.gameStateManager.getState());
+    if (scene.eventLog) {
+      const gameEntries = scene.eventLog.getEntries().filter(e => e.player !== 'chat') as any[];
+      network.sendEventLogSync(gameEntries);
+    }
+  }
+}
+
+/**
  * Sets up callbacks for network events
  * Handles peer join/leave, actions, state sync, and errors
  */
@@ -58,15 +75,7 @@ export function setupNetworkCallbacks(this: GameScene): void {
 
   this.networkManager.onPeerJoined((_peerId) => {
     this.hideConnectionOverlay();
-    this.networkManager?.sendPlayerName(this.playerName);
-    if (this.networkManager?.getIsHost()) {
-      this.networkManager.sendStateSync(this.gameStateManager.getState());
-      if (this.eventLog) {
-        // Filter out chat entries (they're local only, not synced)
-        const gameEntries = this.eventLog.getEntries().filter(e => e.player !== 'chat') as any[];
-        this.networkManager.sendEventLogSync(gameEntries);
-      }
-    }
+    sendInitialSync(this);
   });
 
   this.networkManager.onPeerLeft((_peerId) => {
@@ -89,15 +98,7 @@ export function setupNetworkCallbacks(this: GameScene): void {
   });
 
   if (this.networkManager.getPeerId()) {
-    this.networkManager.sendPlayerName(this.playerName);
-    if (this.networkManager.getIsHost()) {
-      this.networkManager.sendStateSync(this.gameStateManager.getState());
-      if (this.eventLog) {
-        // Filter out chat entries (they're local only, not synced)
-        const gameEntries = this.eventLog.getEntries().filter(e => e.player !== 'chat') as any[];
-        this.networkManager.sendEventLogSync(gameEntries);
-      }
-    }
+    sendInitialSync(this);
   }
 }
 

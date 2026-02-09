@@ -11,7 +11,6 @@ import type { StopwatchComponent } from '../../components/Stopwatch';
 import type { GameScene } from '../GameScene';
 import type { UISnapshot } from './GameTypes';
 import type { PlayerColor } from '../../managers/GameStateManager';
-import { calculateControlPower } from '../../utils/controlPower';
 import { formatTime } from '../../components/Clock';
 import { hex } from '../../utils/colors';
 import { getPileTopPosition } from './GameUIHelpers';
@@ -1115,7 +1114,7 @@ export function updateTurnOverlay(this: GameScene, turn: PlayerColor): void {
  * Shows controlled squares overlay while button is held
  */
 export function showControlledSquaresOverlay(this: GameScene): void {
-  const controlMap = calculateControlPower(this.chessBoard.getWrapper());
+  const controlMap = this.getControlPowerMap();
   this.chessBoard.renderControlOverlay(controlMap, {
     whiteColor: '#ffffff',
     blackColor: '#000000',

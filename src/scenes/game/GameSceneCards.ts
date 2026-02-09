@@ -9,7 +9,7 @@ import { CardComponent } from '../../components/Card';
 import type { CardPlayOutcome } from '../../components/CardTargeting';
 import type { Card, PieceType, PlayerColor, CardEffectAction } from '../../managers/GameStateManager';
 import { effectRequiresTarget, normalizeCardEffects } from '../../managers/GameStateManager';
-import { calculateControlPower, playerControlsSquare } from '../../utils/controlPower';
+import { playerControlsSquare } from '../../utils/controlPower';
 import { MAX_PILE_LAYERS } from './GameConstants';
 import { makeCardComponentClickable } from './GameUIHelpers';
 import type { GameScene } from '../GameScene';
@@ -23,7 +23,12 @@ const DESTROY_HIGHLIGHT_COLOR = 0xff4444;
 const PROMOTION_PIECES: PieceSymbol[] = ['q', 'r', 'b', 'n'];
 const GHOST_PIECE_ALPHA = 0.5;
 const PLAYER_DISCARD_DEPTH = 6;
+const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'] as const;
+const RANKS = ['1', '2', '3', '4', '5', '6', '7', '8'] as const;
 
+/**
+ * Returns true if the square is on the opponent's home rank.
+ */
 function isOpponentHomeRank(square: Square, player: PlayerColor): boolean {
   if (player === 'white') {
     return square[1] === '8';
@@ -42,12 +47,18 @@ function isOwnHomeRank(square: Square, player: PlayerColor): boolean {
   return square[1] === '8';
 }
 
+/**
+ * Returns the list of card effects that require targeting resolution.
+ */
 function getTargetEffects(card: Card): CardEffectAction[] {
   return normalizeCardEffects(card.effect).filter(
     effect => effect.action === 'DEPLOY_PIECE' || effect.action === 'DESTROY_PIECE' || effectRequiresTarget(effect)
   );
 }
 
+/**
+ * Determines the active target effect for multi-target cards.
+ */
 function getActiveTargetEffect(this: GameScene, card: Card): CardEffectAction | null {
   const targetEffects = getTargetEffects(card);
   if (targetEffects.length === 0) return null;
@@ -74,18 +85,20 @@ export function getLegalTargetSquares(this: GameScene, card: Card): { deploy: Sq
     return { deploy, destroy };
   }
 
-  const controlMap = calculateControlPower(this.chessBoard.getWrapper());
-  const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
-  const ranks = ['1', '2', '3', '4', '5', '6', '7', '8'];
+  const controlMap = this.getControlPowerMap();
+  const board = this.chessBoard.getWrapper();
+  const boardFEN = activeEffect.action === 'DEPLOY_PIECE'
+    ? this.chessBoard.getPosition()
+    : null;
   
-  for (const file of files) {
-    for (const rank of ranks) {
+  for (const file of FILES) {
+    for (const rank of RANKS) {
       const square = (file + rank) as Square;
       const playerControls = playerControlsSquare(controlMap, square, this.localColor);
       
       if (!playerControls) continue;
       
-      const piece = this.chessBoard.getWrapper().getPiece(square);
+      const piece = board.getPiece(square);
       
       if (activeEffect.action === 'DEPLOY_PIECE') {
         // Can deploy to empty controlled squares (if it doesn't give check)
@@ -97,8 +110,7 @@ export function getLegalTargetSquares(this: GameScene, card: Card): { deploy: Sq
             continue;
           }
           
-          const boardFEN = this.chessBoard.getPosition();
-          if (!this.gameStateManager.wouldDeploymentGiveCheck(square, pieceType, this.localColor, boardFEN)) {
+          if (boardFEN && !this.gameStateManager.wouldDeploymentGiveCheck(square, pieceType, this.localColor, boardFEN)) {
             deploy.push(square);
           }
         }
@@ -183,7 +195,7 @@ export function setupCardHandCallbacks(this: GameScene): void {
  * @returns true if target is valid
  */
 export function validateCardTarget(this: GameScene, card: Card, square: Square): boolean {
-  const controlMap = calculateControlPower(this.chessBoard.getWrapper());
+  const controlMap = this.getControlPowerMap();
   const playerControls = playerControlsSquare(controlMap, square, this.localColor);
 
   const activeEffect = getActiveTargetEffect.call(this, card);
@@ -221,6 +233,9 @@ export function validateCardTarget(this: GameScene, card: Card, square: Square):
   return false;
 }
 
+/**
+ * Cancels any in-progress multi-target card play and restores board state.
+ */
 function cancelPendingCardPlay(this: GameScene): void {
   const pending = this.pendingCardPlay;
   if (!pending) return;

@@ -61,6 +61,8 @@ import type { NetworkManager, GameAction } from '../managers/NetworkManager';
 import { DeckManager, DECK_SIZE, INITIAL_DRAW_COUNT } from '../managers/DeckManager';
 import { createGameAnimationManager } from '../managers/AnimationManager';
 import type { GameAnimationManager } from '../managers/AnimationManager';
+import type { ControlPowerMap } from '../utils/chessWrapper';
+import { calculateControlPower } from '../utils/controlPower';
 
 import type { GameSceneData, UISnapshot, GameLayout } from './game/GameTypes';
 import { calculateLayout } from './game/GameLayout';
@@ -556,6 +558,9 @@ export class GameScene extends Phaser.Scene {
   /** Deck manager for local player's deck operations */
   public localDeckManager!: DeckManager;
 
+  /** Cached control power map for the current board position */
+  private controlPowerCache: { fen: string; map: ControlPowerMap } | null = null;
+
   /* ----------------------------------------
    * Opponent Stats (from network sync)
    * ---------------------------------------- */
@@ -795,6 +800,19 @@ export class GameScene extends Phaser.Scene {
    */
   constructor() {
     super({ key: 'GameScene' });
+  }
+
+  /**
+   * Returns a cached control power map for the current board position.
+   */
+  public getControlPowerMap(): ControlPowerMap {
+    const fen = this.chessBoard.getPosition();
+    if (this.controlPowerCache?.fen === fen) {
+      return this.controlPowerCache.map;
+    }
+    const map = calculateControlPower(this.chessBoard.getWrapper());
+    this.controlPowerCache = { fen, map };
+    return map;
   }
 
   /* ============================================
