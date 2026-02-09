@@ -37,7 +37,17 @@ export interface NetworkMessage {
  * - Rematch: REMATCH_REQUEST, REMATCH_ACCEPT, REMATCH_DECLINE
  */
 export type GameAction =
-  | { type: 'PLAY_CARD'; cardId: string; cardName: string; target?: string; pieceType?: string; effectAction?: string }
+  | {
+      type: 'PLAY_CARD';
+      cardId: string;
+      cardName: string;
+      target?: string;
+      targets?: string[];
+      pieceType?: string;
+      pieceTypes?: Array<string | null>;
+      effectAction?: string;
+      effectActions?: string[];
+    }
   | { type: 'MOVE_PIECE'; from: string; to: string; promotion?: string }
   | { type: 'MULLIGAN'; time_cost: number }
   | { type: 'READY' }

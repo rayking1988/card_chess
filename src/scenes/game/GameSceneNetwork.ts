@@ -8,6 +8,7 @@ import { Square, Color, PieceSymbol } from 'chess.js';
 import type { GameAction } from '../../managers/NetworkManager';
 import { DECK_SIZE } from '../../managers/DeckManager';
 import { mergeEventLogs } from '../../managers/network/stateSync';
+import { effectRequiresTarget, normalizeCardEffects } from '../../managers/GameStateManager';
 import type { GameScene } from '../GameScene';
 
 /**
@@ -109,7 +110,16 @@ export function setupNetworkCallbacks(this: GameScene): void {
 export function handleNetworkAction(this: GameScene, action: GameAction): void {
   switch (action.type) {
     case 'PLAY_CARD':
-      this.handleOpponentPlayCard(action.cardId, action.cardName, action.target, action.pieceType, action.effectAction);
+      this.handleOpponentPlayCard(
+        action.cardId,
+        action.cardName,
+        action.target,
+        action.pieceType,
+        action.effectAction,
+        action.targets,
+        action.pieceTypes,
+        action.effectActions
+      );
       break;
     case 'MOVE_PIECE':
       this.handleOpponentMovePiece(action.from, action.to, action.promotion);
@@ -315,7 +325,10 @@ export function handleOpponentPlayCard(
   cardName: string,
   target?: string,
   pieceType?: string,
-  effectAction?: string
+  effectAction?: string,
+  targets?: string[],
+  pieceTypes?: Array<string | null>,
+  effectActions?: string[]
 ): void {
   const opponentColor = this.localColor === 'white' ? 'black' : 'white';
   const cardData = this.getCardDataByName(cardName);
@@ -328,7 +341,20 @@ export function handleOpponentPlayCard(
   }
 
   // Pass cardData to animation, which will add to discard after animation completes
-  this.animateCardPlay(cardData, 'opponent', target as Square | undefined, () => {
+  const targetsList = targets ?? (target ? [target] : []);
+  const actionList = effectActions ?? (effectAction ? [effectAction] : []);
+  const pieceList = pieceTypes ?? (pieceType ? [pieceType] : []);
+  const derivedTargetEffects = cardData
+    ? normalizeCardEffects(cardData.effect).filter(
+        effect => effect.action === 'DEPLOY_PIECE' || effect.action === 'DESTROY_PIECE' || effectRequiresTarget(effect)
+      )
+    : [];
+  const derivedActions = actionList.length > 0
+    ? actionList
+    : derivedTargetEffects.map(effect => effect.action);
+  const animateTarget = targetsList.length > 0 ? (targetsList[targetsList.length - 1] as Square) : (target as Square | undefined);
+
+  this.animateCardPlay(cardData, 'opponent', animateTarget, () => {
     // Add card to discard after animation completes
     if (this.networkManager && cardData) {
       this.opponentDiscardCount = Math.min(DECK_SIZE, this.opponentDiscardCount + 1);
@@ -339,19 +365,36 @@ export function handleOpponentPlayCard(
   });
 
   // Handle piece deployment/destruction on board
-  if (effectAction === 'DEPLOY_PIECE' && target && pieceType) {
-    const color: Color = opponentColor === 'white' ? 'w' : 'b';
-    this.chessBoard.placePiece(target as Square, pieceType as PieceSymbol, color);
-    this.gameStateManager.setBoardFEN(this.chessBoard.getPosition());
-    this.gameStateManager.trackDeployedPiece(opponentColor, target, false);
-    this.animatePieceDeploy(target as Square);
-  } else if (effectAction === 'DESTROY_PIECE' && target) {
-    const targetPiece = this.chessBoard.getWrapper().getPiece(target as Square);
-    this.chessBoard.removePiece(target as Square);
-    this.gameStateManager.setBoardFEN(this.chessBoard.getPosition());
-    if (targetPiece) {
-      this.animatePieceDestroy(targetPiece, target as Square);
+  let boardModified = false;
+  for (let i = 0; i < targetsList.length; i++) {
+    const targetSquare = targetsList[i] as Square;
+    const action = derivedActions[i];
+    if (!action) continue;
+
+    if (action === 'DEPLOY_PIECE') {
+      let deployPiece = pieceList[i] as PieceSymbol | undefined;
+      const fallback = derivedTargetEffects[i];
+      if (!deployPiece && fallback && fallback.action === 'DEPLOY_PIECE') {
+        deployPiece = fallback.piece as PieceSymbol;
+      }
+      if (!deployPiece) continue;
+      const color: Color = opponentColor === 'white' ? 'w' : 'b';
+      this.chessBoard.placePiece(targetSquare, deployPiece, color);
+      this.gameStateManager.trackDeployedPiece(opponentColor, targetSquare, false);
+      this.animatePieceDeploy(targetSquare);
+      boardModified = true;
+    } else if (action === 'DESTROY_PIECE') {
+      const targetPiece = this.chessBoard.getWrapper().getPiece(targetSquare);
+      this.chessBoard.removePiece(targetSquare);
+      if (targetPiece) {
+        this.animatePieceDestroy(targetPiece, targetSquare);
+      }
+      boardModified = true;
     }
+  }
+
+  if (boardModified) {
+    this.gameStateManager.setBoardFEN(this.chessBoard.getPosition());
   }
 
   if (cardData) {

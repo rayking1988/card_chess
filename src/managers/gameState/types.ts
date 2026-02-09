@@ -18,7 +18,7 @@
  * - MODIFY_ENERGY_CAP: Change maximum energy
  * - ENERGY_CARD: Standard energy card effect
  */
-export type CardEffect =
+export type CardEffectAction =
   | { action: 'SHUFFLE_DECK' }
   | { action: 'DRAW_CARDS'; count: number; respectCap: boolean }
   | { action: 'DISCARD_TO_CAP' }
@@ -28,6 +28,21 @@ export type CardEffect =
   | { action: 'MODIFY_ENERGY'; amount: number }
   | { action: 'MODIFY_ENERGY_CAP'; amount: number }
   | { action: 'ENERGY_CARD' };
+
+export type CardEffect = CardEffectAction | CardEffectAction[];
+
+export function normalizeCardEffects(effect: CardEffect): CardEffectAction[] {
+  return Array.isArray(effect) ? effect : [effect];
+}
+
+export function effectRequiresTarget(
+  effect: CardEffectAction
+): effect is { action: 'DEPLOY_PIECE'; piece: PieceType; requiresTarget: true } | { action: 'DESTROY_PIECE'; requiresTarget: true } {
+  if (effect.action === 'DEPLOY_PIECE' || effect.action === 'DESTROY_PIECE') {
+    return true;
+  }
+  return 'requiresTarget' in effect && effect.requiresTarget === true;
+}
 
 /** Chess piece type (lowercase) */
 export type PieceType = 'p' | 'n' | 'b' | 'r' | 'q' | 'k';

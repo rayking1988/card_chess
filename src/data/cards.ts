@@ -18,7 +18,7 @@
  * @requires ../managers/GameStateManager
  */
 
-import { Card, CardEffect, PieceType } from '../managers/GameStateManager';
+import { Card, CardEffect, PieceType, effectRequiresTarget, normalizeCardEffects } from '../managers/GameStateManager';
 
 /* ============================================
  * TYPE DEFINITIONS
@@ -102,7 +102,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     effect: { action: 'ENERGY_CARD' },
     artAsset: 'energy.png',
     frameColor: 'gold',    // Gold frame indicates energy card
-    quantity: 24,          // Most common card in deck
+    quantity: 22,          // Most common card in deck
     description: 'Increase your energy cap by 1, then gain 1 energy.'
   },
 
@@ -116,7 +116,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
   pawn: {
     name: 'Pawn',
     type: 'piece',
-    energyCost: 1,
+    energyCost: 0,
     timeCost: 10,
     effect: { action: 'DEPLOY_PIECE', piece: 'p' as PieceType, requiresTarget: true },
     artAsset: 'pawn.png',
@@ -125,11 +125,23 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     description: 'Deploy a Pawn to a square you control.'
   },
 
+  twin_pawn: {
+    name: 'Twin Pawn',
+    type: 'piece',
+    energyCost: 1,
+    timeCost: 15,
+    effect: [{ action: 'DEPLOY_PIECE', piece: 'p' as PieceType, requiresTarget: true },{ action: 'DEPLOY_PIECE', piece: 'p' as PieceType, requiresTarget: true }],
+    artAsset: 'pawn.png',
+    frameColor: 'silver',  // Silver frame indicates piece card
+    quantity: 4,          // Most common piece
+    description: 'Deploy a Pawn to a square you control, then deploy another to a square you control'
+  },
+
   knight: {
     name: 'Knight',
     type: 'piece',
     energyCost: 2,
-    timeCost: 15,
+    timeCost: 20,
     effect: { action: 'DEPLOY_PIECE', piece: 'n' as PieceType, requiresTarget: true },
     artAsset: 'knight.png',
     frameColor: 'silver',
@@ -157,7 +169,7 @@ export const CARD_DEFINITIONS: Record<string, CardDefinition> = {
     effect: { action: 'DEPLOY_PIECE', piece: 'r' as PieceType, requiresTarget: true },
     artAsset: 'rook.png',
     frameColor: 'silver',
-    quantity: 4,
+    quantity: 2,
     description: 'Deploy a Rook to a square you control.'
   },
 
@@ -387,6 +399,5 @@ export function getCardDefinitionByName(name: string): CardDefinition | null {
  * Used by: CardTargetingComponent, GameScene.handleCardPlay()
  */
 export function cardRequiresTarget(card: Card): boolean {
-  const effect = card.effect;
-  return 'requiresTarget' in effect && effect.requiresTarget === true;
+  return normalizeCardEffects(card.effect).some(effectRequiresTarget);
 }

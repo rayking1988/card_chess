@@ -56,6 +56,18 @@ function formatStopwatchTime(seconds: number): string {
   return safeSeconds.toString().padStart(2, '0');
 }
 
+function measureText(
+  scene: Phaser.Scene,
+  sample: string,
+  style: Phaser.Types.GameObjects.Text.TextStyle
+): { width: number; height: number } {
+  const temp = scene.add.text(0, 0, sample, style);
+  const width = temp.width;
+  const height = temp.height;
+  temp.destroy();
+  return { width, height };
+}
+
 /* ============================================
  * STOPWATCH COMPONENT CLASS
  * ============================================
@@ -71,7 +83,8 @@ function formatStopwatchTime(seconds: number): string {
 export class StopwatchComponent {
   private container: Phaser.GameObjects.Container;
   private stopwatchSprite: Phaser.GameObjects.Image;
-  private timeText: Phaser.GameObjects.Text;
+  private timeTextContainer: Phaser.GameObjects.Container;
+  private timeTextChars: Phaser.GameObjects.Text[] = [];
   private currentTime: number = 0;
   private lastDisplayedTime: number = -1;
   private lastWarningLevel: 'none' | 'low' | 'high' = 'none';
@@ -84,21 +97,29 @@ export class StopwatchComponent {
     this.stopwatchSprite.setDisplaySize(STOPWATCH_WIDTH, STOPWATCH_HEIGHT);
     this.container.add(this.stopwatchSprite);
     
-    this.timeText = scene.add.text(0, 5, '00', {
+    const timeTextStyle: Phaser.Types.GameObjects.Text.TextStyle = {
       fontSize: '28px',
       fontFamily: 'Digital7, "Courier New"',
       color: '#ffffff',
       fontStyle: 'normal'
-    }).setOrigin(0.5);
-    const maxStopwatchText = '88';
-    const initialStopwatchText = this.timeText.text;
-    this.timeText.setText(maxStopwatchText);
-    const stopwatchTextWidth = this.timeText.width;
-    const stopwatchTextHeight = this.timeText.height;
-    this.timeText.setText(initialStopwatchText);
-    this.timeText.setFixedSize(stopwatchTextWidth, stopwatchTextHeight);
-    this.timeText.setStyle({ align: 'center' });
-    this.container.add(this.timeText);
+    };
+    const digitMetrics = measureText(scene, '8', timeTextStyle);
+    const digitWidth = Math.ceil(digitMetrics.width);
+    const textHeight = Math.ceil(digitMetrics.height);
+    const totalWidth = digitWidth * 2;
+
+    this.timeTextContainer = scene.add.container(0, 5);
+    let cursor = -totalWidth / 2;
+    for (const ch of formatStopwatchTime(this.currentTime)) {
+      const charText = scene.add.text(0, 0, ch, timeTextStyle);
+      charText.setOrigin(1, 0.5);
+      charText.setPosition(cursor + digitWidth, 0);
+      this.timeTextContainer.add(charText);
+      this.timeTextChars.push(charText);
+      cursor += digitWidth;
+    }
+    this.timeTextContainer.setSize(totalWidth, textHeight);
+    this.container.add(this.timeTextContainer);
     
     this.updateDisplay();
   }
@@ -155,7 +176,7 @@ export class StopwatchComponent {
     }
     
     if (timeChanged) {
-      this.timeText.setText(formatStopwatchTime(this.currentTime));
+      this.setTimeText(formatStopwatchTime(this.currentTime));
       this.lastDisplayedTime = displayTime;
     }
     
@@ -170,7 +191,7 @@ export class StopwatchComponent {
       } else if (currentWarningLevel === 'low') {
         timeColor = STOPWATCH_COLORS.LOW;
       }
-      this.timeText.setColor(timeColor);
+      this.setTimeTextColor(timeColor);
     }
   }
 
@@ -202,8 +223,8 @@ export class StopwatchComponent {
     return this.container;
   }
 
-  getTimeText(): Phaser.GameObjects.Text {
-    return this.timeText;
+  getTimeText(): Phaser.GameObjects.Container {
+    return this.timeTextContainer;
   }
 
   getDimensions(): { width: number; height: number } {
@@ -212,6 +233,21 @@ export class StopwatchComponent {
 
   destroy(): void {
     this.container.destroy();
+  }
+
+  setTimeColor(color: string): void {
+    this.setTimeTextColor(color);
+  }
+
+  private setTimeText(text: string): void {
+    const chars = text.split('');
+    for (let i = 0; i < this.timeTextChars.length; i += 1) {
+      this.timeTextChars[i].setText(chars[i] ?? ' ');
+    }
+  }
+
+  private setTimeTextColor(color: string): void {
+    this.timeTextChars.forEach((charText) => charText.setColor(color));
   }
 }
 

@@ -394,6 +394,16 @@ function setIconSize(icon: Phaser.GameObjects.Image | Phaser.GameObjects.Rectang
   }
 }
 
+function applyFixedTextSize(text: Phaser.GameObjects.Text, sample: string): void {
+  const previousText = text.text;
+  text.setText(sample);
+  const width = text.width;
+  const height = text.height;
+  text.setText(previousText);
+  text.setFixedSize(width, height);
+  text.setStyle({ align: 'center' });
+}
+
 function layoutMobileStatRow(
   scene: GameScene,
   startX: number,
@@ -421,6 +431,11 @@ function layoutMobileStatRow(
     }
     if (text) {
       text.setFontSize(iconSize * 0.8);
+      if (text === clockText) {
+        applyFixedTextSize(text, '88:88');
+      } else if (text === stopwatchText) {
+        applyFixedTextSize(text, '88');
+      }
       const textX = x + iconSize + iconGap;
       text.setPosition(textX, centerY);
       x = textX + text.width + gap;
@@ -460,6 +475,11 @@ function layoutMobileTimeRow(
     }
     if (text) {
       text.setFontSize(iconSize * 0.8);
+      if (text === clockText) {
+        applyFixedTextSize(text, '88:88');
+      } else if (text === stopwatchText) {
+        applyFixedTextSize(text, '88');
+      }
       const textX = x + iconSize + iconGap;
       text.setPosition(textX, centerY);
       x = textX + text.width + gap;

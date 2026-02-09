@@ -1114,8 +1114,30 @@ export class NetworkManager {
    * 
    * Used by: GameScene.handleCardPlay()
    */
-  sendPlayCard(cardId: string, cardName: string, target?: string, pieceType?: string, effectAction?: string): void {
-    this.sendGameAction({ type: 'PLAY_CARD', cardId, cardName, target, pieceType, effectAction });
+  sendPlayCard(
+    cardId: string,
+    cardName: string,
+    target?: string | string[],
+    pieceType?: string | Array<string | null>,
+    effectAction?: string | string[]
+  ): void {
+    const action: GameAction = { type: 'PLAY_CARD', cardId, cardName };
+    if (Array.isArray(target)) {
+      action.targets = target;
+    } else if (target) {
+      action.target = target;
+    }
+    if (Array.isArray(pieceType)) {
+      action.pieceTypes = pieceType;
+    } else if (pieceType) {
+      action.pieceType = pieceType;
+    }
+    if (Array.isArray(effectAction)) {
+      action.effectActions = effectAction;
+    } else if (effectAction) {
+      action.effectAction = effectAction;
+    }
+    this.sendGameAction(action);
   }
 
   /**

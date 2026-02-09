@@ -6,7 +6,9 @@
 
 import { Square, Color, PieceSymbol } from 'chess.js';
 import { CardComponent } from '../../components/Card';
-import type { Card, PieceType, PlayerColor } from '../../managers/GameStateManager';
+import type { CardPlayOutcome } from '../../components/CardTargeting';
+import type { Card, PieceType, PlayerColor, CardEffectAction } from '../../managers/GameStateManager';
+import { effectRequiresTarget, normalizeCardEffects } from '../../managers/GameStateManager';
 import { calculateControlPower, playerControlsSquare } from '../../utils/controlPower';
 import { MAX_PILE_LAYERS } from './GameConstants';
 import { makeCardComponentClickable } from './GameUIHelpers';
@@ -19,6 +21,8 @@ const DEPLOY_HIGHLIGHT_COLOR = 0x4488ff;
 const DESTROY_HIGHLIGHT_COLOR = 0xff4444;
 
 const PROMOTION_PIECES: PieceSymbol[] = ['q', 'r', 'b', 'n'];
+const GHOST_PIECE_ALPHA = 0.5;
+const PLAYER_DISCARD_DEPTH = 6;
 
 function isOpponentHomeRank(square: Square, player: PlayerColor): boolean {
   if (player === 'white') {
@@ -38,6 +42,24 @@ function isOwnHomeRank(square: Square, player: PlayerColor): boolean {
   return square[1] === '8';
 }
 
+function getTargetEffects(card: Card): CardEffectAction[] {
+  return normalizeCardEffects(card.effect).filter(
+    effect => effect.action === 'DEPLOY_PIECE' || effect.action === 'DESTROY_PIECE' || effectRequiresTarget(effect)
+  );
+}
+
+function getActiveTargetEffect(this: GameScene, card: Card): CardEffectAction | null {
+  const targetEffects = getTargetEffects(card);
+  if (targetEffects.length === 0) return null;
+
+  const pending = this.pendingCardPlay;
+  if (pending && pending.card.id === card.id) {
+    return targetEffects[pending.targets.length] ?? null;
+  }
+
+  return targetEffects[0];
+}
+
 /**
  * Gets all legal target squares for a card
  * 
@@ -47,7 +69,11 @@ function isOwnHomeRank(square: Square, player: PlayerColor): boolean {
 export function getLegalTargetSquares(this: GameScene, card: Card): { deploy: Square[], destroy: Square[] } {
   const deploy: Square[] = [];
   const destroy: Square[] = [];
-  
+  const activeEffect = getActiveTargetEffect.call(this, card);
+  if (!activeEffect) {
+    return { deploy, destroy };
+  }
+
   const controlMap = calculateControlPower(this.chessBoard.getWrapper());
   const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
   const ranks = ['1', '2', '3', '4', '5', '6', '7', '8'];
@@ -61,10 +87,10 @@ export function getLegalTargetSquares(this: GameScene, card: Card): { deploy: Sq
       
       const piece = this.chessBoard.getWrapper().getPiece(square);
       
-      if (card.effect.action === 'DEPLOY_PIECE') {
+      if (activeEffect.action === 'DEPLOY_PIECE') {
         // Can deploy to empty controlled squares (if it doesn't give check)
         if (!piece) {
-          const pieceType = (card.effect as { piece: PieceType }).piece;
+          const pieceType = activeEffect.piece;
           
           // Pawns cannot be deployed on player's own home rank
           if (pieceType === 'p' && isOwnHomeRank(square, this.localColor)) {
@@ -76,7 +102,7 @@ export function getLegalTargetSquares(this: GameScene, card: Card): { deploy: Sq
             deploy.push(square);
           }
         }
-      } else if (card.effect.action === 'DESTROY_PIECE') {
+      } else if (activeEffect.action === 'DESTROY_PIECE') {
         // Can destroy non-King pieces on controlled squares
         if (piece && piece.type !== 'k') {
           destroy.push(square);
@@ -144,6 +170,7 @@ export function setupCardHandCallbacks(this: GameScene): void {
   // Handle targeting cancel - clear highlights
   this.cardHand.onTargetingCancel = () => {
     this.clearLegalTargetHighlights();
+    cancelPendingCardPlay.call(this);
   };
 }
 
@@ -159,14 +186,19 @@ export function validateCardTarget(this: GameScene, card: Card, square: Square):
   const controlMap = calculateControlPower(this.chessBoard.getWrapper());
   const playerControls = playerControlsSquare(controlMap, square, this.localColor);
 
-  if (card.effect.action === 'DEPLOY_PIECE') {
+  const activeEffect = getActiveTargetEffect.call(this, card);
+  if (!activeEffect) {
+    return false;
+  }
+
+  if (activeEffect.action === 'DEPLOY_PIECE') {
     // Can only deploy to empty squares you control
     const piece = this.chessBoard.getWrapper().getPiece(square);
     if (!playerControls || piece) {
       return false;
     }
 
-    const pieceType = (card.effect as { piece: PieceType }).piece;
+    const pieceType = activeEffect.piece;
     
     // Pawns cannot be deployed on player's own home rank
     if (pieceType === 'p' && isOwnHomeRank(square, this.localColor)) {
@@ -180,13 +212,25 @@ export function validateCardTarget(this: GameScene, card: Card, square: Square):
     }
 
     return true;
-  } else if (card.effect.action === 'DESTROY_PIECE') {
+  } else if (activeEffect.action === 'DESTROY_PIECE') {
     // Can only destroy non-King pieces on squares you control
     const piece = this.chessBoard.getWrapper().getPiece(square);
     return playerControls && !!piece && piece.type !== 'k';
   }
 
   return false;
+}
+
+function cancelPendingCardPlay(this: GameScene): void {
+  const pending = this.pendingCardPlay;
+  if (!pending) return;
+
+  this.chessBoard.clearGhostSquares();
+  this.chessBoard.setPosition(pending.originalBoardFEN);
+  this.pendingCardPlay = null;
+  this.hidePromotionPicker();
+  this.cardHand.enableInteraction();
+  this.clearLegalTargetHighlights();
 }
 
 /**
@@ -202,7 +246,7 @@ export function validateCardTarget(this: GameScene, card: Card, square: Square):
  * @param card - Card being played
  * @param target - Target square (for targeted cards)
  */
-export function handleLocalCardPlay(this: GameScene, card: Card, target?: Square): boolean {
+export function handleLocalCardPlay(this: GameScene, card: Card, target?: Square): CardPlayOutcome | boolean {
   // Check if it's our turn
   if (!this.gameStateManager.isLocalPlayerTurn()) {
     this.logEvent('system', 'Not your turn!');
@@ -211,6 +255,11 @@ export function handleLocalCardPlay(this: GameScene, card: Card, target?: Square
 
   if (this.isConnectionPaused) {
     this.logEvent('system', 'Connection paused. Waiting for opponent.');
+    return false;
+  }
+
+  if (this.pendingCardPlay && this.pendingCardPlay.card.id !== card.id) {
+    this.logEvent('system', 'Finish the current card play first.');
     return false;
   }
 
@@ -234,46 +283,94 @@ export function handleLocalCardPlay(this: GameScene, card: Card, target?: Square
     return false;
   }
 
-  // Validate target for targeted cards (deployment check, etc.)
-  if (target && !this.validateCardTarget(card, target)) {
-    this.logEvent('system', 'Invalid target!');
-    return false;
-  }
+  const effects = normalizeCardEffects(card.effect);
+  const targetEffects = effects.filter(
+    effect => effect.action === 'DEPLOY_PIECE' || effect.action === 'DESTROY_PIECE' || effectRequiresTarget(effect)
+  );
 
   const releasePos = this.cardHand.getTargeting()?.getLastReleasePosition() ?? undefined;
 
-  const finalizeCardPlay = (deployPieceOverride?: PieceSymbol): boolean => {
+  const finalizeCardPlay = (
+    targets: Square[] = [],
+    targetPieces: Array<PieceSymbol | undefined> = [],
+    cleanupTargeting: boolean = false
+  ): CardPlayOutcome => {
+    const isPendingCard = this.pendingCardPlay?.card.id === card.id;
+    if (isPendingCard) {
+      this.chessBoard.clearGhostSquares();
+    }
+
     // Lock discard display BEFORE playing card to prevent UI update during animation
     this.lockDiscardTop('local');
 
-    const result = this.gameStateManager.playCard(card.id, this.localColor, target);
+    const result = this.gameStateManager.playCard(card.id, this.localColor, targets);
 
     if (result.success) {
       this.logEvent(this.localColor, `Played ${card.name}`);
       // Animation will call releaseDiscardTop when complete
-      this.animateCardPlay(card, 'local', target, undefined, releasePos);
+      const lastTarget = targets.length > 0 ? targets[targets.length - 1] : undefined;
+      this.animateCardPlay(card, 'local', lastTarget, undefined, releasePos);
 
       // Handle piece deployment/destruction on board
-      if (card.effect.action === 'DEPLOY_PIECE' && target) {
-        const piece = deployPieceOverride ?? (card.effect as { piece: PieceSymbol }).piece;
-        const color: Color = this.localColor === 'white' ? 'w' : 'b';
-        this.chessBoard.placePiece(target, piece, color);
-        this.gameStateManager.setBoardFEN(this.chessBoard.getPosition());
-        this.animatePieceDeploy(target);
-      } else if (card.effect.action === 'DESTROY_PIECE' && target) {
-        const targetPiece = this.chessBoard.getWrapper().getPiece(target);
-        this.chessBoard.removePiece(target);
-        this.gameStateManager.setBoardFEN(this.chessBoard.getPosition());
-        if (targetPiece) {
-          this.animatePieceDestroy(targetPiece, target);
+      let targetIndex = 0;
+      let boardModified = false;
+      for (const effect of effects) {
+        if (effect.action === 'DEPLOY_PIECE') {
+          const targetSquare = targets[targetIndex];
+          const piece = targetPieces[targetIndex] ?? effect.piece;
+          targetIndex += 1;
+          if (!targetSquare) continue;
+
+          const color: Color = this.localColor === 'white' ? 'w' : 'b';
+          const existing = this.chessBoard.getWrapper().getPiece(targetSquare);
+          if (!existing) {
+            this.chessBoard.placePiece(targetSquare, piece, color);
+          }
+          this.animatePieceDeploy(targetSquare);
+          boardModified = true;
+        } else if (effect.action === 'DESTROY_PIECE') {
+          const targetSquare = targets[targetIndex];
+          targetIndex += 1;
+          if (!targetSquare) continue;
+
+          const targetPiece = this.chessBoard.getWrapper().getPiece(targetSquare);
+          this.chessBoard.removePiece(targetSquare);
+          if (targetPiece) {
+            this.animatePieceDestroy(targetPiece, targetSquare);
+          }
+          boardModified = true;
         }
       }
 
+      if (boardModified || targets.length > 0) {
+        this.gameStateManager.setBoardFEN(this.chessBoard.getPosition());
+      }
+
       // Send to network with card details for opponent to sync
-      const pieceType = card.effect.action === 'DEPLOY_PIECE'
-        ? (deployPieceOverride ?? (card.effect as { piece: PieceSymbol }).piece)
-        : undefined;
-      this.networkManager?.sendPlayCard(card.id, card.name, target, pieceType, card.effect.action);
+      const targetActions = targetEffects.map(effect => effect.action);
+      const targetPiecesForNetwork = targetActions.map((action, index) => {
+        if (action !== 'DEPLOY_PIECE') return null;
+        return targetPieces[index] ?? (targetEffects[index] as { piece: PieceSymbol }).piece;
+      });
+      if (targets.length === 1) {
+        this.networkManager?.sendPlayCard(
+          card.id,
+          card.name,
+          targets[0],
+          targetPiecesForNetwork[0],
+          targetActions[0]
+        );
+      } else if (targets.length > 1) {
+        this.networkManager?.sendPlayCard(
+          card.id,
+          card.name,
+          targets,
+          targetPiecesForNetwork,
+          targetActions
+        );
+      } else {
+        this.networkManager?.sendPlayCard(card.id, card.name);
+      }
 
       // Check for checkmate/stalemate after card play (Requirement 3.8)
       this.checkCardPlayEndConditions();
@@ -282,7 +379,20 @@ export function handleLocalCardPlay(this: GameScene, card: Card, target?: Square
       this.releaseDiscardTop('local');
       this.logEvent('system', result.message);
       this.updateHandDisplay();
+      if (isPendingCard) {
+        cancelPendingCardPlay.call(this);
+      }
       return false;
+    }
+
+    if (cleanupTargeting) {
+      this.cardHand.getTargeting()?.cancelTargeting();
+      this.clearLegalTargetHighlights();
+    }
+
+    if (isPendingCard) {
+      this.pendingCardPlay = null;
+      this.cardHand.enableInteraction();
     }
 
     this.updateUIFromState();
@@ -295,11 +405,106 @@ export function handleLocalCardPlay(this: GameScene, card: Card, target?: Square
       this.updateUIFromState();
     }
     
-    return true;
+    return 'played';
   };
 
-  if (card.effect.action === 'DEPLOY_PIECE' && target) {
-    const basePiece = (card.effect as { piece: PieceSymbol }).piece;
+  if (targetEffects.length > 1) {
+    if (!target) {
+      this.logEvent('system', 'Card requires a target');
+      return false;
+    }
+
+    const pending = this.pendingCardPlay ?? {
+      card,
+      effects,
+      targetEffects,
+      targets: [],
+      originalBoardFEN: this.chessBoard.getPosition()
+    };
+    if (!this.pendingCardPlay) {
+      this.pendingCardPlay = pending;
+      this.cardHand.disableInteraction();
+    }
+
+    const currentEffect = pending.targetEffects[pending.targets.length];
+    if (!currentEffect) {
+      this.logEvent('system', 'No remaining targets');
+      return false;
+    }
+
+    // Validate target for targeted cards (deployment check, etc.)
+    if (!this.validateCardTarget(card, target)) {
+      this.logEvent('system', 'Invalid target!');
+      return 'continue';
+    }
+
+    const applyTarget = (deployPieceOverride?: PieceSymbol): CardPlayOutcome => {
+      const pieceType = currentEffect.action === 'DEPLOY_PIECE'
+        ? (deployPieceOverride ?? currentEffect.piece)
+        : undefined;
+      if (currentEffect.action === 'DEPLOY_PIECE') {
+        const color: Color = this.localColor === 'white' ? 'w' : 'b';
+        this.chessBoard.setGhostSquare(target, GHOST_PIECE_ALPHA);
+        this.chessBoard.placePiece(target, pieceType as PieceSymbol, color);
+      }
+
+      pending.targets.push({
+        action: currentEffect.action,
+        target,
+        pieceType
+      });
+
+      if (pending.targets.length >= pending.targetEffects.length) {
+        return finalizeCardPlay(
+          pending.targets.map(entry => entry.target),
+          pending.targets.map(entry => entry.pieceType),
+          true
+        );
+      }
+
+      this.clearLegalTargetHighlights();
+      this.highlightLegalTargets(card);
+      return 'continue';
+    };
+
+    if (currentEffect.action === 'DEPLOY_PIECE') {
+      const basePiece = currentEffect.piece;
+      if (basePiece === 'p' && isOpponentHomeRank(target, this.localColor)) {
+        const boardFEN = this.chessBoard.getPosition();
+        const allowedPromotions = PROMOTION_PIECES.filter(
+          piece => !this.gameStateManager.wouldDeploymentGiveCheck(target, piece as PieceType, this.localColor, boardFEN)
+        );
+        if (allowedPromotions.length === 0) {
+          this.logEvent('system', 'No legal promotion options');
+          return 'continue';
+        }
+
+        const targeting = this.cardHand.getTargeting();
+        targeting?.setPaused(true);
+        this.showPromotionPicker(
+          target,
+          target,
+          this.localColor,
+          allowedPromotions,
+          (piece) => {
+            targeting?.setPaused(false);
+            applyTarget(piece);
+          }
+        );
+        return 'continue';
+      }
+    }
+
+    return applyTarget();
+  }
+
+  if (target && !this.validateCardTarget(card, target)) {
+    this.logEvent('system', 'Invalid target!');
+    return false;
+  }
+
+  if (targetEffects.length === 1 && target && targetEffects[0].action === 'DEPLOY_PIECE') {
+    const basePiece = targetEffects[0].piece;
     if (basePiece === 'p' && isOpponentHomeRank(target, this.localColor)) {
       const boardFEN = this.chessBoard.getPosition();
       const allowedPromotions = PROMOTION_PIECES.filter(
@@ -316,14 +521,14 @@ export function handleLocalCardPlay(this: GameScene, card: Card, target?: Square
         this.localColor,
         allowedPromotions,
         (piece) => {
-          finalizeCardPlay(piece);
+          finalizeCardPlay([target], [piece], true);
         }
       );
-      return true;
+      return 'played';
     }
   }
 
-  return finalizeCardPlay();
+  return finalizeCardPlay(target ? [target] : [], target ? [undefined] : [], !!target);
 }
 
 /**
@@ -363,7 +568,11 @@ export function setDiscardTopCard(this: GameScene, side: 'local' | 'opponent', c
   // Create top card - always face-up (discard piles are public information)
   // Only create if we have actual card data (no card back for empty/unknown)
   const topCard = new CardComponent(this, 0, 0, cardData, false, scale);
-  topCard.setDepth(MAX_PILE_LAYERS + 8);
+  if (isOpponent) {
+    topCard.setDepth(MAX_PILE_LAYERS + 8);
+  } else {
+    topCard.setDepth(PLAYER_DISCARD_DEPTH);
+  }
   topCard.getContainer().setPosition(layout.leftPanelX, positionY);
   makeCardComponentClickable(topCard, () => this.showDiscardViewer(side));
   

@@ -466,13 +466,12 @@ export function animateStopwatchChange(
   if (diff === 0) return;
 
   const container = component.getContainer();
-  const text = component.getTimeText();
   const color = diff > 0 ? '#ffaa44' : '#66aaff';
   const layout = this.currentLayout;
   const offset = layout ? 40 * layout.panelScale : 40;
 
   this.animations.bounce(container);
-  text.setColor(color);
+  component.setTimeColor(color);
 
   this.time.delayedCall(300, () => {
     component.setTime(newValue);

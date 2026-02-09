@@ -69,6 +69,18 @@ export function formatTime(seconds: number): string {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
+function measureText(
+  scene: Phaser.Scene,
+  sample: string,
+  style: Phaser.Types.GameObjects.Text.TextStyle
+): { width: number; height: number } {
+  const temp = scene.add.text(0, 0, sample, style);
+  const width = temp.width;
+  const height = temp.height;
+  temp.destroy();
+  return { width, height };
+}
+
 /* ============================================
  * CLOCK COMPONENT CLASS
  * ============================================
@@ -105,8 +117,11 @@ export class ClockComponent {
   /** Background sprite showing the clock face */
   private clockSprite: Phaser.GameObjects.Image;
   
-  /** Text displaying the time in MM:SS format */
-  private timeText: Phaser.GameObjects.Text;
+  /** Container holding fixed-width time characters */
+  private timeTextContainer: Phaser.GameObjects.Container;
+
+  /** Individual time character objects */
+  private timeTextChars: Phaser.GameObjects.Text[] = [];
   
   /** Label text above the clock (e.g., "Your Time") */
   private labelText: Phaser.GameObjects.Text;
@@ -148,21 +163,38 @@ export class ClockComponent {
     
     // Add time display text with digital font
     // Positioned slightly above center for visual balance
-    this.timeText = scene.add.text(0, -11, formatTime(initialTime), {
+    const timeTextStyle: Phaser.Types.GameObjects.Text.TextStyle = {
       fontSize: '47px',
       fontFamily: 'Digital7, "Courier New"',
       color: TIME_COLORS.normal,
       fontStyle: 'normal'
-    }).setOrigin(0.5);
-    const maxClockText = '88:88';
-    const initialClockText = this.timeText.text;
-    this.timeText.setText(maxClockText);
-    const clockTextWidth = this.timeText.width;
-    const clockTextHeight = this.timeText.height;
-    this.timeText.setText(initialClockText);
-    this.timeText.setFixedSize(clockTextWidth, clockTextHeight);
-    this.timeText.setStyle({ align: 'center' });
-    this.container.add(this.timeText);
+    };
+    const digitMetrics = measureText(scene, '8', timeTextStyle);
+    const colonMetrics = measureText(scene, ':', timeTextStyle);
+    const digitWidth = Math.ceil(digitMetrics.width);
+    const colonWidth = Math.ceil(colonMetrics.width);
+    const textHeight = Math.ceil(Math.max(digitMetrics.height, colonMetrics.height));
+    const totalWidth = digitWidth * 4 + colonWidth;
+
+    this.timeTextContainer = scene.add.container(0, -11);
+    let cursor = -totalWidth / 2;
+    for (const ch of formatTime(initialTime)) {
+      const isColon = ch === ':';
+      const cellWidth = isColon ? colonWidth : digitWidth;
+      const charText = scene.add.text(0, 0, ch, timeTextStyle);
+      if (isColon) {
+        charText.setOrigin(0.5, 0.5);
+        charText.setPosition(cursor + cellWidth / 2, 0);
+      } else {
+        charText.setOrigin(1, 0.5);
+        charText.setPosition(cursor + cellWidth, 0);
+      }
+      this.timeTextContainer.add(charText);
+      this.timeTextChars.push(charText);
+      cursor += cellWidth;
+    }
+    this.timeTextContainer.setSize(totalWidth, textHeight);
+    this.container.add(this.timeTextContainer);
     
     // Add optional label text above the clock
     this.labelText = scene.add.text(0, -85, label, {
@@ -197,15 +229,15 @@ export class ClockComponent {
     }
     
     this.currentTime = seconds;
-    this.timeText.setText(formatTime(seconds));
+    this.setTimeText(formatTime(seconds));
     
     // Apply color based on remaining time
     if (seconds <= 0) {
-      this.timeText.setColor(TIME_COLORS.critical);
+      this.setTimeTextColor(TIME_COLORS.critical);
     } else if (seconds <= LOW_TIME_THRESHOLD) {
-      this.timeText.setColor(TIME_COLORS.warning);
+      this.setTimeTextColor(TIME_COLORS.warning);
     } else {
-      this.timeText.setColor(TIME_COLORS.normal);
+      this.setTimeTextColor(TIME_COLORS.normal);
     }
   }
 
@@ -333,12 +365,12 @@ export class ClockComponent {
   /**
    * Gets the time text object for animations
    * 
-   * @returns The Phaser text object displaying the time
+   * @returns The Phaser container holding the time characters
    * 
    * Used by: AnimationManager for time change animations
    */
-  getTimeText(): Phaser.GameObjects.Text {
-    return this.timeText;
+  getTimeText(): Phaser.GameObjects.Container {
+    return this.timeTextContainer;
   }
 
   /**
@@ -364,6 +396,17 @@ export class ClockComponent {
    */
   destroy(): void {
     this.container.destroy();
+  }
+
+  private setTimeText(text: string): void {
+    const chars = text.split('');
+    for (let i = 0; i < this.timeTextChars.length; i += 1) {
+      this.timeTextChars[i].setText(chars[i] ?? ' ');
+    }
+  }
+
+  private setTimeTextColor(color: string): void {
+    this.timeTextChars.forEach((charText) => charText.setColor(color));
   }
 }
 

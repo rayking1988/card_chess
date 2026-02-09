@@ -54,8 +54,9 @@ import type { DisturbCounterComponent } from '../components/DisturbCounter';
 import type { EventLogComponent } from '../components/EventLog';
 import type { FocusDisturbToggleComponent } from '../components/FocusDisturbToggle';
 import type { CardComponent } from '../components/Card';
+import type { CardPlayOutcome } from '../components/CardTargeting';
 import { GameStateManager } from '../managers/GameStateManager';
-import type { PlayerColor, Card } from '../managers/GameStateManager';
+import type { PlayerColor, Card, CardEffectAction } from '../managers/GameStateManager';
 import type { NetworkManager, GameAction } from '../managers/NetworkManager';
 import { DeckManager, DECK_SIZE, INITIAL_DRAW_COUNT } from '../managers/DeckManager';
 import { createGameAnimationManager } from '../managers/AnimationManager';
@@ -191,6 +192,20 @@ import {
   handleReturnToMenu
 } from './game/GameSceneFlow';
 import { showPromotionPicker, hidePromotionPicker } from './game/GameScenePromotion';
+
+type PendingCardTarget = {
+  action: 'DEPLOY_PIECE' | 'DESTROY_PIECE';
+  target: Square;
+  pieceType?: PieceSymbol;
+};
+
+type PendingCardPlay = {
+  card: Card;
+  effects: CardEffectAction[];
+  targetEffects: CardEffectAction[];
+  targets: PendingCardTarget[];
+  originalBoardFEN: string;
+};
 
 /* ============================================
  * DEBUG CONFIGURATION
@@ -447,6 +462,9 @@ export class GameScene extends Phaser.Scene {
     onSelect?: (piece: PieceSymbol) => void;
     title?: string;
   } | null = null;
+
+  /** Pending multi-action card play state (multi-target selection) */
+  public pendingCardPlay: PendingCardPlay | null = null;
 
   /* ----------------------------------------
    * Mobile UI Bars
@@ -1276,9 +1294,22 @@ export class GameScene extends Phaser.Scene {
     cardName: string,
     target?: string,
     pieceType?: string,
-    effectAction?: string
+    effectAction?: string,
+    targets?: string[],
+    pieceTypes?: Array<string | null>,
+    effectActions?: string[]
   ): void {
-    handleOpponentPlayCard.call(this, _cardId, cardName, target, pieceType, effectAction);
+    handleOpponentPlayCard.call(
+      this,
+      _cardId,
+      cardName,
+      target,
+      pieceType,
+      effectAction,
+      targets,
+      pieceTypes,
+      effectActions
+    );
   }
 
   public handleOpponentMovePiece(from: string, to: string, promotion?: string): void {
@@ -1321,7 +1352,7 @@ export class GameScene extends Phaser.Scene {
     clearLegalTargetHighlights.call(this);
   }
 
-  public handleLocalCardPlay(card: Card, target?: Square): boolean {
+  public handleLocalCardPlay(card: Card, target?: Square): CardPlayOutcome | boolean {
     return handleLocalCardPlay.call(this, card, target);
   }
 

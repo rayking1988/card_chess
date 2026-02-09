@@ -39,7 +39,7 @@ export class GameAnimationManager extends BoardAnimationManager {
    * Animates clock time change with visual feedback
    *
    * @param clockContainer - The clock container
-   * @param timeText - The time text object
+   * @param timeText - The time text or container object
    * @param oldTime - Previous time value
    * @param newTime - New time value
    * @param config - Animation configuration
@@ -47,7 +47,7 @@ export class GameAnimationManager extends BoardAnimationManager {
    */
   animateClockChange(
     clockContainer: Phaser.GameObjects.Container,
-    timeText: Phaser.GameObjects.Text,
+    timeText: Phaser.GameObjects.Text | Phaser.GameObjects.Container,
     oldTime: number,
     newTime: number,
     config: TweenConfig = {},
@@ -108,29 +108,62 @@ export class GameAnimationManager extends BoardAnimationManager {
    * @private
    */
   private animateTextChange(
-    text: Phaser.GameObjects.Text,
+    text: Phaser.GameObjects.Text | Phaser.GameObjects.Container,
     flashColor: number,
     config: TweenConfig = {}
   ): void {
     const scene = (this as unknown as { scene: Phaser.Scene }).scene;
-    const originalColor = text.style.color;
-    const baseScaleX = text.scaleX || 1;
-    const baseScaleY = text.scaleY || 1;
+    const targets = this.collectTextTargets(text);
+    if (targets.length === 0) {
+      return;
+    }
 
+    const originalColors = targets.map((target) => target.style.color as string);
     const colorStr = '#' + flashColor.toString(16).padStart(6, '0');
-    text.setColor(colorStr);
 
-    scene.tweens.add({
-      targets: text,
-      scaleX: baseScaleX,
-      scaleY: baseScaleY,
-      duration: (config.duration ?? ANIM_DURATION.CLOCK_CHANGE) / 2,
-      ease: EASING.QUAD_OUT,
-      yoyo: true,
-      onComplete: () => {
-        text.setColor(originalColor as string);
-      },
+    targets.forEach((target) => target.setColor(colorStr));
+
+    const duration = (config.duration ?? ANIM_DURATION.CLOCK_CHANGE) / 2;
+    targets.forEach((target, index) => {
+      const baseScaleX = target.scaleX || 1;
+      const baseScaleY = target.scaleY || 1;
+      scene.tweens.add({
+        targets: target,
+        scaleX: baseScaleX,
+        scaleY: baseScaleY,
+        duration,
+        ease: EASING.QUAD_OUT,
+        yoyo: true,
+        onComplete: () => {
+          target.setColor(originalColors[index] ?? originalColors[0] ?? '#ffffff');
+        },
+      });
     });
+  }
+
+  private collectTextTargets(
+    target: Phaser.GameObjects.Text | Phaser.GameObjects.Container | null | undefined
+  ): Phaser.GameObjects.Text[] {
+    if (!target) {
+      return [];
+    }
+    if (target instanceof Phaser.GameObjects.Text) {
+      return [target];
+    }
+    const results: Phaser.GameObjects.Text[] = [];
+    const queue: Phaser.GameObjects.GameObject[] = [...target.list];
+    while (queue.length > 0) {
+      const child = queue.pop();
+      if (!child) {
+        continue;
+      }
+      if (child instanceof Phaser.GameObjects.Text) {
+        results.push(child);
+      } else if (child instanceof Phaser.GameObjects.Container) {
+        queue.push(...child.list);
+      }
+    }
+    return results;
   }
 
   /**

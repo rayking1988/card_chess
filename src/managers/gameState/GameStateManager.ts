@@ -29,6 +29,7 @@ import {
 import { resolveCardEffect as resolveCardEffectHelper } from './effects';
 import { createInitialGameState } from './factory';
 import type { Card, GamePhase, GameState, PieceType, PlayerColor, PlayerState } from './types';
+import { effectRequiresTarget, normalizeCardEffects } from './types';
 import { wouldDeploymentGiveCheck as wouldDeploymentGiveCheckHelper } from './validation';
 
 /* ============================================
@@ -602,7 +603,9 @@ export class GameStateManager {
     const playerState = this.state.players[player];
     
     // Energy cards don't trigger disturb clear and time deduction
-    const isEnergyCard = card && card.effect.action === 'ENERGY_CARD';
+    const isEnergyCard = !!card && (
+      card.type === 'energy' || normalizeCardEffects(card.effect).some(effect => effect.action === 'ENERGY_CARD')
+    );
     
     if (!playerState.hasPlayedCardThisTurn && playerState.disturbTags > 0 && !isEnergyCard) {
       this.deductTime(player, playerState.disturbTags);
@@ -892,7 +895,7 @@ export class GameStateManager {
    * @param target - Optional target square for targeted effects
    * @returns Object with success flag and message
    */
-  playCard(cardId: string, player: PlayerColor, target?: string): { success: boolean; message: string } {
+  playCard(cardId: string, player: PlayerColor, target?: string | string[]): { success: boolean; message: string } {
     const playerState = this.state.players[player];
 
     const cardIndex = playerState.hand.findIndex(c => c.id === cardId);
@@ -907,8 +910,10 @@ export class GameStateManager {
       return { success: false, message: validation.reason };
     }
 
-    const requiresTarget = 'requiresTarget' in card.effect && card.effect.requiresTarget;
-    if (requiresTarget && !target) {
+    const effects = normalizeCardEffects(card.effect);
+    const requiredTargets = effects.filter(effectRequiresTarget).length;
+    const targets = Array.isArray(target) ? target : (target ? [target] : []);
+    if (requiredTargets > 0 && targets.length < requiredTargets) {
       return { success: false, message: 'Card requires a target' };
     }
 
@@ -928,7 +933,7 @@ export class GameStateManager {
     playerState.hand.splice(cardIndex, 1);
 
     // Resolve effect
-    const effectResult = this.resolveCardEffect(card, player, target);
+    const effectResult = this.resolveCardEffect(card, player, targets);
 
     // Add card to discard pile
     playerState.discard.push(card);
@@ -947,7 +952,7 @@ export class GameStateManager {
    * @returns Object with success flag and message
    * @private
    */
-  resolveCardEffect(card: Card, player: PlayerColor, target?: string): { success: boolean; message: string } {
+  resolveCardEffect(card: Card, player: PlayerColor, target?: string | string[]): { success: boolean; message: string } {
     return resolveCardEffectHelper(this, card, player, target);
   }
 

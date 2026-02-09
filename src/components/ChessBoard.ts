@@ -135,6 +135,9 @@ export class ChessBoardComponent {
   
   /** Map of square → piece sprite */
   private pieceSprites: Map<string, Phaser.GameObjects.Image>;
+
+  /** Squares with ghosted pieces and their alpha */
+  private ghostSquares: Map<string, number> = new Map();
   
   /** Graphics for selection/move highlights */
   private highlightGraphics: Phaser.GameObjects.Graphics;
@@ -716,6 +719,10 @@ export class ChessBoardComponent {
       
       const sprite = this.scene.add.image(x, y, textureKey);
       sprite.setScale(this.scale * 1.1);
+      const ghostAlpha = this.ghostSquares.get(square);
+      if (ghostAlpha !== undefined) {
+        sprite.setAlpha(ghostAlpha);
+      }
       
       // Setup piece dragging if enabled
       if (this.dragEnabled) {
@@ -724,6 +731,13 @@ export class ChessBoardComponent {
       
       this.container.add(sprite);
       this.pieceSprites.set(square, sprite);
+    }
+  }
+
+  private applyGhostAlpha(): void {
+    for (const [square, sprite] of this.pieceSprites.entries()) {
+      const ghostAlpha = this.ghostSquares.get(square);
+      sprite.setAlpha(ghostAlpha !== undefined ? ghostAlpha : 1);
     }
   }
 
@@ -1096,6 +1110,26 @@ export class ChessBoardComponent {
    */
   getPieceSprite(square: Square): Phaser.GameObjects.Image | null {
     return this.pieceSprites.get(square) || null;
+  }
+
+  /**
+   * Marks a piece sprite as a ghost (semi-transparent) for preview placements.
+   */
+  setGhostSquare(square: Square, alpha: number = 0.5): void {
+    this.ghostSquares.set(square, alpha);
+    const sprite = this.getPieceSprite(square);
+    if (sprite) {
+      sprite.setAlpha(alpha);
+    }
+  }
+
+  /**
+   * Clears all ghost markers and restores full opacity.
+   */
+  clearGhostSquares(): void {
+    if (this.ghostSquares.size === 0) return;
+    this.ghostSquares.clear();
+    this.applyGhostAlpha();
   }
 
   /**

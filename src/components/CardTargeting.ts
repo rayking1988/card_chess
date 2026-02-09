@@ -40,6 +40,9 @@ const ARROW_WIDTH = TARGETING_LAYOUT.ARROW_WIDTH;
 /** Size of the arrow head in pixels */
 const ARROW_HEAD_SIZE = TARGETING_LAYOUT.ARROW_HEAD_SIZE;
 
+/** Alpha for persistent arrows when selecting multiple targets */
+const PERSISTENT_ARROW_ALPHA = 0.6;
+
 /** Color for valid target highlights (green) */
 const VALID_TARGET_COLOR = hex(TARGETING_COLORS.VALID_TARGET);
 
@@ -71,6 +74,14 @@ const ARROW_CURVE_FACTOR = TARGETING_LAYOUT.ARROW_CURVE_FACTOR;
  * @returns True if the target is valid
  */
 export type TargetValidator = (square: Square, card: CardData) => boolean;
+
+export type CardPlayOutcome = 'played' | 'continue' | 'cancelled';
+
+export function normalizeCardPlayOutcome(outcome: CardPlayOutcome | boolean | void): CardPlayOutcome {
+  if (outcome === 'continue') return 'continue';
+  if (outcome === 'cancelled' || outcome === false) return 'cancelled';
+  return 'played';
+}
 
 /**
  * Play zone bounds definition
@@ -124,6 +135,9 @@ export class CardTargetingComponent {
   
   /** Graphics for drawing the targeting arrow */
   private arrowGraphics: Phaser.GameObjects.Graphics;
+
+  /** Graphics for persistent arrows between multi-step targets */
+  private persistentArrowGraphics: Phaser.GameObjects.Graphics;
   
   /** Graphics for highlighting the play zone */
   private playZoneGraphics: Phaser.GameObjects.Graphics;
@@ -215,10 +229,10 @@ export class CardTargetingComponent {
    */
   
   /** Called when a non-targeted card is played (Req 9.3) */
-  public onCardPlayed?: (card: CardData) => void;
+  public onCardPlayed?: (card: CardData) => CardPlayOutcome | boolean | void;
   
   /** Called when a targeted card hits a valid target (Req 9.5) */
-  public onCardTargeted?: (card: CardData, target: Square) => void;
+  public onCardTargeted?: (card: CardData, target: Square) => CardPlayOutcome | boolean | void;
   
   /** Called when targeting starts */
   public onTargetingStart?: (card: CardData) => void;
@@ -234,6 +248,15 @@ export class CardTargetingComponent {
   
   /** Throttle timestamp for update calls */
   private lastUpdateTime: number = 0;
+
+  /** Whether to follow pointer movement after releasing (multi-step targeting) */
+  private followPointer: boolean = false;
+
+  /** Ignore the next scene pointerup event after switching to follow mode */
+  private ignoreNextPointerUp: boolean = false;
+
+  /** Pause targeting updates (used for modal overlays) */
+  private paused: boolean = false;
   
   /** Minimum ms between update calls to prevent glitches from fast movement */
   private static readonly UPDATE_THROTTLE_MS = 8; // ~120fps max
@@ -256,6 +279,9 @@ export class CardTargetingComponent {
     this.useSceneInputHandlers = useSceneInputHandlers;
     
     // Create graphics layers
+    this.persistentArrowGraphics = scene.add.graphics();
+    this.persistentArrowGraphics.setDepth(DEPTH.TARGETING_ARROW);
+
     this.arrowGraphics = scene.add.graphics();
     this.arrowGraphics.setDepth(DEPTH.TARGETING_ARROW);
     
@@ -411,6 +437,10 @@ export class CardTargetingComponent {
     this.lastPlayZoneInBounds = null;
     this.lastReleaseX = null;
     this.lastReleaseY = null;
+    this.followPointer = false;
+    this.ignoreNextPointerUp = false;
+    this.paused = false;
+    this.persistentArrowGraphics.clear();
     
     const requiresTarget = this.forceDragMode ? false : cardRequiresTarget(card);
     
@@ -449,6 +479,7 @@ export class CardTargetingComponent {
    */
   updateTargeting(x: number, y: number): void {
     if (!this.activeCard) return;
+    if (this.paused) return;
     
     // Skip if coordinates haven't changed
     if (this.lastUpdateX === x && this.lastUpdateY === y) {
@@ -520,8 +551,19 @@ export class CardTargetingComponent {
       
       if (target && this.isValidTarget(target, card)) {
         // Requirement 9.5: Valid target - resolve effect
-        if (this.onCardTargeted) {
-          this.onCardTargeted(card, target);
+        const outcome = normalizeCardPlayOutcome(this.onCardTargeted?.(card, target));
+        if (outcome === 'continue') {
+          this.addPersistentArrow(target);
+          this.followPointer = true;
+          this.ignoreNextPointerUp = true;
+          this.scene.time.delayedCall(0, () => {
+            this.ignoreNextPointerUp = false;
+          });
+          return 'played';
+        }
+        if (outcome === 'cancelled') {
+          this.cancelTargeting();
+          return 'cancelled';
         }
         this.cancelTargeting();
         return 'played';
@@ -537,8 +579,10 @@ export class CardTargetingComponent {
       // Drag-to-play - check if we're in the play zone
       if (this.isInPlayZone(x, y)) {
         // Requirement 9.5: In play zone - play the card
-        if (this.onCardPlayed) {
-          this.onCardPlayed(card);
+        const outcome = normalizeCardPlayOutcome(this.onCardPlayed?.(card));
+        if (outcome === 'cancelled') {
+          this.cancelTargeting();
+          return 'cancelled';
         }
         this.cancelTargeting();
         return 'played';
@@ -570,8 +614,12 @@ export class CardTargetingComponent {
     this.lastUpdateY = null;
     this.lastPlayZoneInBounds = null;
     this.lastUpdateTime = 0;
+    this.followPointer = false;
+    this.ignoreNextPointerUp = false;
+    this.paused = false;
     
     this.arrowGraphics.clear();
+    this.persistentArrowGraphics.clear();
     this.hidePlayZone();
   }
   
@@ -658,29 +706,33 @@ export class CardTargetingComponent {
    * @private
    */
   private setupInputHandlers(): void {
-    if (this.useSceneInputHandlers) {
-      this.boundPointerMove = (pointer: Phaser.Input.Pointer) => {
-        if (this.isActive()) {
-          this.updateTargeting(pointer.x, pointer.y);
-        }
-      };
-      
-      this.boundPointerUp = (pointer: Phaser.Input.Pointer) => {
-        if (this.isActive()) {
-          this.endTargeting(pointer.x, pointer.y);
-        }
-      };
+    this.boundPointerMove = (pointer: Phaser.Input.Pointer) => {
+      if (this.isActive() && this.shouldHandleSceneInput()) {
+        this.updateTargeting(pointer.x, pointer.y);
+      }
+    };
+    
+    this.boundPointerUp = (pointer: Phaser.Input.Pointer) => {
+      if (!this.isActive() || !this.shouldHandleSceneInput()) return;
+      if (this.ignoreNextPointerUp) {
+        this.ignoreNextPointerUp = false;
+        return;
+      }
+      this.endTargeting(pointer.x, pointer.y);
+    };
 
-      this.boundPointerUpOutside = (pointer: Phaser.Input.Pointer) => {
-        if (this.isActive()) {
-          this.endTargeting(pointer.x, pointer.y);
-        }
-      };
+    this.boundPointerUpOutside = (pointer: Phaser.Input.Pointer) => {
+      if (!this.isActive() || !this.shouldHandleSceneInput()) return;
+      if (this.ignoreNextPointerUp) {
+        this.ignoreNextPointerUp = false;
+        return;
+      }
+      this.endTargeting(pointer.x, pointer.y);
+    };
 
-      this.scene.input.on('pointermove', this.boundPointerMove);
-      this.scene.input.on('pointerup', this.boundPointerUp);
-      this.scene.input.on('pointerupoutside', this.boundPointerUpOutside);
-    }
+    this.scene.input.on('pointermove', this.boundPointerMove);
+    this.scene.input.on('pointerup', this.boundPointerUp);
+    this.scene.input.on('pointerupoutside', this.boundPointerUpOutside);
 
     // Right-click to cancel targeting
     this.boundRightClick = (pointer: Phaser.Input.Pointer) => {
@@ -711,10 +763,99 @@ export class CardTargetingComponent {
     this.cancelTargeting();
   }
 
+  private shouldHandleSceneInput(): boolean {
+    return (this.useSceneInputHandlers || this.followPointer) && !this.paused;
+  }
+
+  /**
+   * Pauses or resumes targeting updates (e.g., during promotion picker).
+   */
+  setPaused(paused: boolean): void {
+    this.paused = paused;
+    if (paused) {
+      this.arrowGraphics.clear();
+    }
+  }
+
   /* ============================================
    * PRIVATE RENDERING METHODS
    * ============================================
    */
+
+  private addPersistentArrow(target: Square): void {
+    if (!this.boardBounds) return;
+    const { col, row } = this.squareToCoords(target);
+    const endX = this.boardX + col * this.squareSize + this.squareSize / 2;
+    const endY = this.boardY + row * this.squareSize + this.squareSize / 2;
+    this.drawArrow(
+      this.persistentArrowGraphics,
+      this.startX,
+      this.startY,
+      endX,
+      endY,
+      VALID_TARGET_COLOR,
+      PERSISTENT_ARROW_ALPHA
+    );
+  }
+
+  private drawArrow(
+    graphics: Phaser.GameObjects.Graphics,
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+    color: number,
+    alpha: number = 1
+  ): void {
+    const midX = (startX + endX) / 2;
+    const midY = (startY + endY) / 2;
+    const dx = endX - startX;
+    const dy = endY - startY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // Perpendicular offset for curve (curves upward/left relative to direction)
+    const perpX = -dy * ARROW_CURVE_FACTOR;
+    const perpY = dx * ARROW_CURVE_FACTOR;
+    const controlX = midX + perpX;
+    const controlY = midY + perpY;
+
+    // Draw curved line using quadratic bezier
+    graphics.lineStyle(ARROW_WIDTH, color, alpha);
+    graphics.beginPath();
+    graphics.moveTo(startX, startY);
+
+    // Draw bezier curve as series of line segments for smooth appearance
+    const segments = Math.max(TARGETING_LAYOUT.MIN_ARROW_SEGMENTS, Math.floor(distance / TARGETING_LAYOUT.ARROW_SEGMENT_DIVISOR));
+    for (let i = 1; i <= segments; i++) {
+      const t = i / segments;
+      const invT = 1 - t;
+      // Quadratic bezier formula: B(t) = (1-t)²P0 + 2(1-t)tP1 + t²P2
+      const x = invT * invT * startX + 2 * invT * t * controlX + t * t * endX;
+      const y = invT * invT * startY + 2 * invT * t * controlY + t * t * endY;
+      graphics.lineTo(x, y);
+    }
+    graphics.strokePath();
+
+    // Calculate tangent angle at the end of the curve for arrow head direction
+    // Derivative of quadratic bezier at t=1: 2(P2 - P1)
+    const tangentX = 2 * (endX - controlX);
+    const tangentY = 2 * (endY - controlY);
+    const angle = Math.atan2(tangentY, tangentX);
+
+    // Draw arrow head aligned with curve tangent
+    const headX1 = endX - ARROW_HEAD_SIZE * Math.cos(angle - MATH.ARROW_HEAD_ANGLE);
+    const headY1 = endY - ARROW_HEAD_SIZE * Math.sin(angle - MATH.ARROW_HEAD_ANGLE);
+    const headX2 = endX - ARROW_HEAD_SIZE * Math.cos(angle + MATH.ARROW_HEAD_ANGLE);
+    const headY2 = endY - ARROW_HEAD_SIZE * Math.sin(angle + MATH.ARROW_HEAD_ANGLE);
+
+    graphics.fillStyle(color, alpha);
+    graphics.beginPath();
+    graphics.moveTo(endX, endY);
+    graphics.lineTo(headX1, headY1);
+    graphics.lineTo(headX2, headY2);
+    graphics.closePath();
+    graphics.fillPath();
+  }
 
   /**
    * Draws the targeting arrow from card to cursor
@@ -741,55 +882,7 @@ export class CardTargetingComponent {
     const isValid = target && this.activeCard && this.isValidTarget(target, this.activeCard);
     const color = isValid ? VALID_TARGET_COLOR : ARROW_COLOR;
     
-    // Calculate control point for quadratic bezier curve
-    const midX = (this.startX + this.currentX) / 2;
-    const midY = (this.startY + this.currentY) / 2;
-    const dx = this.currentX - this.startX;
-    const dy = this.currentY - this.startY;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    
-    // Perpendicular offset for curve (curves upward/left relative to direction)
-    const perpX = -dy * ARROW_CURVE_FACTOR;
-    const perpY = dx * ARROW_CURVE_FACTOR;
-    const controlX = midX + perpX;
-    const controlY = midY + perpY;
-    
-    // Draw curved line using quadratic bezier
-    this.arrowGraphics.lineStyle(ARROW_WIDTH, color, 1);
-    this.arrowGraphics.beginPath();
-    this.arrowGraphics.moveTo(this.startX, this.startY);
-    
-    // Draw bezier curve as series of line segments for smooth appearance
-    const segments = Math.max(TARGETING_LAYOUT.MIN_ARROW_SEGMENTS, Math.floor(distance / TARGETING_LAYOUT.ARROW_SEGMENT_DIVISOR));
-    for (let i = 1; i <= segments; i++) {
-      const t = i / segments;
-      const invT = 1 - t;
-      // Quadratic bezier formula: B(t) = (1-t)²P0 + 2(1-t)tP1 + t²P2
-      const x = invT * invT * this.startX + 2 * invT * t * controlX + t * t * this.currentX;
-      const y = invT * invT * this.startY + 2 * invT * t * controlY + t * t * this.currentY;
-      this.arrowGraphics.lineTo(x, y);
-    }
-    this.arrowGraphics.strokePath();
-    
-    // Calculate tangent angle at the end of the curve for arrow head direction
-    // Derivative of quadratic bezier at t=1: 2(P2 - P1)
-    const tangentX = 2 * (this.currentX - controlX);
-    const tangentY = 2 * (this.currentY - controlY);
-    const angle = Math.atan2(tangentY, tangentX);
-    
-    // Draw arrow head aligned with curve tangent
-    const headX1 = this.currentX - ARROW_HEAD_SIZE * Math.cos(angle - MATH.ARROW_HEAD_ANGLE);
-    const headY1 = this.currentY - ARROW_HEAD_SIZE * Math.sin(angle - MATH.ARROW_HEAD_ANGLE);
-    const headX2 = this.currentX - ARROW_HEAD_SIZE * Math.cos(angle + MATH.ARROW_HEAD_ANGLE);
-    const headY2 = this.currentY - ARROW_HEAD_SIZE * Math.sin(angle + MATH.ARROW_HEAD_ANGLE);
-    
-    this.arrowGraphics.fillStyle(color, 1);
-    this.arrowGraphics.beginPath();
-    this.arrowGraphics.moveTo(this.currentX, this.currentY);
-    this.arrowGraphics.lineTo(headX1, headY1);
-    this.arrowGraphics.lineTo(headX2, headY2);
-    this.arrowGraphics.closePath();
-    this.arrowGraphics.fillPath();
+    this.drawArrow(this.arrowGraphics, this.startX, this.startY, this.currentX, this.currentY, color, 1);
     
     // Highlight target square if over board
     if (target && this.boardBounds) {
@@ -987,6 +1080,7 @@ export class CardTargetingComponent {
    */
   setDepth(depth: number): void {
     this.arrowGraphics.setDepth(depth);
+    this.persistentArrowGraphics.setDepth(depth);
     this.playZoneGraphics.setDepth(depth - 1);
   }
 
@@ -1012,6 +1106,7 @@ export class CardTargetingComponent {
       this.scene.input.off('pointerdown', this.boundRightClick);
       this.boundRightClick = undefined;
     }
+    this.persistentArrowGraphics.destroy();
     this.arrowGraphics.destroy();
     this.playZoneGraphics.destroy();
   }

@@ -23,7 +23,7 @@
 import Phaser from 'phaser';
 import { Card as CardData } from '../managers/GameStateManager';
 import { CardComponent, CARD_WIDTH, CARD_HEIGHT } from './Card';
-import { CardTargetingComponent, TargetValidator, PlayZoneBounds } from './CardTargeting';
+import { CardTargetingComponent, TargetValidator, PlayZoneBounds, CardPlayOutcome, normalizeCardPlayOutcome } from './CardTargeting';
 import { Square } from 'chess.js';
 
 /* ============================================
@@ -214,10 +214,10 @@ export class CardHandComponent {
   public onCardHover?: (card: CardData | null) => void;
   
   /** Called when a non-targeted card is played (Req 9.3) */
-  public onCardPlayed?: (card: CardData) => boolean | void;
+  public onCardPlayed?: (card: CardData) => CardPlayOutcome | boolean | void;
   
   /** Called when a targeted card hits a valid target (Req 9.5) */
-  public onCardTargeted?: (card: CardData, target: Square) => boolean | void;
+  public onCardTargeted?: (card: CardData, target: Square) => CardPlayOutcome | boolean | void;
   
   /** Called when targeting starts (for highlighting legal squares) */
   public onTargetingStart?: (card: CardData) => void;
@@ -298,21 +298,25 @@ export class CardHandComponent {
         draggedCard.disableInteraction();
       }
 
-      const accepted = this.onCardPlayed ? this.onCardPlayed(card) : false;
+      const outcome = normalizeCardPlayOutcome(this.onCardPlayed?.(card));
       if (draggedCard) {
-        if (accepted === false) {
+        if (outcome === 'cancelled') {
           this.resetCardPosition(draggedCard);
           draggedCard.enableInteraction(true);
           draggedCard.setVisible(true); // Ensure card is visible when rejected
+        } else if (outcome === 'continue') {
+          this.resetCardPosition(draggedCard);
+          draggedCard.disableInteraction();
+          draggedCard.setVisible(true);
         } else {
           draggedCard.setVisible(false);
         }
       }
       
-      // Clear highlights after card is played
-      if (this.onTargetingCancel) {
+      if (outcome === 'cancelled' && this.onTargetingCancel) {
         this.onTargetingCancel(card);
       }
+      return outcome;
     };
     
     // When a targeted card hits a valid target
@@ -326,21 +330,25 @@ export class CardHandComponent {
         draggedCard.disableInteraction();
       }
 
-      const accepted = this.onCardTargeted ? this.onCardTargeted(card, target) : false;
+      const outcome = normalizeCardPlayOutcome(this.onCardTargeted?.(card, target));
       if (draggedCard) {
-        if (accepted === false) {
+        if (outcome === 'cancelled') {
           this.resetCardPosition(draggedCard);
           draggedCard.enableInteraction(true);
           draggedCard.setVisible(true); // Ensure card is visible when rejected
+        } else if (outcome === 'continue') {
+          this.resetCardPosition(draggedCard);
+          draggedCard.disableInteraction();
+          draggedCard.setVisible(true);
         } else {
           draggedCard.setVisible(false);
         }
       }
       
-      // Clear highlights after card is targeted
-      if (this.onTargetingCancel) {
+      if (outcome === 'cancelled' && this.onTargetingCancel) {
         this.onTargetingCancel(card);
       }
+      return outcome;
     };
     
     // When targeting is cancelled (invalid target or released outside)
