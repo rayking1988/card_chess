@@ -35,7 +35,12 @@ const DEFAULT_QUEUE_ID = 'default';
 const MATCHMAKING_STORAGE_PREFIX = 'matchmaking_waiting:';
 const MATCHMAKING_TTL_MS = 45000;
 
-// Handle CORS preflight
+/**
+ * Handles CORS preflight requests for the worker.
+ *
+ * @param {Request} request - Incoming request to inspect.
+ * @returns {Response|null} A preflight response, or null if not applicable.
+ */
 function handleCORS(request) {
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 200, headers: corsHeaders });

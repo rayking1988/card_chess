@@ -10,6 +10,9 @@ import { buildDiscardViewerCards, layoutDiscardViewer } from './GameSceneDiscard
 import { getBoardOverlayMetrics, getPreviewOverlayMetrics } from './GameSceneOverlays';
 import { OVERLAY_LAYOUT, TURN_OVERLAY } from '../../config';
 
+/**
+ * Computes the overlay scale factor based on layout and mobile constraints.
+ */
 function getOverlayScale(layout: GameLayout): number {
   if (!layout.isMobile) {
     return layout.panelScale;

@@ -56,6 +56,9 @@ function formatStopwatchTime(seconds: number): string {
   return safeSeconds.toString().padStart(2, '0');
 }
 
+/**
+ * Measures a sample text string with the provided style.
+ */
 function measureText(
   scene: Phaser.Scene,
   sample: string,
@@ -251,6 +254,9 @@ export class StopwatchComponent {
   }
 }
 
+/**
+ * Factory helper for creating a StopwatchComponent.
+ */
 export function createStopwatch(
   scene: Phaser.Scene,
   x: number,

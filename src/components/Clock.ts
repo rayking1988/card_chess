@@ -69,6 +69,9 @@ export function formatTime(seconds: number): string {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
+/**
+ * Measures a sample text string with the provided style.
+ */
 function measureText(
   scene: Phaser.Scene,
   sample: string,

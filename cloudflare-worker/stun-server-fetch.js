@@ -20,7 +20,12 @@ const corsHeaders = {
   'Access-Control-Max-Age': '86400',
 };
 
-// Handle CORS preflight
+/**
+ * Handles CORS preflight requests for the worker.
+ *
+ * @param {Request} request - Incoming request to inspect.
+ * @returns {Response|null} A preflight response, or null if not applicable.
+ */
 function handleCORS(request) {
   if (request.method === 'OPTIONS') {
     return new Response(null, {
@@ -31,7 +36,12 @@ function handleCORS(request) {
   return null;
 }
 
-// Fetch Twilio ICE servers
+/**
+ * Fetches ICE server configuration from Twilio.
+ *
+ * @param {Record<string, string>} env - Worker environment with Twilio credentials.
+ * @returns {Promise<any>} Parsed Twilio response payload.
+ */
 async function fetchTwilioServers(env) {
   // Replace with your actual Twilio credentials and endpoint
   // This is just an example - use your existing implementation
@@ -55,7 +65,12 @@ async function fetchTwilioServers(env) {
   return await response.json();
 }
 
-// Filter servers to STUN only
+/**
+ * Filters a list of ICE servers down to STUN-only entries.
+ *
+ * @param {Array<{ urls?: string[] | string; url?: string }>} servers - ICE server list.
+ * @returns {Array<{ urls?: string[] | string; url?: string }>} STUN-only server list.
+ */
 function filterStunServers(servers) {
   return servers.filter(server => {
     const urls = server.urls || server.url || '';

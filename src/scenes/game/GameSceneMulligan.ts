@@ -12,6 +12,12 @@ import { INTERACTION_BLOCKER, OVERLAY_LAYOUT } from '../../config';
 import { getBoardOverlayMetrics } from './GameSceneOverlays';
 import { MULLIGAN_TIME_BASE_COST } from '../../managers/gameState';
 
+/**
+ * Shows the waiting-for-opponent mulligan overlay state.
+ *
+ * @param scene - Game scene instance.
+ * @param layout - Optional layout override (defaults to current layout).
+ */
 function showMulliganWaitingState(scene: GameScene, layout = scene.currentLayout ?? calculateLayout(scene.scale.width, scene.scale.height)): void {
   const { overlayWidth, overlayHeight, overlayX, overlayY } = getBoardOverlayMetrics(scene, layout);
 

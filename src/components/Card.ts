@@ -117,6 +117,12 @@ const BACK_SCALE = 0.3;
 
 let cachedTimeTextSize: { width: number; height: number } | null = null;
 
+/**
+ * Measures and caches the time text size for consistent alignment.
+ *
+ * @param scene - Phaser scene used to create a temporary text object.
+ * @returns Cached width/height for the time text.
+ */
 function getTimeTextSize(scene: Phaser.Scene): { width: number; height: number } {
   if (cachedTimeTextSize) return cachedTimeTextSize;
   const sample = scene.add.text(0, 0, '888', {

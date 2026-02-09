@@ -17,6 +17,16 @@ const PANEL_RADIUS = 10;
 const TITLE_FONT_SIZE = 22;
 const ICON_BASE_SIZE = 56;
 
+/**
+ * Shows a promotion picker overlay and wires a selection handler.
+ *
+ * @param from - Origin square of the move.
+ * @param to - Destination square of the move.
+ * @param movingColor - Color of the moving player.
+ * @param options - Promotion piece options to display.
+ * @param onSelect - Optional callback invoked with selected piece.
+ * @param titleText - Optional title text for the picker.
+ */
 export function showPromotionPicker(
   this: GameScene,
   from: Square,
@@ -101,6 +111,9 @@ export function showPromotionPicker(
   this.promotionOverlay = overlay;
 }
 
+/**
+ * Hides and clears the promotion picker overlay.
+ */
 export function hidePromotionPicker(this: GameScene): void {
   if (this.promotionOverlay) {
     this.promotionOverlay.destroy();

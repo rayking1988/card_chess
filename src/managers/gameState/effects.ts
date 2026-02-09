@@ -68,6 +68,15 @@ export function resolveCardEffect(
   return { success: true, message: messages.join('; ') };
 }
 
+/**
+ * Resolves a single card effect action.
+ *
+ * @param context - Effect resolution context.
+ * @param effect - Effect action to resolve.
+ * @param player - Player who triggered the effect.
+ * @param target - Optional target square for targeted effects.
+ * @returns Result object with success flag and message.
+ */
 function resolveSingleEffect(
   context: CardEffectContext,
   effect: CardEffectAction,

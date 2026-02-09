@@ -383,6 +383,9 @@ export function positionMobileBars(this: GameScene, layout: GameLayout): void {
   }
 }
 
+/**
+ * Applies a uniform size to a mobile UI icon, preserving aspect ratio.
+ */
 function setIconSize(icon: Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle, size: number): void {
   if (icon instanceof Phaser.GameObjects.Image) {
     const baseWidth = Math.max(1, icon.width);
@@ -394,6 +397,9 @@ function setIconSize(icon: Phaser.GameObjects.Image | Phaser.GameObjects.Rectang
   }
 }
 
+/**
+ * Measures a sample string and fixes the text object's bounds to that size.
+ */
 function applyFixedTextSize(text: Phaser.GameObjects.Text, sample: string): void {
   const previousText = text.text;
   text.setText(sample);
@@ -404,6 +410,9 @@ function applyFixedTextSize(text: Phaser.GameObjects.Text, sample: string): void
   text.setStyle({ align: 'center' });
 }
 
+/**
+ * Lays out the mobile stat row (clock/stopwatch/energy/disturb) and returns the next X position.
+ */
 function layoutMobileStatRow(
   scene: GameScene,
   startX: number,
@@ -452,6 +461,9 @@ function layoutMobileStatRow(
   return x;
 }
 
+/**
+ * Lays out the mobile time row (clock/stopwatch) and returns the next X position.
+ */
 function layoutMobileTimeRow(
   scene: GameScene,
   startX: number,
@@ -494,6 +506,9 @@ function layoutMobileTimeRow(
   return x;
 }
 
+/**
+ * Lays out the mobile energy/disturb row and returns the next X position.
+ */
 function layoutMobileEnergyRow(
   scene: GameScene,
   startX: number,
@@ -531,6 +546,9 @@ function layoutMobileEnergyRow(
   return x;
 }
 
+/**
+ * Lays out the mobile count row (deck/discard/hand) and returns the next X position.
+ */
 function layoutMobileCountRow(
   scene: GameScene,
   startX: number,
@@ -574,6 +592,9 @@ function layoutMobileCountRow(
   return x;
 }
 
+/**
+ * Lays out the mobile mode toggle icon/text and returns the next X position.
+ */
 function layoutMobileModeSwitch(
   scene: GameScene,
   startX: number,

@@ -16,11 +16,17 @@ import { hex } from '../../utils/colors';
 import { getPileTopPosition } from './GameUIHelpers';
 import { CLOCK, CLOCK_COLORS, LEFT_PANEL_LAYOUT, STOPWATCH, STOPWATCH_COLORS } from '../../config';
 
+/**
+ * Formats stopwatch seconds as a zero-padded two-digit string.
+ */
 function formatStopwatchTime(seconds: number): string {
   const safeSeconds = Math.max(0, Math.floor(seconds));
   return safeSeconds.toString().padStart(2, '0');
 }
 
+/**
+ * Returns the appropriate clock color based on remaining time.
+ */
 function getClockTextColor(seconds: number): string {
   if (seconds <= 0) {
     return CLOCK_COLORS.CRITICAL;
@@ -31,6 +37,9 @@ function getClockTextColor(seconds: number): string {
   return CLOCK_COLORS.NORMAL;
 }
 
+/**
+ * Returns the appropriate stopwatch color based on thresholds.
+ */
 function getStopwatchTextColor(seconds: number): string {
   if (seconds >= STOPWATCH.WARNING_THRESHOLDS.HIGH) {
     return STOPWATCH_COLORS.HIGH;

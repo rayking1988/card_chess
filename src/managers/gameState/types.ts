@@ -31,10 +31,22 @@ export type CardEffectAction =
 
 export type CardEffect = CardEffectAction | CardEffectAction[];
 
+/**
+ * Normalizes a card effect into an array form for uniform processing.
+ *
+ * @param effect - Card effect definition (single or array).
+ * @returns Array of card effects.
+ */
 export function normalizeCardEffects(effect: CardEffect): CardEffectAction[] {
   return Array.isArray(effect) ? effect : [effect];
 }
 
+/**
+ * Type guard for effects that require a target square.
+ *
+ * @param effect - Card effect to test.
+ * @returns True if the effect requires a target.
+ */
 export function effectRequiresTarget(
   effect: CardEffectAction
 ): effect is { action: 'DEPLOY_PIECE'; piece: PieceType; requiresTarget: true } | { action: 'DESTROY_PIECE'; requiresTarget: true } {

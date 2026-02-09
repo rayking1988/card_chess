@@ -293,6 +293,9 @@ export function handleGameEnd(this: GameScene, winner: PlayerColor | null, reaso
   this.gameEndMenuButton.setScale(buttonScale);
 }
 
+/**
+ * Switches the end screen into view-board-only mode.
+ */
 export function enterViewBoardMode(this: GameScene): void {
   this.isViewingBoard = true;
   this.gameEndBannerRect?.setVisible(false);

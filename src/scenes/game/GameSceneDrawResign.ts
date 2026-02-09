@@ -7,11 +7,17 @@
 import Phaser from 'phaser';
 import type { GameScene } from '../GameScene';
 
+/**
+ * Retrieves the text label stored on a button container.
+ */
 function getButtonLabel(button?: Phaser.GameObjects.Container | null): Phaser.GameObjects.Text | null {
   if (!button) return null;
   return (button.getData('label') as Phaser.GameObjects.Text | undefined) ?? null;
 }
 
+/**
+ * Applies label text/color and interactivity state to a button.
+ */
 function setButtonState(
   button: Phaser.GameObjects.Container | undefined,
   text: string,
@@ -33,6 +39,9 @@ function setButtonState(
   }
 }
 
+/**
+ * Updates draw/resign button labels based on current state.
+ */
 export function updateDrawResignButtons(this: GameScene): void {
   if (this.opponentOfferedDraw) {
     setButtonState(this.offerDrawButton, 'Accept Draw', '#66ff66', true);
@@ -49,6 +58,9 @@ export function updateDrawResignButtons(this: GameScene): void {
   }
 }
 
+/**
+ * Handles the local player offering or accepting a draw.
+ */
 export function handleOfferDraw(this: GameScene): void {
   if (this.gameStateManager.getPhase() !== 'playing') return;
 
@@ -75,6 +87,9 @@ export function handleOfferDraw(this: GameScene): void {
   }
 }
 
+/**
+ * Handles the local player clicking resign (two-step confirmation).
+ */
 export function handleResignClick(this: GameScene): void {
   if (this.gameStateManager.getPhase() !== 'playing') return;
 
@@ -94,12 +109,18 @@ export function handleResignClick(this: GameScene): void {
   this.handleGameEnd(opponentColor, 'Resigned');
 }
 
+/**
+ * Handles receiving a draw offer from the opponent.
+ */
 export function handleOpponentOfferDraw(this: GameScene): void {
   this.opponentOfferedDraw = true;
   this.updateDrawResignButtons();
   this.logEvent('system', `${this.opponentName} offered a draw`);
 }
 
+/**
+ * Handles receiving a draw acceptance from the opponent.
+ */
 export function handleOpponentAcceptDraw(this: GameScene): void {
   this.opponentOfferedDraw = false;
   this.localOfferedDraw = false;
@@ -107,6 +128,9 @@ export function handleOpponentAcceptDraw(this: GameScene): void {
   this.handleGameEnd(null, 'Draw agreed');
 }
 
+/**
+ * Handles the opponent resigning.
+ */
 export function handleOpponentResign(this: GameScene): void {
   this.logEvent('system', `${this.opponentName} resigned`);
   this.handleGameEnd(this.localColor, 'Opponent resigned');

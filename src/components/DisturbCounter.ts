@@ -53,6 +53,9 @@ const TEXT_COLORS = {
  * ============================================
  */
 
+/**
+ * DisturbCounterComponent - Renders the disturb tag bar and count.
+ */
 export class DisturbCounterComponent {
   /** Container holding all visual elements */
   private container: Phaser.GameObjects.Container;
@@ -273,6 +276,9 @@ export class DisturbCounterComponent {
   }
 }
 
+/**
+ * Factory helper for creating a DisturbCounterComponent.
+ */
 export function createDisturbCounter(
   scene: Phaser.Scene,
   x: number,
