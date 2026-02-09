@@ -11,7 +11,8 @@ import type { Card, PieceType, PlayerColor, CardEffectAction } from '../../manag
 import { effectRequiresTarget, normalizeCardEffects } from '../../managers/GameStateManager';
 import { playerControlsSquare } from '../../utils/controlPower';
 import { MAX_PILE_LAYERS } from './GameConstants';
-import { makeCardComponentClickable } from './GameUIHelpers';
+import { getPileTopPosition, makeCardComponentClickable } from './GameUIHelpers';
+import { LEFT_PANEL_LAYOUT } from '../../config';
 import type { GameScene } from '../GameScene';
 
 /** Color for deployment target highlights (blue) */
@@ -332,7 +333,13 @@ export function handleLocalCardPlay(this: GameScene, card: Card, target?: Square
       this.logEvent(this.localColor, `Played ${card.name}`);
       // Animation will call releaseDiscardTop when complete
       const lastTarget = targets.length > 0 ? targets[targets.length - 1] : undefined;
-      this.animateCardPlay(card, 'local', lastTarget, undefined, releasePos);
+      this.animateCardPlay(
+        card,
+        'local',
+        lastTarget,
+        () => this.setDiscardTopCard('local', card),
+        releasePos
+      );
 
       // Handle piece deployment/destruction on board
       let targetIndex = 0;
@@ -567,11 +574,22 @@ export function setDiscardTopCard(this: GameScene, side: 'local' | 'opponent', c
   const scale = 0.75 * layout.panelScale;
   const isOpponent = side === 'opponent';
   const existing = isOpponent ? this.opponentDiscardTopCard : this.playerDiscardTopCard;
+
+  const deckScale = LEFT_PANEL_LAYOUT.DECK_SCALE * layout.panelScale;
+  const opponentColor = this.localColor === 'white' ? 'black' : 'white';
+  const discardCount = isOpponent
+    ? (this.networkManager ? this.opponentDiscardCount : this.gameStateManager.getPlayer(opponentColor).discard.length)
+    : this.gameStateManager.getPlayer(this.localColor).discard.length;
+  const pendingSuppression = isOpponent ? this.suppressOpponentDiscardTop : this.suppressLocalDiscardTop;
+  const effectiveCount = !isOpponent && pendingSuppression > 0
+    ? Math.max(1, discardCount - Math.max(0, pendingSuppression - 1))
+    : discardCount;
   
   // Calculate position - use the layout values directly (no offset needed)
   const positionY = isOpponent 
     ? layout.opponentDiscardY 
     : layout.playerDiscardY;
+  const topPos = getPileTopPosition(layout.leftPanelX, positionY, deckScale, effectiveCount);
 
   // If no card data, clear the reference (don't create card back)
   if (!cardData) {
@@ -588,7 +606,7 @@ export function setDiscardTopCard(this: GameScene, side: 'local' | 'opponent', c
 
   const existingCardId = existing?.getCardId();
   if (existing && existingCardId && existingCardId === cardData.id) {
-    existing.setPosition(layout.leftPanelX, positionY);
+    existing.setPosition(topPos.x, topPos.y);
     existing.setScale(scale);
     if (isOpponent) {
       existing.setDepth(MAX_PILE_LAYERS + 8);
@@ -611,7 +629,7 @@ export function setDiscardTopCard(this: GameScene, side: 'local' | 'opponent', c
   } else {
     topCard.setDepth(PLAYER_DISCARD_DEPTH);
   }
-  topCard.getContainer().setPosition(layout.leftPanelX, positionY);
+  topCard.getContainer().setPosition(topPos.x, topPos.y);
   makeCardComponentClickable(topCard, () => this.showDiscardViewer(side));
   
   // Hide in mobile view

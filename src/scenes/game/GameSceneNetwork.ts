@@ -360,6 +360,7 @@ export function handleOpponentPlayCard(
     if (this.networkManager && cardData) {
       this.opponentDiscardCount = Math.min(DECK_SIZE, this.opponentDiscardCount + 1);
       this.opponentDiscardCards.push(cardData);
+      this.setDiscardTopCard('opponent', cardData);
     }
     // Update UI after animation completes to show correct hand count
     this.updateUIFromState();
