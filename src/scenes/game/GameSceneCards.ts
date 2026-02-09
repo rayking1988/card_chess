@@ -26,6 +26,16 @@ const PLAYER_DISCARD_DEPTH = 6;
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'] as const;
 const RANKS = ['1', '2', '3', '4', '5', '6', '7', '8'] as const;
 
+type TargetedEffect = Extract<CardEffectAction, { action: 'DEPLOY_PIECE' | 'DESTROY_PIECE' }>;
+
+function getLastNonNullCard(cards: Array<Card | null>): Card | null {
+  for (let i = cards.length - 1; i >= 0; i -= 1) {
+    const card = cards[i];
+    if (card) return card;
+  }
+  return null;
+}
+
 /**
  * Returns true if the square is on the opponent's home rank.
  */
@@ -50,16 +60,14 @@ function isOwnHomeRank(square: Square, player: PlayerColor): boolean {
 /**
  * Returns the list of card effects that require targeting resolution.
  */
-function getTargetEffects(card: Card): CardEffectAction[] {
-  return normalizeCardEffects(card.effect).filter(
-    effect => effect.action === 'DEPLOY_PIECE' || effect.action === 'DESTROY_PIECE' || effectRequiresTarget(effect)
-  );
+function getTargetEffects(card: Card): TargetedEffect[] {
+  return normalizeCardEffects(card.effect).filter(effectRequiresTarget);
 }
 
 /**
  * Determines the active target effect for multi-target cards.
  */
-function getActiveTargetEffect(this: GameScene, card: Card): CardEffectAction | null {
+function getActiveTargetEffect(this: GameScene, card: Card): TargetedEffect | null {
   const targetEffects = getTargetEffects(card);
   if (targetEffects.length === 0) return null;
 
@@ -372,7 +380,7 @@ export function handleLocalCardPlay(this: GameScene, card: Card, target?: Square
           card.id,
           card.name,
           targets[0],
-          targetPiecesForNetwork[0],
+          targetPiecesForNetwork[0] ?? undefined,
           targetActions[0]
         );
       } else if (targets.length > 1) {
@@ -397,7 +405,7 @@ export function handleLocalCardPlay(this: GameScene, card: Card, target?: Square
       if (isPendingCard) {
         cancelPendingCardPlay.call(this);
       }
-      return false;
+      return 'cancelled';
     }
 
     if (cleanupTargeting) {
@@ -565,19 +573,34 @@ export function setDiscardTopCard(this: GameScene, side: 'local' | 'opponent', c
     ? layout.opponentDiscardY 
     : layout.playerDiscardY;
 
-  // Destroy existing top card
-  if (existing) {
-    existing.destroy();
-  }
-
   // If no card data, clear the reference (don't create card back)
   if (!cardData) {
+    if (existing) {
+      existing.destroy();
+    }
     if (isOpponent) {
       this.opponentDiscardTopCard = null;
     } else {
       this.playerDiscardTopCard = null;
     }
     return;
+  }
+
+  const existingCardId = existing?.getCardId();
+  if (existing && existingCardId && existingCardId === cardData.id) {
+    existing.setPosition(layout.leftPanelX, positionY);
+    existing.setScale(scale);
+    if (isOpponent) {
+      existing.setDepth(MAX_PILE_LAYERS + 8);
+    } else {
+      existing.setDepth(PLAYER_DISCARD_DEPTH);
+    }
+    existing.setVisible(!layout.isMobile);
+    return;
+  }
+
+  if (existing) {
+    existing.destroy();
   }
 
   // Create top card - always face-up (discard piles are public information)
@@ -616,10 +639,7 @@ export function refreshDiscardTopCards(this: GameScene): void {
 
   if (this.suppressOpponentDiscardTop === 0) {
     // Find the last non-null card in opponent's discard
-    const nonNullCards = this.opponentDiscardCards.filter(c => c !== null);
-    const opponentTop = nonNullCards.length > 0
-      ? nonNullCards[nonNullCards.length - 1]
-      : null;
+    const opponentTop = getLastNonNullCard(this.opponentDiscardCards);
     this.setDiscardTopCard('opponent', opponentTop);
   }
 }

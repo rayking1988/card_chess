@@ -41,7 +41,6 @@ export function resolveCardEffect(
   let targetIndex = 0;
   const messages: string[] = [];
 
-  const fail = (message: string): { success: boolean; message: string } => ({ success: false, message });
   const pushMessage = (message: string): void => {
     if (message) {
       messages.push(message);

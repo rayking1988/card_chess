@@ -201,10 +201,12 @@ type PendingCardTarget = {
   pieceType?: PieceSymbol;
 };
 
+type TargetedEffect = Extract<CardEffectAction, { action: 'DEPLOY_PIECE' | 'DESTROY_PIECE' }>;
+
 type PendingCardPlay = {
   card: Card;
   effects: CardEffectAction[];
-  targetEffects: CardEffectAction[];
+  targetEffects: TargetedEffect[];
   targets: PendingCardTarget[];
   originalBoardFEN: string;
 };
