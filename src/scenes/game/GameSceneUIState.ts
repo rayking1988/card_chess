@@ -4,6 +4,7 @@
  * @module scenes/game/GameSceneUIState
  */
 
+import Phaser from 'phaser';
 import type { ClockComponent } from '../../components/Clock';
 import type { DisturbCounterComponent } from '../../components/DisturbCounter';
 import type { EnergyBarComponent } from '../../components/EnergyBar';
@@ -15,6 +16,20 @@ import { formatTime } from '../../components/Clock';
 import { hex } from '../../utils/colors';
 import { getPileTopPosition } from './GameUIHelpers';
 import { CLOCK, CLOCK_COLORS, LEFT_PANEL_LAYOUT, STOPWATCH, STOPWATCH_COLORS } from '../../config';
+
+function setTextIfChanged(text: Phaser.GameObjects.Text | undefined | null, value: string): void {
+  if (!text) return;
+  if (text.text !== value) {
+    text.setText(value);
+  }
+}
+
+function setColorIfChanged(text: Phaser.GameObjects.Text | undefined | null, color: string): void {
+  if (!text) return;
+  if (text.style.color !== color) {
+    text.setColor(color);
+  }
+}
 
 /**
  * Formats stopwatch seconds as a zero-padded two-digit string.
@@ -219,41 +234,45 @@ export function updateUIFromState(this: GameScene, options: { sendStats?: boolea
   this.updateCardCount();
 
   if (this.mobileTopNameText) {
-    this.mobileTopNameText.setText(this.opponentName);
+    setTextIfChanged(this.mobileTopNameText, this.opponentName);
   }
   if (this.mobileBottomNameText) {
-    this.mobileBottomNameText.setText(this.playerName);
+    setTextIfChanged(this.mobileBottomNameText, this.playerName);
   }
   if (this.mobileTopClockText) {
-    this.mobileTopClockText.setText(formatTime(opponentClock));
-    this.mobileTopClockText.setColor(getClockTextColor(opponentClock));
+    setTextIfChanged(this.mobileTopClockText, formatTime(opponentClock));
+    setColorIfChanged(this.mobileTopClockText, getClockTextColor(opponentClock));
   }
   if (this.mobileBottomClockText) {
-    this.mobileBottomClockText.setText(formatTime(localPlayer.clock));
-    this.mobileBottomClockText.setColor(getClockTextColor(localPlayer.clock));
+    setTextIfChanged(this.mobileBottomClockText, formatTime(localPlayer.clock));
+    setColorIfChanged(this.mobileBottomClockText, getClockTextColor(localPlayer.clock));
   }
   if (this.mobileTopStopwatchText) {
-    this.mobileTopStopwatchText.setText(formatStopwatchTime(opponentStopwatch));
-    this.mobileTopStopwatchText.setColor(getStopwatchTextColor(opponentStopwatch));
+    setTextIfChanged(this.mobileTopStopwatchText, formatStopwatchTime(opponentStopwatch));
+    setColorIfChanged(this.mobileTopStopwatchText, getStopwatchTextColor(opponentStopwatch));
   }
   if (this.mobileBottomStopwatchText) {
-    this.mobileBottomStopwatchText.setText(formatStopwatchTime(localPlayer.stopwatch));
-    this.mobileBottomStopwatchText.setColor(getStopwatchTextColor(localPlayer.stopwatch));
+    setTextIfChanged(this.mobileBottomStopwatchText, formatStopwatchTime(localPlayer.stopwatch));
+    setColorIfChanged(this.mobileBottomStopwatchText, getStopwatchTextColor(localPlayer.stopwatch));
   }
-  this.mobileTopEnergyText?.setText(`${opponentEnergy}/${opponentEnergyCap}`);
-  this.mobileBottomEnergyText?.setText(`${localPlayer.energy}/${localPlayer.energyCap}`);
-  this.mobileTopDisturbText?.setText(`${opponentDisturb}`);
-  this.mobileBottomDisturbText?.setText(`${localPlayer.disturbTags}`);
-  this.mobileBottomModeText?.setText(localPlayer.mode === 'focus' ? 'FOCUS' : 'DISTURB');
-  this.mobileBottomModeIcon?.setTexture(localPlayer.mode === 'focus' ? 'switch_focus' : 'switch_disturb');
+  setTextIfChanged(this.mobileTopEnergyText, `${opponentEnergy}/${opponentEnergyCap}`);
+  setTextIfChanged(this.mobileBottomEnergyText, `${localPlayer.energy}/${localPlayer.energyCap}`);
+  setTextIfChanged(this.mobileTopDisturbText, `${opponentDisturb}`);
+  setTextIfChanged(this.mobileBottomDisturbText, `${localPlayer.disturbTags}`);
+  const modeLabel = localPlayer.mode === 'focus' ? 'FOCUS' : 'DISTURB';
+  const modeIcon = localPlayer.mode === 'focus' ? 'switch_focus' : 'switch_disturb';
+  setTextIfChanged(this.mobileBottomModeText, modeLabel);
+  if (this.mobileBottomModeIcon && this.mobileBottomModeIcon.texture.key !== modeIcon) {
+    this.mobileBottomModeIcon.setTexture(modeIcon);
+  }
   
   // Update mobile deck/discard/hand counts
-  this.mobileTopDeckText?.setText(`${opponentDeckCount}`);
-  this.mobileTopDiscardText?.setText(`${opponentDiscardCount}`);
-  this.mobileTopHandText?.setText(`${opponentHandCount}`);
-  this.mobileBottomDeckText?.setText(`${localPlayer.deck.length}`);
-  this.mobileBottomDiscardText?.setText(`${localPlayer.discard.length}`);
-  this.mobileBottomHandText?.setText(`${localPlayer.hand.length}`);
+  setTextIfChanged(this.mobileTopDeckText, `${opponentDeckCount}`);
+  setTextIfChanged(this.mobileTopDiscardText, `${opponentDiscardCount}`);
+  setTextIfChanged(this.mobileTopHandText, `${opponentHandCount}`);
+  setTextIfChanged(this.mobileBottomDeckText, `${localPlayer.deck.length}`);
+  setTextIfChanged(this.mobileBottomDiscardText, `${localPlayer.discard.length}`);
+  setTextIfChanged(this.mobileBottomHandText, `${localPlayer.hand.length}`);
 
   if (this.currentLayout) {
     this.positionMobileBars(this.currentLayout);
@@ -1159,8 +1178,8 @@ export function toggleMobileEventLog(this: GameScene): void {
 export function updateOpponentDeckCounts(this: GameScene, deckCount: number, discardCount: number): void {
   this.opponentDeckCount = deckCount;
   this.opponentDiscardCount = discardCount;
-  this.opponentDeckCountText.setText(`${deckCount}`);
-  this.opponentDiscardCountText.setText(`${discardCount}`);
+  setTextIfChanged(this.opponentDeckCountText, `${deckCount}`);
+  setTextIfChanged(this.opponentDiscardCountText, `${discardCount}`);
   if (this.currentLayout?.isMobile) {
     this.opponentDeckCountText.setVisible(false);
     this.opponentDiscardCountText.setVisible(false);
@@ -1177,8 +1196,8 @@ export function updateOpponentDeckCounts(this: GameScene, deckCount: number, dis
  * @param discardCount - Number of cards in player's discard pile
  */
 export function updatePlayerDeckCounts(this: GameScene, deckCount: number, discardCount: number): void {
-  this.playerDeckCountText.setText(`${deckCount}`);
-  this.playerDiscardCountText.setText(`${discardCount}`);
+  setTextIfChanged(this.playerDeckCountText, `${deckCount}`);
+  setTextIfChanged(this.playerDiscardCountText, `${discardCount}`);
   if (this.currentLayout?.isMobile) {
     this.playerDeckCountText.setVisible(false);
     this.playerDiscardCountText.setVisible(false);

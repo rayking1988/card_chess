@@ -291,8 +291,13 @@ export class ClockComponent {
    * Used by: GameScene when player names are updated
    */
   setLabel(label: string): void {
-    this.labelText.setText(label);
-    this.labelText.setVisible(label.trim().length > 0);
+    if (this.labelText.text !== label) {
+      this.labelText.setText(label);
+    }
+    const shouldShow = label.trim().length > 0;
+    if (this.labelText.visible !== shouldShow) {
+      this.labelText.setVisible(shouldShow);
+    }
   }
 
   /**

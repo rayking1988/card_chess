@@ -193,6 +193,15 @@ export class CardHandComponent {
 
   /** Whether interaction was enabled before draw animation started */
   private restoreInteractionAfterDraw: boolean = false;
+
+  /** Pixel threshold for skipping minor position tweens */
+  private static readonly POSITION_EPSILON = 0.5;
+
+  /** Rotation threshold for skipping minor rotation tweens */
+  private static readonly ROTATION_EPSILON = 0.001;
+
+  /** Scale threshold for skipping minor scale tweens */
+  private static readonly SCALE_EPSILON = 0.001;
   
   /* ============================================
    * EVENT CALLBACKS
@@ -646,17 +655,7 @@ export class CardHandComponent {
       (card as CardComponentWithOriginal).originalDepth = i;
       (card as CardComponentWithOriginal).originalScale = pos.scale;
       
-      // Animate to new position
-      this.scene.tweens.add({
-        targets: card.getContainer(),
-        x: pos.x,
-        y: pos.y,
-        rotation: pos.rotation,
-        scaleX: pos.scale,
-        scaleY: pos.scale,
-        duration: 200,
-        ease: 'Quad.easeOut'
-      });
+      this.applyCardLayout(card, pos, 200, 'Quad.easeOut');
       
       card.setDepth(i);
     }
@@ -800,28 +799,67 @@ export class CardHandComponent {
 
       const isNewCard = i === newCardIndex;
       const duration = isNewCard ? 100 : 300;
+      const onComplete = isNewCard
+        ? () => {
+            if (token !== this.drawSequenceToken) return;
+            this.scene.time.delayedCall(20, () => this.processDrawQueue(token));
+          }
+        : undefined;
 
-      this.scene.tweens.add({
-        targets: cardView.getContainer(),
-        x: pos.x,
-        y: pos.y,
-        rotation: pos.rotation,
-        scaleX: pos.scale,
-        scaleY: pos.scale,
-        duration,
-        ease: 'Quad.easeOut',
-        onComplete: isNewCard
-          ? () => {
-              if (token !== this.drawSequenceToken) return;
-              this.scene.time.delayedCall(20, () => this.processDrawQueue(token));
-            }
-          : undefined
-      });
+      this.applyCardLayout(cardView, pos, duration, 'Quad.easeOut', onComplete);
 
       cardView.setDepth(i);
     }
 
     this.container.sort('depth');
+  }
+
+  /**
+   * Applies a layout transform to a card, skipping tweens when already close.
+   *
+   * @param card - Card component to move.
+   * @param pos - Target position/rotation/scale.
+   * @param duration - Tween duration in ms.
+   * @param ease - Tween easing string.
+   * @param onComplete - Optional completion callback.
+   * @private
+   */
+  private applyCardLayout(
+    card: CardComponent,
+    pos: { x: number; y: number; rotation: number; scale: number },
+    duration: number,
+    ease: string,
+    onComplete?: () => void
+  ): void {
+    const container = card.getContainer();
+    const needsTween =
+      Math.abs(container.x - pos.x) > CardHandComponent.POSITION_EPSILON ||
+      Math.abs(container.y - pos.y) > CardHandComponent.POSITION_EPSILON ||
+      Math.abs(container.rotation - pos.rotation) > CardHandComponent.ROTATION_EPSILON ||
+      Math.abs(container.scaleX - pos.scale) > CardHandComponent.SCALE_EPSILON ||
+      Math.abs(container.scaleY - pos.scale) > CardHandComponent.SCALE_EPSILON;
+
+    if (!needsTween || duration <= 0) {
+      container.setPosition(pos.x, pos.y);
+      container.setRotation(pos.rotation);
+      container.setScale(pos.scale);
+      if (onComplete) {
+        onComplete();
+      }
+      return;
+    }
+
+    this.scene.tweens.add({
+      targets: container,
+      x: pos.x,
+      y: pos.y,
+      rotation: pos.rotation,
+      scaleX: pos.scale,
+      scaleY: pos.scale,
+      duration,
+      ease,
+      onComplete
+    });
   }
 
   /**

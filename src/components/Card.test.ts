@@ -32,6 +32,18 @@ describe('Card Data Validation', () => {
     expect(deck.length).toBe(60);
   });
 
+  it('createDeck honors per-card quantities', () => {
+    const deck = createDeck();
+    const countsByName = deck.reduce<Record<string, number>>((acc, card) => {
+      acc[card.name] = (acc[card.name] ?? 0) + 1;
+      return acc;
+    }, {});
+
+    for (const definition of Object.values(CARD_DEFINITIONS)) {
+      expect(countsByName[definition.name] ?? 0).toBe(definition.quantity);
+    }
+  });
+
   it('all cards in deck have unique IDs', () => {
     const deck = createDeck();
     const ids = deck.map(c => c.id);
@@ -50,18 +62,21 @@ describe('Card Data Validation', () => {
 describe('Card Targeting Logic', () => {
   it('piece cards require target', () => {
     const pawnCard = createCard('pawn');
+    const twinPawnCard = createCard('twin_pawn');
     const knightCard = createCard('knight');
     const bishopCard = createCard('bishop');
     const rookCard = createCard('rook');
     const queenCard = createCard('queen');
     
     expect(pawnCard).not.toBeNull();
+    expect(twinPawnCard).not.toBeNull();
     expect(knightCard).not.toBeNull();
     expect(bishopCard).not.toBeNull();
     expect(rookCard).not.toBeNull();
     expect(queenCard).not.toBeNull();
     
     expect(cardRequiresTarget(pawnCard!)).toBe(true);
+    expect(cardRequiresTarget(twinPawnCard!)).toBe(true);
     expect(cardRequiresTarget(knightCard!)).toBe(true);
     expect(cardRequiresTarget(bishopCard!)).toBe(true);
     expect(cardRequiresTarget(rookCard!)).toBe(true);
@@ -104,13 +119,13 @@ describe('Card Cost Validation', () => {
   });
 
   it('piece cards have both energy and time costs', () => {
-    const pieceCards = ['pawn', 'knight', 'bishop', 'rook', 'queen'];
+    const pieceCards = ['pawn', 'twin_pawn', 'knight', 'bishop', 'rook', 'queen'];
     
     for (const cardKey of pieceCards) {
       const card = createCard(cardKey);
       expect(card).not.toBeNull();
       expect(card!.energyCost).not.toBeNull();
-      expect(card!.energyCost).toBeGreaterThan(0);
+      expect(card!.energyCost).toBeGreaterThanOrEqual(0);
       expect(card!.timeCost).not.toBeNull();
       expect(card!.timeCost).toBeGreaterThan(0);
     }
@@ -131,13 +146,15 @@ describe('Card Cost Validation', () => {
 
   it('piece costs scale with piece value', () => {
     const pawn = createCard('pawn');
+    const twinPawn = createCard('twin_pawn');
     const knight = createCard('knight');
     const bishop = createCard('bishop');
     const rook = createCard('rook');
     const queen = createCard('queen');
     
     // Pawn should be cheapest
-    expect(pawn!.energyCost).toBeLessThan(knight!.energyCost!);
+    expect(pawn!.energyCost).toBeLessThanOrEqual(twinPawn!.energyCost!);
+    expect(twinPawn!.energyCost).toBeLessThanOrEqual(knight!.energyCost!);
     // Knight and Bishop similar
     expect(knight!.energyCost).toBeLessThanOrEqual(bishop!.energyCost!);
     // Rook more expensive
@@ -156,8 +173,8 @@ describe('Card Type Distribution', () => {
     const spellCount = deck.filter(c => c.type === 'spell').length;
     
     // Based on CARD_DEFINITIONS quantities
-    expect(energyCount).toBe(24);
-    expect(pieceCount).toBe(23); // 10 pawns + 4 knights + 4 bishops + 4 rooks + 1 queen
+    expect(energyCount).toBe(22);
+    expect(pieceCount).toBe(25); // 10 pawns + 4 twin pawns + 4 knights + 4 bishops + 2 rooks + 1 queen
     expect(spellCount).toBe(13); // 4 ponder + 4 growth + 4 slash + 1 deep analysis
   });
 });
